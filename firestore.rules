@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connectivity Test Path
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerified() && request.auth.uid == userId;
+    }
+
+    // Admin check - only include if explicitly needed. Using user email as requested.
+    function isAdmin() {
+      return isVerified() && request.auth.token.email == 'pauloazevedo2@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidUser(data) {
+      return data.uid == request.auth.uid
+        && data.email is string && data.email.size() <= 256
+        && (data.get('displayName', '') is string && data.get('displayName', '').size() <= 256)
+        && (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 1024)
+        && (data.get('plan', 'free') in ['free', 'basic', 'premium']);
+    }
+
+    function isValidAnalysis(data) {
+      return data.userId == request.auth.uid
+        && data.video is map
+        && data.video.videoId is string && data.video.videoId.size() <= 64
+        && data.video.title is string && data.video.title.size() <= 512
+        && (data.video.get('thumbnail', '') is string && data.video.get('thumbnail', '').size() <= 2048)
+        && (data.get('summary', '') is string && data.get('summary', '').size() <= 100000)
+        && (data.get('transcript', '') is string && data.get('transcript', '').size() <= 2000000)
+        && (data.get('key_points', []) is list && data.get('key_points', []).size() <= 100)
+        && (data.get('quiz', []) is list && data.get('quiz', []).size() <= 50)
+        && (data.get('mind_map', {}) is map || data.get('mind_map', '') is string)
+        && (data.get('mode', 'transcript') in ['transcript', 'metadata_fallback'])
+        && (data.get('limitations', []) is list && data.get('limitations', []).size() <= 20)
+        && (data.get('tutor_questions', []) is list && data.get('tutor_questions', []).size() <= 20);
+    }
+
+    // --- Rules ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow create: if isVerified() && isValidId(userId) && userId == request.auth.uid 
+        && incoming().keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt', 'plan'])
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().plan == 'free'
+        && isValidUser(incoming());
+      
+      allow update: if isOwner(userId) 
+        && incoming().updatedAt == request.time
+        && incoming().uid == existing().uid
+        // plan only changeable by admin or remains same
+        && (incoming().plan == existing().plan || isAdmin())
+        && isValidUser(incoming());
+
+      // Sub-collection rule following Master Gate pattern (check parent)
+      match /analyses/{analysisId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(analysisId) 
+          && exists(/databases/$(database)/documents/users/$(userId)) // Master Gate
+          && incoming().keys().hasAll(['userId', 'video', 'mode', 'summary', 'createdAt'])
+          && incoming().createdAt == request.time
+          && isValidAnalysis(incoming());
+        allow update: if isOwner(userId) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['summary', 'quiz', 'mind_map', 'key_points', 'tutor_questions', 'limitations', 'updatedAt'])
+          && (incoming().get('updatedAt', request.time) == request.time)
+          && isValidAnalysis(incoming())
+        );
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
