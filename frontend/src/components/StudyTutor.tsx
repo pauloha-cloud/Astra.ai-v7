@@ -17,7 +17,6 @@ import {
   Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
 import { AudioStreamer, AudioPlayer } from '../lib/audio-utils';
 
 interface Props {
@@ -34,6 +33,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [status, setStatus] = useState(t.readyToStart);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcription, setTranscription] = useState<string[]>([]);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -97,24 +97,24 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   };
 
   const startSession = async () => {
+    setErrorMessage(null);
     setIsConnecting(true);
     setStatus(t.initializingGemini);
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      aiRef.current = ai;
-
       playerRef.current = new AudioPlayer((playing) => {
         setIsAiSpeaking(playing);
         if (playing) setIsAiThinking(false);
       }, (vol) => {
         setAiVolume(vol);
       });
+
       streamerRef.current = new AudioStreamer((base64Data) => {
-        if (sessionRef.current && !isMuted) {
-          sessionRef.current.sendRealtimeInput({
-            audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
-          });
+        if (sessionRef.current && sessionRef.current.readyState === WebSocket.OPEN && !isMuted) {
+          sessionRef.current.send(JSON.stringify({
+            type: "audio",
+            data: base64Data
+          }));
         }
       }, (active) => {
         setIsUserSpeaking(active);
@@ -125,17 +125,47 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
         setUserVolume(vol);
       });
 
-      const session = await ai.live.connect({
-        model: "gemini-3.1-flash-live-preview",
-        callbacks: {
-          onopen: () => {
-            setIsConnected(true);
-            setIsConnecting(false);
-            setStatus(t.liveSessionActive);
-            streamerRef.current?.start();
-            playNotificationSound('connect');
-          },
-          onmessage: async (message: LiveServerMessage) => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const socketUrl = `${protocol}//${window.location.host}/ws/tutor`;
+      
+      console.log(`[Tutor Client] Connecting to: ${socketUrl}`);
+      const ws = new WebSocket(socketUrl);
+      
+      ws.onopen = () => {
+        console.log("[Tutor Client] WebSocket connected, sending setup packet...");
+        setIsConnected(true);
+        setIsConnecting(false);
+        setStatus(t.liveSessionActive);
+        playNotificationSound('connect');
+        
+        // Send setup payload to configure the backend's Gemini Live connection
+        ws.send(JSON.stringify({
+          type: "setup",
+          videoTitle,
+          transcript
+        }));
+
+        // Start mic streamer
+        streamerRef.current?.start();
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          const envelope = JSON.parse(event.data);
+          
+          if (envelope.event === "open") {
+            console.log("[Tutor Client] Server-side session opened");
+          } else if (envelope.event === "close") {
+            console.log("[Tutor Client] Server-side session closed");
+            stopSession();
+          } else if (envelope.event === "error") {
+            console.error("[Tutor Client] Server error:", envelope.details);
+            setErrorMessage(envelope.details);
+            setStatus(t.sessionError);
+            stopSession();
+          } else if (envelope.event === "message") {
+            const message = envelope.data;
+
             // Check if model started or stopped a turn for thinking state
             if (message.serverContent?.modelTurn) {
               setIsAiThinking(false);
@@ -157,33 +187,25 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
             if (userTranscription) {
               setTranscription(prev => [...prev.slice(-19), `YOU: ${userTranscription}`]);
             }
-          },
-          onclose: () => {
-            stopSession();
-          },
-          onerror: (err) => {
-            console.error("Live API Error:", err);
-            setStatus(t.sessionError);
-            stopSession();
           }
-        },
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
-          },
-          systemInstruction: t.tutorSystemInstruction.replace('{videoTitle}', videoTitle) + 
-          `\n\nContext from Video:\n${transcript.substring(0, 15000)}` +
-          `\n\nPedagogical Guidelines:\n` +
-          `1. Be the ultimate mentor. Don't just give answers—ask targeted questions that guide the user to the answer.\n` +
-          `2. Use specific examples from the transcript to build your explanations.\n` +
-          `3. If the user seems lost, simplify the concept using a real-world analogy.\n` +
-          `4. Acknowledge the user's progress. Use phrases like "Exactly!", "Great catch", "You've got it".\n` +
-          `5. Keep your spoken responses concise and energetic. Aim for natural conversation patterns.`,
-        },
-      });
+        } catch (e) {
+          console.error("[Tutor Client] Error parsing incoming websocket message:", e);
+        }
+      };
 
-      sessionRef.current = session;
+      ws.onclose = () => {
+        console.log("[Tutor Client] Client WebSocket closed");
+        stopSession();
+      };
+
+      ws.onerror = (err) => {
+        console.error("[Tutor Client] WebSocket Error:", err);
+        setStatus(t.sessionError);
+        stopSession();
+      };
+
+      sessionRef.current = ws;
+
     } catch (error) {
       console.error("Failed to start session:", error);
       setIsConnecting(false);
@@ -193,7 +215,13 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
 
   const stopSession = () => {
     if (isConnected) playNotificationSound('disconnect');
-    sessionRef.current?.close();
+    if (sessionRef.current) {
+      try {
+        sessionRef.current.close();
+      } catch (e) {
+        // ignore
+      }
+    }
     streamerRef.current?.stop();
     playerRef.current?.close();
     
@@ -234,16 +262,17 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
 
   const startCameraStreaming = () => {
     const sendFrame = () => {
-      if (sessionRef.current && isCameraOn && videoRef.current && canvasRef.current) {
+      if (sessionRef.current && sessionRef.current.readyState === WebSocket.OPEN && isCameraOn && videoRef.current && canvasRef.current) {
         const canvas = canvasRef.current;
         const video = videoRef.current;
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const base64Data = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
-          sessionRef.current.sendRealtimeInput({
-            video: { data: base64Data, mimeType: 'image/jpeg' }
-          });
+          sessionRef.current.send(JSON.stringify({
+            type: "video",
+            data: base64Data
+          }));
         }
       }
       animationFrameRef.current = requestAnimationFrame(sendFrame);
@@ -567,6 +596,21 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                        <h3 className="text-3xl font-black italic tracking-tighter text-white">{t.neuralSession}</h3>
                        <p className="text-xs text-gray-400 font-medium leading-relaxed uppercase tracking-widest opacity-60">{t.initializingLink}</p>
                     </div>
+
+                    {errorMessage && (
+                      <div className="p-4 bg-red-950/45 border border-red-500/20 rounded-2xl flex items-start gap-3 text-left">
+                        <AlertTriangle className="text-red-500 flex-shrink-0 mt-0.5" size={16} />
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-red-400 uppercase tracking-wider">Server Configuration Needed</p>
+                          <p className="text-[11px] text-red-200/90 leading-normal">
+                            {errorMessage}
+                          </p>
+                          <p className="text-[10px] text-gray-400/60 leading-normal mt-1.5 font-medium">
+                            ℹ️ Check your <span className="font-mono text-gray-300 bg-white/5 px-1 rounded">GEMINI_API_KEY</span> inside the Secrets section in AI Studio.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     <button 
                       onClick={startSession}
                       className="group relative px-16 py-6 bg-orange-600 text-white rounded-3xl font-black text-xl transition-all transform hover:-translate-y-2 active:translate-y-0 shadow-[0_20px_50px_rgba(234,88,12,0.3)] flex items-center gap-4 overflow-hidden"

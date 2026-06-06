@@ -6,6 +6,7 @@
 export class AudioStreamer {
   private audioContext: AudioContext | null = null;
   private processor: ScriptProcessorNode | null = null;
+  private currentStream: MediaStream | null = null;
   private sampleRate = 16000;
   private bufferSize = 4096;
 
@@ -20,7 +21,23 @@ export class AudioStreamer {
       sampleRate: this.sampleRate,
     });
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      console.error("[AudioStreamer] getUserMedia failed:", err);
+      this.stop();
+      throw err;
+    }
+
+    // Safety check: if stop() was called during getUserMedia prompt
+    if (!this.audioContext) {
+      console.log("[AudioStreamer] AudioContext was cleared/stopped during userMedia acquisition.");
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+
+    this.currentStream = stream;
     const source = this.audioContext.createMediaStreamSource(stream);
     
     this.processor = this.audioContext.createScriptProcessor(this.bufferSize, 1, 1);
@@ -30,6 +47,8 @@ export class AudioStreamer {
     const silenceLimit = 20; // Number of chunks to consider silence
 
     this.processor.onaudioprocess = (e) => {
+      if (!this.audioContext) return;
+
       const inputData = e.inputBuffer.getChannelData(0);
       
       // Basic VAD (Voice Activity Detection)
@@ -62,13 +81,29 @@ export class AudioStreamer {
   }
 
   stop() {
+    if (this.currentStream) {
+      try {
+        this.currentStream.getTracks().forEach(track => track.stop());
+      } catch (e) {
+        console.error("[AudioStreamer] Error stopping stream tracks:", e);
+      }
+      this.currentStream = null;
+    }
     if (this.processor) {
-      this.processor.disconnect();
+      try {
+        this.processor.disconnect();
+      } catch (e) {
+        // ignore
+      }
       this.processor = null;
     }
     if (this.audioContext) {
       if (this.audioContext.state !== 'closed') {
-        this.audioContext.close();
+        try {
+          this.audioContext.close();
+        } catch (e) {
+          // ignore
+        }
       }
       this.audioContext = null;
     }

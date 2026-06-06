@@ -1,4 +1,6 @@
 import express from "express";
+import http from "http";
+import { WebSocketServer } from "ws";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -11,8 +13,46 @@ import { GoogleGenAI, Type } from "@google/genai";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize Gemini
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+// Lazy Initialize AI Client for GoogleGenAI
+let cachedAIClient: GoogleGenAI | null = null;
+let currentAuthWorkflow = "";
+
+function getAI(): GoogleGenAI {
+  if (cachedAIClient) return cachedAIClient;
+
+  const isVertex = !!process.env.VERTEX_PROJECT_ID;
+  if (isVertex) {
+    const project = process.env.VERTEX_PROJECT_ID;
+    const location = process.env.VERTEX_LOCATION || "us-central1";
+    console.log(`[Backend AI] AUTH WORKFLOW DETECTED: Google Cloud Vertex AI (Project: ${project}, Location: ${location})`);
+    currentAuthWorkflow = `Vertex AI (Project: ${project})`;
+    cachedAIClient = new GoogleGenAI({
+      vertexai: true,
+      project: project,
+      location: location
+    });
+    return cachedAIClient;
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey.trim() === "") {
+    console.error("[Backend AI] ERROR: GEMINI_API_KEY is missing, empty, or using the placeholder value 'MY_GEMINI_API_KEY'.");
+    throw new Error("Missing or invalid Gemini API configuration. Please configure GEMINI_API_KEY on the server.");
+  }
+
+  console.log(`[Backend AI] AUTH WORKFLOW DETECTED: Standard Gemini API (API Key starts with: ${apiKey.substring(0, 4)}...)`);
+  currentAuthWorkflow = "Standard Gemini API Key";
+  cachedAIClient = new GoogleGenAI({
+    apiKey: apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build-tutor',
+      }
+    }
+  });
+
+  return cachedAIClient;
+}
 
 // Helper to extract YouTube Video ID from various formats
 function extractVideoId(url: string | any): string | null {
@@ -113,6 +153,92 @@ function safeParseAIJSON(text: string): any {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[Backend] Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
+/**
+ * Initializes a new Tutor AI Live session using the @google/genai SDK,
+ * automatically detecting and configuring either a standard Gemini API key
+ * or a Google Cloud Vertex AI authentication workflow.
+ */
+async function initializeTutorSession(
+  videoTitle: string,
+  transcript: string,
+  clientWs: any
+): Promise<any> {
+  let aiClient: GoogleGenAI;
+  
+  try {
+    aiClient = getAI();
+    console.log(`[Backend Tutor] Dynamic AI Client resolved. Active workflow: ${currentAuthWorkflow}`);
+  } catch (err: any) {
+    console.error("[Backend Tutor] Failed to initialize dynamic GoogleGenAI client:", err.message);
+    if (clientWs.readyState === 1) { // 1 is WebSocket.OPEN
+      clientWs.send(JSON.stringify({ 
+        event: "error", 
+        details: err?.message || "Tutor live session cannot start due to missing server-side API configuration." 
+      }));
+    }
+    throw err;
+  }
+
+  const isVertex = !!process.env.VERTEX_PROJECT_ID;
+  const modelName = isVertex 
+    ? (process.env.VERTEX_MODEL_NAME || "gemini-3.1-flash-live-preview")
+    : "gemini-3.1-flash-live-preview";
+
+  console.log(`[Backend Tutor] Starting Gemini/Vertex Live API connection under model '${modelName}' for: "${videoTitle}"`);
+
+  return await aiClient.live.connect({
+    model: modelName,
+    callbacks: {
+      onopen: () => {
+        console.log("[Backend Tutor] Connected successfully to Gemini/Vertex Live API stream");
+        if (clientWs.readyState === 1) { // 1 is WebSocket.OPEN
+          clientWs.send(JSON.stringify({ event: "open" }));
+        }
+      },
+      onmessage: (liveMsg) => {
+        if (clientWs.readyState === 1) { // 1 is WebSocket.OPEN
+          clientWs.send(JSON.stringify({ event: "message", data: liveMsg }));
+        }
+      },
+      onclose: () => {
+        console.log("[Backend Tutor] Gemini/Vertex Live API session closed cleanly");
+        if (clientWs.readyState === 1) { // 1 is WebSocket.OPEN
+          clientWs.send(JSON.stringify({ event: "close" }));
+          clientWs.close();
+        }
+      },
+      onerror: (err: any) => {
+        console.error("[Backend Tutor] Gemini/Vertex Live session encountered an error:", err);
+        if (clientWs.readyState === 1) { // 1 is WebSocket.OPEN
+          clientWs.send(JSON.stringify({ event: "error", details: err?.message || "Gemini Live Session Error" }));
+        }
+      }
+    },
+    config: {
+      responseModalities: ["AUDIO" as any],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+      },
+      generationConfig: {
+        responseModalities: ["AUDIO" as any],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+        },
+      },
+      outputAudioTranscription: {},
+      inputAudioTranscription: {},
+      systemInstruction: `You are Astra AI, the ultimate neural study companion. You are guiding a student on the video: "${videoTitle}".\n\n` +
+      `Context from Video:\n${(transcript || "").substring(0, 15000)}\n\n` +
+      `Pedagogical Guidelines:\n` +
+      `1. Be the ultimate mentor. Don't just give answers—ask targeted questions that guide the user to the answer.\n` +
+      `2. Use specific examples from the transcript to build your explanations.\n` +
+      `3. If the user seems lost, simplify the concept using a real-world analogy.\n` +
+      `4. Acknowledge the user's progress. Use phrases like "Exactly!", "Great catch", "You've got it".\n` +
+      `5. Keep your spoken responses concise and energetic. Aim for natural conversation patterns.`
+    }
+  });
+}
 
 async function startServer() {
   const app = express();
@@ -277,7 +403,7 @@ async function startServer() {
                 - tutor_questions: Relevant questions for deep learning.
                 - limitations: Mention that this analysis is based on metadata/title as the specific video transcript was unavailable.`;
 
-        const geminiResult = await ai.models.generateContent({
+        const geminiResult = await getAI().models.generateContent({
           model: "gemini-3-flash-preview",
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           config: {
@@ -382,6 +508,14 @@ async function startServer() {
       } catch (aiErr: any) {
         console.error("[Backend] Gemini analysis: FAILED -", aiErr.message);
         
+        // Propagate API configuration errors immediately to let the frontend know the API key requires attention
+        if (aiErr.message?.includes("Gemini API configuration") || aiErr.message?.includes("GEMINI_API_KEY")) {
+          return res.status(500).json({
+            error: "Gemini API Configuration Error",
+            details: aiErr.message
+          });
+        }
+        
         // Final fallback analysis object if AI fails completely (constructive and helpful)
         const isPt = lang === 'pt';
         analysisData = {
@@ -437,6 +571,66 @@ async function startServer() {
     }
   });
 
+  // Extra Quiz Questions Generation Endpoint (Secure server-side proxy)
+  app.post("/api/generate-extra-questions", async (req, res) => {
+    const { title, content, lang } = req.body;
+    try {
+      const langNames: Record<string, string> = {
+        'pt': 'Portuguese (Brazilian)',
+        'en': 'English',
+        'es': 'Spanish'
+      };
+      const targetLang = langNames[lang] || 'English';
+
+      const prompt = `Based on the following content for the video "${title}", generate 5 additional challenging multiple-choice quiz questions.
+        
+        CRITICAL:
+        1. Content must be in ${targetLang}.
+        2. Response must be valid JSON only.
+        3. Questions must be different from common knowledge, focus on specific details in the content.
+        
+        Content:
+        ${(content || "").substring(0, 30000)}`;
+
+      console.log(`[Backend] Generating extra questions for video "${title}" in: ${targetLang}`);
+      
+      const aiClient = getAI();
+      const response = await aiClient.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              quiz: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    question: { type: Type.STRING },
+                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    answer: { type: Type.STRING },
+                    explanation: { type: Type.STRING }
+                  },
+                  required: ["question", "options", "answer", "explanation"]
+                }
+              }
+            },
+            required: ["quiz"]
+          }
+        }
+      });
+
+      const text = response.text || "";
+      const parsed = JSON.parse(text);
+      res.json({ quiz: parsed.quiz || [] });
+    } catch (error: any) {
+      console.error("[Backend] Error generating extra questions:", error);
+      res.status(500).json({ error: error.message || "Failed to generate extra questions from Gemini" });
+    }
+  });
+
   // Global Error Handler
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error("Unhandled Application Error:", err);
@@ -464,7 +658,75 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = http.createServer(app);
+
+  // Attach WebSocket Server
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on("upgrade", (request, socket, head) => {
+    try {
+      const { pathname } = new URL(request.url || "", `http://${request.headers.host || 'localhost'}`);
+      if (pathname === "/api/tutor-socket" || pathname === "/ws/tutor") {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit("connection", ws, request);
+        });
+      } else {
+        socket.destroy();
+      }
+    } catch (e) {
+      console.error("[Backend WebSocket] Upgrade failed:", e);
+      socket.destroy();
+    }
+  });
+
+  wss.on("connection", (clientWs) => {
+    console.log("[Backend Tutor] Client connected to live WebSocket");
+    let session: any = null;
+
+    clientWs.on("message", async (messageData) => {
+      try {
+        const msg = JSON.parse(messageData.toString());
+        if (msg.type === "setup") {
+          const { videoTitle, transcript } = msg;
+          console.log(`[Backend Tutor] Initializing separated Tutor Live Session for: "${videoTitle}"`);
+
+          session = await initializeTutorSession(videoTitle, transcript, clientWs);
+        } else if (msg.type === "audio") {
+          if (session) {
+            session.sendRealtimeInput({
+              audio: { data: msg.data, mimeType: 'audio/pcm;rate=16000' }
+            });
+          }
+        } else if (msg.type === "video") {
+          if (session) {
+            session.sendRealtimeInput({
+              video: { data: msg.data, mimeType: 'image/jpeg' }
+            });
+          }
+        }
+      } catch (error: any) {
+        console.error("[Backend Tutor] Error processing socket message:", error);
+        clientWs.send(JSON.stringify({ event: "error", details: error?.message || "Invalid message format" }));
+      }
+    });
+
+    clientWs.on("close", () => {
+      console.log("[Backend Tutor] Client WebSocket disconnected, cleaning up Gemini session...");
+      if (session) {
+        try {
+          session.close();
+        } catch (e) {
+          // ignore
+        }
+      }
+    });
+
+    clientWs.on("error", (err) => {
+      console.error("[Backend Tutor] Client WebSocket error:", err);
+    });
+  });
+
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Astra.ai integrated server running on http://localhost:${PORT}`);
   });
 }
