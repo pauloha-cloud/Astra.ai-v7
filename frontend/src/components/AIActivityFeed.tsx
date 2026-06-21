@@ -138,7 +138,7 @@ export const AIActivityFeed = ({ isDarkMode, t }: AIActivityFeedProps) => {
             }`}
           >
             <Sparkles className="w-3 h-3 text-orange-500" />
-            <span className="text-[10px] font-black tracking-widest text-orange-500 uppercase">Astra Engine</span>
+            <span className="text-[10px] font-black tracking-widest text-orange-500 uppercase">Astra Learning AI Engine</span>
           </motion.div>
           
           <motion.h2 
@@ -146,7 +146,7 @@ export const AIActivityFeed = ({ isDarkMode, t }: AIActivityFeedProps) => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className={`text-3xl md:text-4xl font-bold tracking-tight mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
+            className={`text-3xl md:text-4xl font-bold italic tracking-tight mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
           >
             {t.title}
           </motion.h2>

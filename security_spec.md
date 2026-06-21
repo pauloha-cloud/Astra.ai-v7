@@ -1,4 +1,4 @@
-# Security Specification for Astra.ai
+# Security Specification for Astra Learning AI
 
 ## Data Invariants
 - A user profile can only be created by the authenticated user with matching UID.

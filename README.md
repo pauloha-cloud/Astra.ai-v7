@@ -1,4 +1,4 @@
-# Astra.ai - AI-Powered Educational Platform
+# Astra Learning AI - AI-Powered Educational Platform
 
 Transform long YouTube videos into concise study materials using AI.
 
@@ -13,7 +13,7 @@ Transform long YouTube videos into concise study materials using AI.
 ## Project Structure
 
 ```
-astra-ai/
+astra-learning-ai/
 ├── backend/            # Express API service
 │   ├── src/            # Backend source code
 │   └── package.json    # Backend dependencies

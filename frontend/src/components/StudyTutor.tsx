@@ -682,7 +682,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                             }`}>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-[9px] font-black uppercase tracking-widest ${isAstra ? 'text-orange-500' : 'text-gray-500'}`}>
-                                  {isAstra ? 'ASTRA' : 'YOU'}
+                                  {isAstra ? 'ASTRA LEARNING AI' : 'YOU'}
                                 </span>
                                 {isAstra && isAiSpeaking && i === transcription.length - 1 && (
                                   <motion.div 
@@ -778,22 +778,22 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            className="absolute inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md overflow-hidden"
           >
             <motion.div 
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="bg-[#0f0f0f] border border-white/10 rounded-[2.5rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl relative"
+              className="bg-[#0f0f0f] border border-white/10 rounded-[2rem] md:rounded-[2.5rem] w-full max-w-2xl max-h-[calc(100dvh-1rem)] overflow-y-auto custom-scrollbar shadow-2xl relative"
             >
-              <div className="p-8 md:p-12 space-y-10">
+              <div className="p-5 sm:p-6 md:p-8 space-y-6 md:space-y-8">
                 {/* Header Side */}
                 <div className="flex flex-col items-center text-center gap-6">
                   <div className="w-16 h-16 bg-orange-600/20 rounded-3xl flex items-center justify-center border border-orange-500/30 shadow-lg shadow-orange-600/20">
                     <Brain size={32} className="text-orange-500" />
                   </div>
                   <div className="space-y-2">
-                    <h2 className="text-3xl font-black italic tracking-tighter text-white uppercase">{t.onboardingTitle}</h2>
+                    <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-white uppercase">{t.onboardingTitle}</h2>
                     <p className="text-gray-400 text-base leading-relaxed">{t.onboardingDesc}</p>
                   </div>
                 </div>
@@ -860,7 +860,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                       }
                       setShowOnboarding(false);
                     }}
-                    className="w-full py-6 bg-white text-black rounded-3xl font-black text-xl hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-white/10 uppercase tracking-tight"
+                    className="w-full py-4 md:py-5 bg-orange-600 text-white rounded-3xl font-black text-lg md:text-xl hover:bg-orange-500 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-orange-600/25 uppercase tracking-tight"
                   >
                     {t.startLearning}
                   </button>

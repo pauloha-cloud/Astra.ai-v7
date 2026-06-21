@@ -1,6 +1,6 @@
 {
   "name": "Remix: Remix: Astra.ai - v7",
-  "description": "AI-powered educational platform to transform YouTube videos into study materials, quizzes, and mind maps.",
+  "description": "Learn faster. Understand deeper with AI-powered video learning.",
   "requestFramePermissions": [
     "camera",
     "microphone"

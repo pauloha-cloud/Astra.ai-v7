@@ -21,19 +21,27 @@ import {
   Loader2,
   ExternalLink,
   ChevronRight,
-  Search
+  Search,
+  Mail,
+  Lock,
+  ArrowLeft,
+  AlertCircle,
+  Check,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { checkHealth, api } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
 import { analyzeVideoContent, AnalysisResult } from './services/geminiService';
 import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './lib/firebase';
+import { db, auth } from './lib/firebase';
 import { AnalysisResultView } from './components/AnalysisResultView';
 import { handleFirestoreError, OperationType } from './lib/firestoreUtils';
 import { Pricing } from './components/Pricing';
 import { AICore } from './components/AICore';
 import { AIActivityFeed } from './components/AIActivityFeed';
 import axios from 'axios';
+import { BrandLogo } from './components/BrandLogo';
 
 // Types
 type ComponentState = 'landing' | 'dashboard';
@@ -45,19 +53,19 @@ const TRANSLATIONS = {
     pricing: "Preços",
     signIn: "Entrar",
     startFree: "Começar Agora",
-    watchDemo: "Ver Astra em Ação",
+    watchDemo: "Ver Astra Learning AI em Ação",
     heroTitle: "TRANSFORME ASSISTIR",
     heroHighlight: "EM APRENDER.",
     heroDesc: "Uma plataforma de aprendizado com IA que transforma vídeos em resumos, mapas mentais, quizzes, flashcards e experiências de estudo personalizadas.",
-    pwrByPrecision: "IMPULSIONADO PELA PRECISÃO.",
+    pwrByPrecision: "ECOSSISTEMA INTEGRADO DE ESTUDOS.",
     aiSummaries: "Resumos com IA",
-    aiSummariesDesc: "Obtenha os conceitos centrais sem enrolação.",
+    aiSummariesDesc: "Economize horas de estudo e absorva os pontos fundamentais em segundos.",
     mindMaps: "Mapas Mentais",
-    mindMapsDesc: "Visualize a estrutura do vídeo automaticamente.",
+    mindMapsDesc: "Visualize conexões semânticas fundamentais para dominar conceitos complexos.",
     studyTutor: "Tutor de Estudos",
-    studyTutorDesc: "Converse com seu vídeo para tirar dúvidas complexas.",
+    studyTutorDesc: "Esclareça dúvidas complexas e receba explicações direcionadas da nossa IA.",
     quizGen: "Geração de Quizzes",
-    quizGenDesc: "Teste seus conhecimentos com perguntas orientadas por IA.",
+    quizGenDesc: "Avalie sua fixação de conteúdo com avaliações dinâmicas sob demanda.",
     welcome: "Bem-vindo de volta, Explorador",
     readyAnalyze: "Pronto para analisar outra obra-prima?",
     videoUrl: "URL do Vídeo no YouTube",
@@ -72,14 +80,36 @@ const TRANSLATIONS = {
     history: "Histórico",
     settings: "Configurações",
     exit: "Sair",
-    loginTitle: "BEM-VINDO À ASTRA",
+    loginTitle: "BEM-VINDO AO ASTRA LEARNING AI",
     loginDesc: "Junte-se a milhares de estudantes e pesquisadores transformando sua forma de aprender.",
     continueGoogle: "Continuar com Google",
+    continueApple: "Continuar com Apple",
+    continueEmail: "Continuar com e-mail",
+    emailPlaceholder: "Seu endereço de e-mail",
+    passwordPlaceholder: "Sua senha (mín. 6 caracteres)",
+    loginButton: "Entrar",
+    signupButton: "Criar Conta",
+    dontHaveAccount: "Não tem uma conta? Cadastre-se",
+    alreadyHaveAccount: "Já tem uma conta? Conecte-se",
+    verifyEmailTitle: "CONFIRME SEU E-MAIL",
+    verifyEmailDesc: "Enviamos um link de confirmação para {email}. Por favor, verifique sua caixa de entrada e spam para ativar sua conta.",
+    checkVerificationButton: "Já verifiquei meu e-mail",
+    resendButton: "Reenviar e-mail de verificação",
+    cancelButton: "Cancelar e sair",
+    backToSocial: "Voltar para opções de login",
+    backToLogin: "Voltar para o login",
+    enterEmailAndPasswordDesc: "Insira suas credenciais para acessar a conta.",
+    createAccountDesc: "Cadastre-se para começar a estudar.",
+    forgotPassword: "Esqueceu sua senha?",
+    passwordResetTitle: "REDEFINIR SENHA",
+    passwordResetDesc: "Insira seu e-mail para receber um link de redefinição de senha.",
+    sendResetLinkButton: "Enviar link de redefinição",
+    resetLinkSent: "Link de redefinição enviado com sucesso! Verifique seu e-mail.",
     terms: "Ao continuar, você concorda com nossos Termos de Serviço e Política de Privacidade.",
     signOut: "Sair",
     searchHistory: "Pesquisar histórico...",
     clearSearch: "Limpar Pesquisa",
-    astraV3: "ASTRA v3",
+    astraV3: "Astra Learning AI",
     premium: "PREMIUM",
     noResults: "Nenhum resultado para",
     adjustSearch: "Tente ajustar sua pesquisa ou palavras-chave.",
@@ -108,17 +138,17 @@ const TRANSLATIONS = {
     noTranscript: "Nenhuma transcrição disponível para este vídeo.",
     closeAnalysis: "Fechar Análise",
     studyTutorLive: "Tutor de Estudos Ao Vivo",
-    onboardingTitle: "Bem-vindo ao Astra Tutor",
+    onboardingTitle: "Bem-vindo ao Tutor Astra Learning AI",
     onboardingDesc: "Um mentor de IA totalmente conversacional que entende cada detalhe deste vídeo.",
     onboardingStep1Title: "Fale Naturalmente",
-    onboardingStep1Desc: "Sem necessidade de digitar. Basta falar com a Astra como faria com um mentor humano.",
+    onboardingStep1Desc: "Sem necessidade de digitar. Basta falar com o Astra Learning AI como faria com um mentor humano.",
     onboardingStep2Title: "Consciente do Contexto",
-    onboardingStep2Desc: "A Astra analisou a transcrição completa e pode responder a perguntas complexas dinamicamente.",
+    onboardingStep2Desc: "O Astra Learning AI analisou a transcrição completa e pode responder a perguntas complexas dinamicamente.",
     onboardingStep3Title: "Feedback em Tempo Real",
     onboardingStep3Desc: "O núcleo visual reage à sua voz e ao status da IA em tempo real.",
     getStarted: "Começar",
     onboardingStep4Title: "Limitações",
-    onboardingStep4Desc: "Como toda IA, a Astra pode ocasionalmente cometer erros ou omitir detalhes técnicos muito específicos. Sempre verifique informações críticas.",
+    onboardingStep4Desc: "Como toda IA, o Astra Learning AI pode ocasionalmente cometer erros ou omitir detalhes técnicos muito específicos. Sempre verifique informações críticas.",
     exampleQuestionsTitle: "Tente perguntar:",
     exampleQuestion1: "Resuma os argumentos dos primeiros 5 minutos.",
     exampleQuestion2: "Explique o conceito de [X] de forma simples.",
@@ -130,7 +160,7 @@ const TRANSLATIONS = {
     connectNeuralLink: "Conectar Link Neural",
     auraActive: "Aura Ativa",
     processing: "Processando...",
-    astraAnswering: "Astra está respondendo",
+    astraAnswering: "Astra Learning AI está respondendo",
     listeningToYou: "Ouvindo você",
     imListening: "Estou Ouvindo",
     analyzingRequest: "Analisando seu pedido",
@@ -153,7 +183,7 @@ const TRANSLATIONS = {
     sessionError: "Erro na sessão. Por favor, reconecte.",
     failedConnectMic: "Falha ao conectar. Verifique se o microfone está ativado.",
     sessionEnded: "Sessão encerrada",
-    fallbackTranscript: "Astra Fallback: Transcrição indisponível.",
+    fallbackTranscript: "Astra Learning AI Fallback: Transcrição indisponível.",
     aiStatus: "Status da IA",
     transcriptReady: "TRANSCRIÇÃO: PRONTA",
     // Pricing
@@ -204,8 +234,8 @@ const TRANSLATIONS = {
     noResponse: "Sem resposta do servidor",
     networkIssue: "Problema de conexão de rede ou tempo de espera do servidor esgotado.",
     hero: {
-      badgeOnline: "Astra AI Core Online",
-      badgeOffline: "Astra AI Core Offline",
+      badgeOnline: "Astra Learning AI Core Online",
+      badgeOffline: "Astra Learning AI Core Offline",
       badgeChecking: "Verificando...",
       subtitle: "Uma plataforma de aprendizado com IA que transforma vídeos em resumos, mapas mentais, quizzes, flashcards e experiências de estudo personalizadas.",
       processingStates: [
@@ -229,44 +259,44 @@ const TRANSLATIONS = {
         "Refinando material..."
       ]
     },
-    tutorSystemInstruction: "Você é o Astra Tutor, um educador brilhante e prestativo. Você está em uma sessão ao vivo sobre o vídeo: \"{videoTitle}\". Use o contexto da transcrição para responder perguntas exatamente como um tutor faria. Seja conversacional, conciso e encoraje o pensamento crítico. Mantenha as respostas curtas para melhor interação em tempo real.",
+    tutorSystemInstruction: "Você é o Tutor Astra Learning AI, um educador brilhante e prestativo. Você está em uma sessão ao vivo sobre o vídeo: \"{videoTitle}\". Use o contexto da transcrição para responder perguntas exatamente como um tutor faria. Seja conversacional, conciso e encoraje o pensamento crítico. Mantenha as respostas curtas para melhor interação em tempo real.",
     quizScoreMessage: "Ótimo esforço! Conhecimento é poder.",
     activityFeed: {
-      title: "Atividade da IA em tempo real",
-      subtitle: "Acompanhe como o Astra.ai transforma conteúdo em experiências de aprendizado personalizadas.",
+      title: "FLUXO INTELIGENTE EM TEMPO REAL",
+      subtitle: "Do vídeo ao plano de estudo: acompanhe as etapas que preparam o conteúdo para você.",
       now: "agora",
       recent: "recentemente",
       ago2: "há 2 min",
       ago5: "há 5 min",
       items: [
         {
-          title: "Resumo gerado com sucesso",
-          desc: "Principais conceitos extraídos com precisão neural.",
+          title: "Sintetizando fluxo do conteúdo",
+          desc: "Ingestão e processamento da transcrição para consolidação de ideias centrais.",
           type: "summary"
         },
         {
-          title: "Mapa mental concluído",
-          desc: "Estrutura visual de conhecimento organizada automaticamente.",
+          title: "Mapeando ramificações semânticas",
+          desc: "Estruturação gráfica de conexões lógicas e hierarquia de conceitos de aprendizagem.",
           type: "mindmap"
         },
         {
-          title: "Quiz criado pela IA",
-          desc: "Questões personalizadas para testar sua retenção.",
+          title: "Estruturando matriz de avaliação",
+          desc: "Análise quantitativa do conteúdo para formulação de testes de fixação personalizados.",
           type: "quiz"
         },
         {
-          title: "Flashcards preparados",
-          desc: "Cartões de revisão otimizados para memorização.",
+          title: "Otimizando espaçamento de repetição",
+          desc: "Geração de cartões mnemônicos baseados em lacunas de conhecimento identificadas.",
           type: "flashcards"
         },
         {
-          title: "Tutor inteligente ativo",
-          desc: "IA analisou novo conteúdo e está pronta para ensinar.",
+          title: "Alinhando modelo cognitivo",
+          desc: "Ajuste de parâmetros do tutor de estudos com base nos metadados do vídeo.",
           type: "tutor"
         },
         {
-          title: "Recomendações atualizadas",
-          desc: "Novos caminhos de estudo sugeridos pela Astra.",
+          title: "Calculando vetores de contexto",
+          desc: "Mapeamento de rotas de aprendizado complementares recomendadas.",
           type: "rec"
         }
       ]
@@ -277,19 +307,19 @@ const TRANSLATIONS = {
     pricing: "Pricing",
     signIn: "Sign In",
     startFree: "Get Started Now",
-    watchDemo: "See Astra in Action",
+    watchDemo: "See Astra Learning AI in Action",
     heroTitle: "TURN WATCHING",
     heroHighlight: "INTO LEARNING.",
     heroDesc: "An AI-powered learning platform that transforms videos into summaries, mind maps, quizzes, flashcards, and personalized study experiences.",
-    pwrByPrecision: "POWERED BY PRECISION.",
+    pwrByPrecision: "INTELLIGENT STUDY ECOSYSTEM.",
     aiSummaries: "AI Summaries",
-    aiSummariesDesc: "Get the core concepts without the fluff.",
+    aiSummariesDesc: "Save hours of watching by instantly capturing essential insights and takeaways.",
     mindMaps: "Mind Maps",
-    mindMapsDesc: "Visualize the video structure automatically.",
+    mindMapsDesc: "Map out key connections visually to organize complex topics and boost retention.",
     studyTutor: "Study Tutor",
-    studyTutorDesc: "Chat with your video to clarify complex topics.",
+    studyTutorDesc: "Get tailored explanations and clarify doubts in real-time with our smart AI.",
     quizGen: "Quiz Generation",
-    quizGenDesc: "Test your knowledge with AI-driven questions.",
+    quizGenDesc: "Validate your comprehension instantly with dynamically generated assessments.",
     welcome: "Welcome back, Explorer",
     readyAnalyze: "Ready to analyze another masterpiece?",
     videoUrl: "YouTube Video URL",
@@ -304,14 +334,36 @@ const TRANSLATIONS = {
     history: "History",
     settings: "Settings",
     exit: "Exit",
-    loginTitle: "WELCOME TO ASTRA",
+    loginTitle: "WELCOME TO ASTRA LEARNING AI",
     loginDesc: "Join thousands of students and researchers transforming how they learn.",
     continueGoogle: "Continue with Google",
+    continueApple: "Continue with Apple",
+    continueEmail: "Continue with email",
+    emailPlaceholder: "Your email address",
+    passwordPlaceholder: "Your password (min. 6 characters)",
+    loginButton: "Log In",
+    signupButton: "Create Account",
+    dontHaveAccount: "Don't have an account? Sign up",
+    alreadyHaveAccount: "Already have an account? Log in",
+    verifyEmailTitle: "VERIFY YOUR EMAIL",
+    verifyEmailDesc: "We sent a confirmation link to {email}. Please check your inbox and spam folders to activate your account.",
+    checkVerificationButton: "I've verified my email",
+    resendButton: "Resend verification email",
+    cancelButton: "Cancel and sign out",
+    backToSocial: "Back to login options",
+    backToLogin: "Back to login",
+    enterEmailAndPasswordDesc: "Enter your credentials to access your account.",
+    createAccountDesc: "Sign up to start learning.",
+    forgotPassword: "Forgot password?",
+    passwordResetTitle: "RESET PASSWORD",
+    passwordResetDesc: "Enter your email address to receive a password reset link.",
+    sendResetLinkButton: "Send reset link",
+    resetLinkSent: "Password reset link sent successfully! Please check your email.",
     terms: "By continuing, you agree to our Terms of Service and Privacy Policy.",
     signOut: "Sign Out",
     searchHistory: "Search history...",
     clearSearch: "Clear Search",
-    astraV3: "ASTRA v3",
+    astraV3: "Astra Learning AI",
     premium: "PREMIUM",
     noResults: "No results for",
     adjustSearch: "Try adjusting your search or keywords.",
@@ -340,17 +392,17 @@ const TRANSLATIONS = {
     noTranscript: "No transcript available for this video.",
     closeAnalysis: "Close Analysis",
     studyTutorLive: "Study Tutor Live",
-    onboardingTitle: "Welcome to Astra Tutor",
+    onboardingTitle: "Welcome to Astra Learning AI Tutor",
     onboardingDesc: "A fully conversational AI mentor that understands every detail of this video.",
     onboardingStep1Title: "Speak Naturally",
-    onboardingStep1Desc: "No typing required. Just talk to Astra like you would with a human mentor.",
+    onboardingStep1Desc: "No typing required. Just talk to Astra Learning AI like you would with a human mentor.",
     onboardingStep2Title: "Context Aware",
-    onboardingStep2Desc: "Astra has analyzed the full transcript and can answer complex questions dynamically.",
+    onboardingStep2Desc: "Astra Learning AI has analyzed the full transcript and can answer complex questions dynamically.",
     onboardingStep3Title: "Real-time Feedback",
     onboardingStep3Desc: "The visual core reacts to your voice and AI status in real-time.",
     getStarted: "Get Started",
     onboardingStep4Title: "Limitations",
-    onboardingStep4Desc: "Like all AI, Astra may occasionally make mistakes or miss highly specific technical details. Always verify critical information.",
+    onboardingStep4Desc: "Like all AI, Astra Learning AI may occasionally make mistakes or miss highly specific technical details. Always verify critical information.",
     exampleQuestionsTitle: "Try asking:",
     exampleQuestion1: "Summarize the arguments from the first 5 mins.",
     exampleQuestion2: "Explain the concept of [X] simply.",
@@ -362,7 +414,7 @@ const TRANSLATIONS = {
     connectNeuralLink: "Connect Neural Link",
     auraActive: "Aura Active",
     processing: "Processing...",
-    astraAnswering: "Astra is answering",
+    astraAnswering: "Astra Learning AI is answering",
     listeningToYou: "Listening to you",
     imListening: "I'm Listening",
     analyzingRequest: "Analyzing your request",
@@ -385,7 +437,7 @@ const TRANSLATIONS = {
     sessionError: "Session error. Please reconnect.",
     failedConnectMic: "Failed to connect. Ensure your microphone is enabled.",
     sessionEnded: "Session ended",
-    fallbackTranscript: "Astra Fallback: Transcript unavailable.",
+    fallbackTranscript: "Astra Learning AI Fallback: Transcript unavailable.",
     aiStatus: "AI Status",
     transcriptReady: "TRANSCRIPT: READY",
     // Pricing
@@ -436,8 +488,8 @@ const TRANSLATIONS = {
     noResponse: "No response from server",
     networkIssue: "Network connection issue or server timeout.",
     hero: {
-      badgeOnline: "Astra AI Core Online",
-      badgeOffline: "Astra AI Core Offline",
+      badgeOnline: "Astra Learning AI Core Online",
+      badgeOffline: "Astra Learning AI Core Offline",
       badgeChecking: "Checking...",
       subtitle: "An AI-powered learning platform that transforms videos into summaries, mind maps, quizzes, flashcards and personalized study experiences.",
       processingStates: [
@@ -461,44 +513,44 @@ const TRANSLATIONS = {
         "Refining content..."
       ]
     },
-    tutorSystemInstruction: "You are Astra Tutor, a brilliant and supportive educator. You are in a live session about the video: \"{videoTitle}\". Use the transcript context to answer questions exactly as a tutor would. Be conversational, concise, and encourage critical thinking. Keep responses short for better real-time interaction.",
+    tutorSystemInstruction: "You are Astra Learning AI Tutor, a brilliant and supportive educator. You are in a live session about the video: \"{videoTitle}\". Use the transcript context to answer questions exactly as a tutor would. Be conversational, concise, and encourage critical thinking. Keep responses short for better real-time interaction.",
     quizScoreMessage: "Great effort! Knowledge is power.",
     activityFeed: {
-      title: "Real-time AI activity",
-      subtitle: "Watch how Astra.ai transforms content into personalized learning experiences.",
+      title: "REAL-TIME LEARNING WORKFLOW",
+      subtitle: "From video input to study plan, see how Astra Learning AI prepares your content step by step.",
       now: "now",
       recent: "recently",
       ago2: "2 min ago",
       ago5: "5 min ago",
       items: [
         {
-          title: "Summary generated successfully",
-          desc: "Key concepts extracted with neural precision.",
+          title: "Synthesizing content stream",
+          desc: "Parsing and filtering transcripts to consolidate high-value core insights.",
           type: "summary"
         },
         {
-          title: "Mind map completed",
-          desc: "Visual knowledge structure organized automatically.",
+          title: "Mapping visual cognitive paths",
+          desc: "Structuring logical connections and topic hierarchies into visual nodes.",
           type: "mindmap"
         },
         {
-          title: "Quiz created by AI",
-          desc: "Personalized questions to test your retention.",
+          title: "Generating active recall matrix",
+          desc: "Formulating challenge checkpoints directly derived from video timelines.",
           type: "quiz"
         },
         {
-          title: "Flashcards prepared",
-          desc: "Review cards optimized for memorization.",
+          title: "Constructing spaced recall decks",
+          desc: "Creating high-retention active study cards based on conceptual patterns.",
           type: "flashcards"
         },
         {
-          title: "Intelligent tutor active",
-          desc: "AI analyzed new content and is ready to teach.",
+          title: "Calibrating contextual tutor model",
+          desc: "Feeding real-time video parameters into the interactive learning assistant.",
           type: "tutor"
         },
         {
-          title: "Recommendations updated",
-          desc: "New study paths suggested by Astra.",
+          title: "Predicting adaptive learning vector",
+          desc: "Calculating personalized supplemental pathways for next-step expansion.",
           type: "rec"
         }
       ]
@@ -509,19 +561,19 @@ const TRANSLATIONS = {
     pricing: "Precios",
     signIn: "Iniciar Sesión",
     startFree: "Empezar Ahora",
-    watchDemo: "Ver Astra en Acción",
+    watchDemo: "Ver Astra Learning AI en Acción",
     heroTitle: "CONVIERTE MIRAR",
     heroHighlight: "EN APRENDER.",
     heroDesc: "Una plataforma de aprendizaje con IA que transforma videos en resúmenes, mapas mentales, cuestionarios, flashcards y experiencias de estudio personalizadas.",
-    pwrByPrecision: "IMPULSIONADO POR LA PRECISÃO.",
+    pwrByPrecision: "ECOSISTEMA DE ESTUDIO INTELIGENTE.",
     aiSummaries: "Resúmenes con IA",
-    aiSummariesDesc: "Obtén los conceptos clave sin rodeos.",
+    aiSummariesDesc: "Ahorra horas de estudio extrayendo los conceptos clave al instante.",
     mindMaps: "Mapas Mentales",
-    mindMapsDesc: "Visualiza la estructura del vídeo automáticamente.",
+    mindMapsDesc: "Visualiza la conexión entre temas para estructurar materias complejas.",
     studyTutor: "Tutor de Estudio",
-    studyTutorDesc: "Chatea con tu vídeo para aclarar dudas complejas.",
+    studyTutorDesc: "Resuelve dudas difíciles y obtén explicaciones personalizadas con nuestra IA.",
     quizGen: "Generación de Cuestionarios",
-    quizGenDesc: "Pon a prueba tus conocimientos con preguntas guiadas por IA.",
+    quizGenDesc: "Evalúa tu aprendizaje de inmediato con test creados de manera automática.",
     welcome: "Bienvenido de nuevo, Explorador",
     readyAnalyze: "¿Listo para analizar otra obra maestra?",
     videoUrl: "URL del Vídeo de YouTube",
@@ -536,14 +588,36 @@ const TRANSLATIONS = {
     history: "Historial",
     settings: "Ajustes",
     exit: "Salir",
-    loginTitle: "BIENVENIDO A ASTRA",
+    loginTitle: "BIENVENIDO A ASTRA LEARNING AI",
     loginDesc: "Únete a miles de estudiantes e investigadores transformando su forma de aprender.",
     continueGoogle: "Continuar con Google",
+    continueApple: "Continuar con Apple",
+    continueEmail: "Continuar con correo",
+    emailPlaceholder: "Tu dirección de correo electrónico",
+    passwordPlaceholder: "Tu contraseña (mín. 6 caracteres)",
+    loginButton: "Iniciar Sesión",
+    signupButton: "Crear Cuenta",
+    dontHaveAccount: "¿No tienes una cuenta? Regístrate",
+    alreadyHaveAccount: "¿Ya tienes una cuenta? Inicia sesión",
+    verifyEmailTitle: "CONFIRMA TU CORREO",
+    verifyEmailDesc: "Enviamos un enlace de confirmación a {email}. Por favor, revisa tu bandeja de entrada y correo no deseado para activar tu cuenta.",
+    checkVerificationButton: "Ya he verificado mi correo",
+    resendButton: "Reenviar correo de verificación",
+    cancelButton: "Cancelar y salir",
+    backToSocial: "Volver a opciones de inicio",
+    backToLogin: "Volver al inicio de sesión",
+    enterEmailAndPasswordDesc: "Introduce tus credenciales para acceder a tu cuenta.",
+    createAccountDesc: "Regístrate para empezar a aprender.",
+    forgotPassword: "¿Olvidaste tu contraseña?",
+    passwordResetTitle: "RESTABLECER CONTRASEÑA",
+    passwordResetDesc: "Introduce tu correo para recibir un enlace de restablecimiento.",
+    sendResetLinkButton: "Enviar enlace de restablecimiento",
+    resetLinkSent: "¡Enlace de restablecimiento enviado con éxito! Revisa tu correo.",
     terms: "Al continuar, aceptas nuestros Térmos de Servicio y Política de Privacidad.",
     signOut: "Cerrar Sesión",
     searchHistory: "Buscar historial...",
     clearSearch: "Limpar Búsqueda",
-    astraV3: "ASTRA v3",
+    astraV3: "Astra Learning AI",
     premium: "PREMIUM",
     noResults: "No hay resultados para",
     adjustSearch: "Prueba ajustando tu búsqueda o palabras clave.",
@@ -572,17 +646,17 @@ const TRANSLATIONS = {
     noTranscript: "No hay transcripción disponible para este vídeo.",
     closeAnalysis: "Cerrar Análisis",
     studyTutorLive: "Tutor de Estudio en Vivo",
-    onboardingTitle: "Bienvenido al Tutor Astra",
+    onboardingTitle: "Bienvenido al Tutor Astra Learning AI",
     onboardingDesc: "Un mentor de IA totalmente conversacional que entiende cada detalle de este video.",
     onboardingStep1Title: "Habla con Naturalidad",
-    onboardingStep1Desc: "No es necesario escribir. Solo habla con Astra como lo harías con un mentor humano.",
+    onboardingStep1Desc: "No es necesario escribir. Solo habla con Astra Learning AI como lo harías con un mentor humano.",
     onboardingStep2Title: "Consciente del Contexto",
-    onboardingStep2Desc: "Astra ha analizado la transcripción completa y puede responder preguntas complejas dinamicamente.",
+    onboardingStep2Desc: "Astra Learning AI ha analizado la transcripción completa y puede responder preguntas complejas dinamicamente.",
     onboardingStep3Title: "Retroalimentación en Tiempo Real",
     onboardingStep3Desc: "El núcleo visual reacciona a tu voz y al estado de la IA en tiempo real.",
     getStarted: "Empezar",
     onboardingStep4Title: "Limitaciones",
-    onboardingStep4Desc: "Como toda IA, Astra puede cometer errores ocasionalmente o pasar por alto detalles técnicos muy específicos. Siempre verifica la información crítica.",
+    onboardingStep4Desc: "Como toda IA, Astra Learning AI puede cometer errores ocasionalmente o pasar por alto detalles técnicos muy específicos. Siempre verifica la información crítica.",
     exampleQuestionsTitle: "Prueba preguntando:",
     exampleQuestion1: "Resume los argumentos de los primeros 5 minutos.",
     exampleQuestion2: "Explica el concepto de [X] de forma sencilla.",
@@ -594,7 +668,7 @@ const TRANSLATIONS = {
     connectNeuralLink: "Conectar Enlace Neural",
     auraActive: "Aura Activa",
     processing: "Procesando...",
-    astraAnswering: "Astra está respondiendo",
+    astraAnswering: "Astra Learning AI está respondiendo",
     listeningToYou: "Escuchándote",
     imListening: "Estoy Escuchando",
     analyzingRequest: "Analizando tu solicitud",
@@ -617,7 +691,7 @@ const TRANSLATIONS = {
     sessionError: "Error de sesión. Por favor, reconéctate.",
     failedConnectMic: "Fallo al conectar. Asegúrate de que tu micrófono esté habilitado.",
     sessionEnded: "Sesión finalizada",
-    fallbackTranscript: "Astra Fallback: Transcripción no disponible.",
+    fallbackTranscript: "Astra Learning AI Fallback: Transcripción no disponible.",
     aiStatus: "Estado de la IA",
     transcriptReady: "TRANSCRIPCIÓN: LISTA",
     // Pricing
@@ -668,8 +742,8 @@ const TRANSLATIONS = {
     noResponse: "Sin respuesta del servidor",
     networkIssue: "Problema de conexión de red o tiempo de espera del servidor agotado.",
     hero: {
-      badgeOnline: "Astra AI Core Online",
-      badgeOffline: "Astra AI Core Offline",
+      badgeOnline: "Astra Learning AI Core Online",
+      badgeOffline: "Astra Learning AI Core Offline",
       badgeChecking: "Verificando...",
       subtitle: "Una plataforma de aprendizaje con IA que transforma videos en resúmenes, mapas mentales, quizzes, flashcards y experiencias de estudio personalizadas.",
       processingStates: [
@@ -693,44 +767,45 @@ const TRANSLATIONS = {
         "Refinando contenido..."
       ]
     },
-    tutorSystemInstruction: "Eres Astra Tutor, un educador brillante y servicial. Estás en una sesión en vivo sobre el video: \"{videoTitle}\". Usa el contexto de la transcripción para responder preguntas exactamente como lo haría un tutor. Sé conversador, conciso y fomenta el pensamiento crítico. Mantén las respuestas cortas para una mejor interacción en tiempo real.",
+    tutorSystemInstruction: "Eres el Tutor Astra Learning AI, un educador brillante y servicial. Estás en uma sesión en vivo sobre el video: \"{videoTitle}\". Usa el contexto de la transcripción para responder preguntas exactamente como lo haría un tutor. Sé conversador, conciso y fomenta el pensamiento crítico. Mantén las respuestas cortas para una mejor interacción en tiempo real.", // wait, "estás en una..." (Spanish is "una" not "uma")
+    // Eres el Tutor Astra Learning AI, un educador brillante y servicial. Estás en una sesión en vivo sobre el video: "{videoTitle}". Usa el contexto de la transcripción para responder preguntas exactamente como lo haría un tutor. Sé conversador, conciso y fomenta el pensamiento crítico. Mantén las respuestas cortas para una mejor interacción en tiempo real.
     quizScoreMessage: "¡Gran esfuerzo! El conocimiento es poder.",
     activityFeed: {
-      title: "Actividad de IA en tiempo real",
-      subtitle: "Sigue cómo Astra.ai transforma contenido en experiencias de aprendizaje personalizadas.",
+      title: "FLUJO INTELIGENTE EN TIEMPO REAL",
+      subtitle: "Del video al plan de estudio: sigue cómo Astra Learning AI prepara el contenido paso a paso.",
       now: "ahora",
       recent: "recientemente",
       ago2: "hace 2 min",
       ago5: "hace 5 min",
       items: [
         {
-          title: "Resumen generado con éxito",
-          desc: "Conceptos clave extraídos con precisión neural.",
+          title: "Sintetizando flujo de contenido",
+          desc: "Procesando transcripciones para consolidar ideas esenciales en tiempo real.",
           type: "summary"
         },
         {
-          title: "Mapa mental completado",
-          desc: "Estructura visual de conocimiento organizada automáticamente.",
+          title: "Mapeando rutas cognitivas visuales",
+          desc: "Estructurando conexiones lógicas y jerarquías de temas en nodos visuales.",
           type: "mindmap"
         },
         {
-          title: "Quiz creado por la IA",
-          desc: "Preguntas personalizadas para probar tu retención.",
+          title: "Estructurando matriz de evaluación",
+          desc: "Formulando puntos de control interactivos basados en el progreso del video.",
           type: "quiz"
         },
         {
-          title: "Flashcards preparados",
-          desc: "Tarjetas de revisión optimizadas para memorización.",
+          title: "Generando mazos de repaso activo",
+          desc: "Creando tarjetas de memoria optimizadas para la retención conceptual continua.",
           type: "flashcards"
         },
         {
-          title: "Tutor inteligente activo",
-          desc: "La IA analizó contenido nuevo y está lista para enseñar.",
+          title: "Calibrando modelo de tutor virtual",
+          desc: "Cargando parámetros de aprendizaje conversacional en el asistente inteligente.",
           type: "tutor"
         },
         {
-          title: "Recomendaciones actualizadas",
-          desc: "Nuevas rutas de estudio sugeridas por Astra.",
+          title: "Calculando vectores de aprendizaje",
+          desc: "Proyectando recomendaciones de estudio y temas complementarios sugeridos.",
           type: "rec"
         }
       ]
@@ -744,18 +819,24 @@ const Button = ({
   variant = 'primary', 
   onClick, 
   className = "",
-  disabled = false
+  disabled = false,
+  isDarkMode = true
 }: { 
   children: React.ReactNode, 
   variant?: 'primary' | 'secondary' | 'ghost', 
   onClick?: () => void,
   className?: string,
-  disabled?: boolean
+  disabled?: boolean,
+  isDarkMode?: boolean
 }) => {
   const variants = {
     primary: "bg-orange-600 hover:bg-orange-700 text-white disabled:opacity-50 shadow-[0_0_20px_-10px_rgba(234,88,12,0.5)] hover:shadow-[0_0_25px_-5px_rgba(234,88,12,0.6)]",
-    secondary: "bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md disabled:opacity-50 shadow-lg",
-    ghost: "bg-transparent hover:bg-white/5 text-gray-400 hover:text-white disabled:opacity-50"
+    secondary: isDarkMode 
+      ? "bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md disabled:opacity-50 shadow-lg"
+      : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 disabled:opacity-50 shadow-sm",
+    ghost: isDarkMode
+      ? "bg-transparent hover:bg-white/5 text-gray-400 hover:text-white disabled:opacity-50"
+      : "bg-transparent hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-50"
   };
 
   return (
@@ -769,8 +850,207 @@ const Button = ({
   );
 };
 
+const getPasswordStrength = (pass: string, currentLang: Language) => {
+  if (!pass) return { score: 0, label: '', color: 'bg-gray-300', width: 'w-0', checks: { length: false, mixed: false, digit: false, special: false } };
+  
+  let score = 0;
+  
+  // Rule 1: Minimum length of 8 chars
+  const hasMinLength = pass.length >= 8;
+  if (hasMinLength) score += 1;
+  else if (pass.length > 0) score += 0.5;
+  
+  // Rule 2: Upper and lower case
+  const hasMixedCase = /[a-z]/.test(pass) && /[A-Z]/.test(pass);
+  if (hasMixedCase) score += 1;
+  
+  // Rule 3: Number
+  const hasDigit = /[0-9]/.test(pass);
+  if (hasDigit) score += 1;
+  
+  // Rule 4: Special char
+  const hasSpecial = /[^A-Za-z0-9]/.test(pass);
+  if (hasSpecial) score += 1;
+  
+  const finalScore = Math.min(4, Math.floor(score));
+  
+  let label = '';
+  let color = '';
+  let width = '';
+  
+  if (pass.length === 0) {
+    label = '';
+    color = 'bg-gray-300';
+    width = 'w-0';
+  } else if (finalScore <= 1) {
+    label = currentLang === 'pt' ? 'Fraca' : currentLang === 'es' ? 'Débil' : 'Weak';
+    color = 'bg-red-500';
+    width = 'w-1/4';
+  } else if (finalScore === 2) {
+    label = currentLang === 'pt' ? 'Média' : currentLang === 'es' ? 'Media' : 'Medium';
+    color = 'bg-yellow-500';
+    width = 'w-2/4';
+  } else if (finalScore === 3) {
+    label = currentLang === 'pt' ? 'Boa' : currentLang === 'es' ? 'Buena' : 'Good';
+    color = 'bg-emerald-500';
+    width = 'w-3/4';
+  } else {
+    label = currentLang === 'pt' ? 'Forte' : currentLang === 'es' ? 'Fuerte' : 'Strong';
+    color = 'bg-blue-500';
+    width = 'w-full';
+  }
+  
+  return { 
+    score: finalScore, 
+    label, 
+    color, 
+    width,
+    checks: {
+      length: hasMinLength,
+      mixed: hasMixedCase,
+      digit: hasDigit,
+      special: hasSpecial
+    }
+  };
+};
+
+const getRequirementsText = (currentLang: Language) => {
+  if (currentLang === 'pt') {
+    return {
+      length: 'Pelo menos 8 caracteres',
+      mixed: 'Maiúsculas e minúsculas',
+      digit: 'Pelo menos um número',
+      special: 'Caractere especial',
+      strengthLabel: 'Força da senha'
+    };
+  } else if (currentLang === 'es') {
+    return {
+      length: 'Al menos 8 caracteres',
+      mixed: 'Mayúsculas y minúsculas',
+      digit: 'Al menos un número',
+      special: 'Carácter especial',
+      strengthLabel: 'Fuerza de la contraseña'
+    };
+  } else {
+    return {
+      length: 'At least 8 characters',
+      mixed: 'Uppercase and lowercase',
+      digit: 'At least one number',
+      special: 'Special character',
+      strengthLabel: 'Password strength'
+    };
+  }
+};
+
+const formatAuthError = (code: string, message: string, lang: Language): string => {
+  switch (code) {
+    case 'auth/operation-not-allowed':
+      if (lang === 'pt') {
+        return 'O método de login solicitado não está habilitado no Console do Firebase. Ative-o em Autenticação > Sign-in method.';
+      }
+      if (lang === 'es') {
+        return 'El método de inicio de sesión solicitado no está habilitado en la Consola Firebase. Actívalo en Autenticación > Sign-in method.';
+      }
+      return 'The requested sign-in method is not enabled in your Firebase Console. Please enable it under Authentication > Sign-in method.';
+      
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      if (lang === 'pt') {
+        return 'E-mail ou senha incorretos. Por favor, verifique suas credenciais.';
+      }
+      if (lang === 'es') {
+        return 'Usuario o contraseña incorrectos. Por favor comprueba sus credenciales.';
+      }
+      return 'Incorrect email or password. Please check your credentials.';
+      
+    case 'auth/email-already-in-use':
+      if (lang === 'pt') {
+        return 'Este endereço de e-mail já está em uso por outra conta.';
+      }
+      if (lang === 'es') {
+        return 'Esta dirección de correo ya está en uso por otra cuenta.';
+      }
+      return 'This email address is already in use by another account.';
+
+    case 'auth/weak-password':
+      if (lang === 'pt') {
+        return 'A senha é muito fraca. Escolha uma senha mais forte (mínimo de 6 caracteres).';
+      }
+      if (lang === 'es') {
+        return 'La contraseña es demasiado débil. Elija una contraseña más fuerte (mínimo 6 caracteres).';
+      }
+      return 'The password is too weak. Please choose a stronger password (minimum 6 characters).';
+
+    case 'auth/invalid-email':
+      if (lang === 'pt') {
+        return 'Formato de e-mail inválido. Por favor, digite um e-mail correto.';
+      }
+      if (lang === 'es') {
+        return 'Formato de correo inválido. Por favor introduce un correo correcto.';
+      }
+      return 'Invalid email format. Please make sure you have entered it correctly.';
+
+    case 'auth/popup-closed-by-user':
+      if (lang === 'pt') {
+        return 'A janela de autenticação foi fechada antes de concluir o processo.';
+      }
+      if (lang === 'es') {
+        return 'La ventana emergente se cerró antes de completar la autenticación.';
+      }
+      return 'The authentication popup was closed before completion.';
+
+    case 'auth/user-disabled':
+      if (lang === 'pt') {
+        return 'Esta conta de usuário foi desativada por um administrador.';
+      }
+      if (lang === 'es') {
+        return 'Esta cuenta de usuario ha sido inhabilitada por un administrador.';
+      }
+      return 'This user account has been disabled by an administrator.';
+
+    case 'auth/too-many-requests':
+      if (lang === 'pt') {
+        return 'Muitas tentativas fracassadas de login. O acesso foi temporariamente bloqueado. Redefina sua senha ou tente novamente mais tarde.';
+      }
+      if (lang === 'es') {
+        return 'Demasiados intentos fallidos. El acceso ha sido bloqueado temporalmente. Restablece tu contraseña o inténtalo más tarde.';
+      }
+      return 'Too many failed login attempts. Access has been temporarily blocked. Please reset your password or try again later.';
+
+    default:
+      if (message && message.includes('auth/')) {
+        // extract the auth code if embedded
+        const match = message.match(/auth\/[a-zA-Z0-9-]+/);
+        if (match) return formatAuthError(match[0], message, lang);
+      }
+      return message || (lang === 'pt' ? 'Ocorreu um erro inesperado.' : lang === 'es' ? 'Ocurrió un error inesperado.' : 'An unexpected error occurred.');
+  }
+};
+
 export default function App() {
-  const { user, signInWithGoogle, signOut } = useAuth();
+  const { 
+    user, 
+    signInWithGoogle, 
+    signInWithApple, 
+    signUpWithEmail, 
+    signInWithEmail, 
+    sendVerificationEmail, 
+    sendPasswordReset,
+    reloadUser, 
+    signOut 
+  } = useAuth();
+  
+  const [authMethod, setAuthMethod] = useState<'social' | 'login' | 'signup' | 'forgot'>('social');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
+  const [passwordResetSuccess, setPasswordResetSuccess] = useState(false);
+  const [verificationChecking, setVerificationChecking] = useState(false);
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [view, setView] = useState<ComponentState>('landing');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [apiStatus, setApiStatus] = useState<string>(''); 
@@ -785,6 +1065,11 @@ export default function App() {
   const [currentResult, setCurrentResult] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    setPassword('');
+    setShowPassword(false);
+  }, [authMethod]);
 
   const t = TRANSLATIONS[currentLang];
 
@@ -810,15 +1095,23 @@ export default function App() {
 
   useEffect(() => {
     if (user) {
-      setView('dashboard');
-      setShowLoginModal(false);
-      setCurrentLang('pt');
-      fetchHistory();
+      if (user.emailVerified) {
+        if (verificationSuccess) {
+          return;
+        }
+        setView('dashboard');
+        setShowLoginModal(false);
+        setCurrentLang('pt');
+        fetchHistory();
+      } else {
+        setView('landing');
+        setShowLoginModal(true);
+      }
     } else {
       setView('landing');
       setHistory([]);
     }
-  }, [user]);
+  }, [user, verificationSuccess]);
 
   const handleAnalyze = async () => {
     if (!videoUrl || !user) return;
@@ -913,44 +1206,179 @@ export default function App() {
   });
 
   const handleStart = () => {
-    if (user) {
+    if (user && user.emailVerified) {
       setView('dashboard');
     } else {
       setShowLoginModal(true);
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      await signInWithGoogle();
+      setShowLoginModal(false);
+    } catch (err: any) {
+      console.warn("Google sign in error", err);
+      setAuthError(formatAuthError(err.code, err.message, currentLang));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      await signInWithApple();
+      setShowLoginModal(false);
+    } catch (err: any) {
+      console.warn("Apple sign in error", err);
+      setAuthError(formatAuthError(err.code, err.message, currentLang));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) return;
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      await signInWithEmail(email, password);
+      setEmail('');
+      setPassword('');
+      setShowLoginModal(false);
+    } catch (err: any) {
+      console.warn("Email login error", err);
+      setAuthError(formatAuthError(err.code, err.message, currentLang));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) return;
+    if (password.length < 6) {
+      setAuthError(
+        currentLang === 'pt' 
+          ? 'A senha deve ter pelo menos 6 caracteres.' 
+          : currentLang === 'es' 
+            ? 'La contraseña debe tener al menos 6 caracteres.' 
+            : 'Password must be at least 6 characters.'
+      );
+      return;
+    }
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      await signUpWithEmail(email, password);
+      setEmail('');
+      setPassword('');
+    } catch (err: any) {
+      console.warn("Email sign up error", err);
+      setAuthError(formatAuthError(err.code, err.message, currentLang));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handlePasswordResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setAuthError('');
+    setAuthLoading(true);
+    setPasswordResetSuccess(false);
+    try {
+      await sendPasswordReset(email);
+      setPasswordResetSuccess(true);
+      setEmail('');
+    } catch (err: any) {
+      console.warn("Password reset error", err);
+      setAuthError(formatAuthError(err.code, err.message, currentLang));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    setAuthError('');
+    setVerificationChecking(true);
+    try {
+      await reloadUser();
+      if (auth.currentUser?.emailVerified) {
+        setVerificationSuccess(true);
+        setTimeout(() => {
+          setView('dashboard');
+          setShowLoginModal(false);
+          setCurrentLang('pt');
+          fetchHistory();
+          setVerificationSuccess(false);
+        }, 2200);
+      } else {
+        setAuthError(
+          currentLang === 'pt' 
+            ? 'O e-mail ainda não está verificado. Verifique sua caixa de entrada e clique no link de validação enviado.' 
+            : currentLang === 'es' 
+              ? 'El correo electrónico aún no está verificado. Por favor revise su bandeja de entrada y haga clic en el enlace.' 
+              : 'Our verification check indicates the email is not verified yet. Please check your spam/inbox and click the link first.'
+        );
+      }
+    } catch (err: any) {
+      console.warn("Check verification error", err);
+      setAuthError(err.message || 'Error checking verification status');
+    } finally {
+      setVerificationChecking(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    setAuthError('');
+    setResendSuccess(false);
+    setAuthLoading(true);
+    try {
+      await sendVerificationEmail();
+      setResendSuccess(true);
+      setTimeout(() => setResendSuccess(false), 6000);
+    } catch (err: any) {
+      console.warn("Resend email error", err);
+      setAuthError(err.message || 'Error sending email');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-white dark' : 'bg-gray-50 text-gray-900 light'}`}>
+    <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-white dark' : 'bg-[#f6f7fb] text-slate-950 light'}`}>
       {/* Navigation */}
-      <nav className={`fixed top-0 w-full z-50 border-b backdrop-blur-md ${isDarkMode ? 'border-white/5' : 'border-black/5'}`}>
+      <nav className={`fixed top-0 w-full z-50 border-b backdrop-blur-md ${isDarkMode ? 'border-white/5' : 'bg-white/85 border-slate-200/70 shadow-sm shadow-slate-900/5'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {view === 'dashboard' && (
               <button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className={`p-2 md:hidden transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
+                className={`p-2 md:hidden transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-500 hover:text-slate-950'}`}
               >
                 {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
               </button>
             )}
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('landing')}>
-              <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-600/20">
-                <Zap className="text-white w-6 h-6 fill-current" />
-              </div>
-              <span className="text-2xl font-bold tracking-tight">Astra<span className="text-orange-600">.ai</span></span>
+              <BrandLogo variant="horizontal" size="md" isDarkMode={isDarkMode} />
             </div>
           </div>
 
           <div className="flex items-center gap-3 sm:gap-6">
             <div className="hidden md:flex items-center gap-6 mr-6 transition-all">
-              <a href="#features" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}>{t.features}</a>
-              <a href="#pricing" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}>{t.pricing}</a>
+              <a href="#features" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.features}</a>
+              <a href="#pricing" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.pricing}</a>
             </div>
             
             {/* Language Selector */}
-            <div className={`flex items-center gap-1 p-1 rounded-full border shrink-0 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-gray-200/50 border-gray-300'}`}>
-              <div className="px-1.5 sm:px-2 text-gray-500 hidden sm:block">
+            <div className={`flex items-center gap-1 p-1 rounded-full border shrink-0 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200/80'}`}>
+              <div className={`px-1.5 sm:px-2 hidden sm:block ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
                 <Languages size={14} />
               </div>
               {(['pt', 'en', 'es'] as Language[]).map((lang) => (
@@ -960,7 +1388,7 @@ export default function App() {
                   className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all ${
                     currentLang === lang 
                       ? 'bg-orange-600 text-white shadow-sm' 
-                      : isDarkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+                      : isDarkMode ? 'text-gray-500 hover:text-gray-300' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   {lang.toUpperCase()}
@@ -968,23 +1396,24 @@ export default function App() {
               ))}
             </div>
 
-            <Button variant="ghost" onClick={toggleTheme} className={`px-2 sm:px-3 ${isDarkMode ? '' : 'bg-gray-200/50 hover:bg-gray-200'}`}>
+            <Button variant="ghost" onClick={toggleTheme} isDarkMode={isDarkMode} className={`px-2 sm:px-3 ${isDarkMode ? '' : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700'}`}>
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </Button>
             
             {user ? (
               <div className="flex items-center gap-2 sm:gap-4">
-                <div className={`flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full border max-w-[120px] sm:max-w-none overflow-hidden ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200 shadow-sm'}`}>
+                <div className={`flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full border max-w-[120px] sm:max-w-none overflow-hidden ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm text-slate-800'}`}>
                   <img src={user.photoURL || ''} alt="" className="w-5 h-5 sm:w-6 sm:h-6 rounded-full shrink-0" />
                   <span className="text-xs sm:text-sm font-medium truncate hidden sm:inline-block">{user.displayName}</span>
                 </div>
                 <Button 
                   variant="secondary" 
                   onClick={signOut} 
+                  isDarkMode={isDarkMode}
                   className={`px-2 sm:px-4 py-1.5 sm:py-2 group transition-all flex items-center gap-2 ${
                     isDarkMode 
                       ? 'hover:border-red-500/50 hover:text-red-500' 
-                      : 'bg-white border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 shadow-sm'
+                      : '!bg-white border-slate-200 !text-slate-600 hover:!bg-red-50 hover:!border-red-200 hover:!text-red-600 shadow-sm'
                   }`}
                 >
                   <LogOut size={16} className="group-hover:translate-x-0.5 transition-transform shrink-0" />
@@ -1006,41 +1435,675 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowLoginModal(false)}
+              onClick={() => {
+                if (!user || user.emailVerified) {
+                  setShowLoginModal(false);
+                  setAuthError('');
+                }
+              }}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className={`relative w-full max-w-md border rounded-3xl p-8 shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#0d0d0d] border-white/10' : 'bg-white border-gray-100'}`}
+              className={`relative w-full max-w-md border rounded-3xl p-8 shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#0d0d0d] border-white/10 text-white' : 'bg-white border-slate-200 shadow-xl shadow-slate-900/5 text-slate-900'}`}
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-orange-600" />
-              <div className="flex flex-col items-center text-center space-y-6">
-                <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center rotate-3 shadow-lg shadow-orange-600/30">
-                  <Zap className="text-white w-8 h-8 fill-current" />
+              
+              {verificationSuccess ? (
+                <div className="flex flex-col items-center text-center space-y-6 py-6 animate-in fade-in zoom-in-95 duration-300">
+                  <motion.div 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [0, 1.25, 1] }}
+                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                    className="w-20 h-20 bg-emerald-500/10 dark:bg-emerald-400/10 rounded-full flex items-center justify-center relative shadow-lg shadow-emerald-500/5"
+                  >
+                    <motion.div
+                      initial={{ rotate: -45, scale: 0.5 }}
+                      animate={{ rotate: 0, scale: 1 }}
+                      transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+                    >
+                      <CheckCircle className="text-emerald-500 dark:text-emerald-400 w-12 h-12" />
+                    </motion.div>
+                    <span className="absolute inset-0 rounded-full animate-ping bg-emerald-500/10 dark:bg-emerald-400/20" />
+                  </motion.div>
+
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 uppercase italic">
+                      {currentLang === 'pt' ? 'E-mail Verificado!' : currentLang === 'es' ? '¡Correo Verificado!' : 'Email Verified!'}
+                    </h2>
+                    <p className={`text-sm leading-relaxed max-w-xs mx-auto ${isDarkMode ? 'text-gray-300' : 'text-slate-600'}`}>
+                      {currentLang === 'pt' 
+                        ? 'Seu endereço de e-mail foi confirmado com sucesso. Redirecionando para o painel...' 
+                        : currentLang === 'es' 
+                          ? 'Su dirección de correo electrónico ha sido confirmada con éxito. Redirigiendo al panel...' 
+                          : 'Your email address has been successfully confirmed. Redirecting to the dashboard...'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-1.5 mt-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.3s]"></span>
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.15s]"></span>
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-bounce"></span>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-bold italic">{t.loginTitle}</h2>
-                  <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t.loginDesc}</p>
+              ) : user && !user.emailVerified ? (
+                <div className="flex flex-col items-center text-center space-y-6">
+                  <div className="w-16 h-16 bg-orange-600/10 rounded-2xl flex items-center justify-center relative shadow-lg shadow-orange-600/5">
+                    <Mail className="text-orange-500 w-8 h-8 animate-bounce" />
+                    <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-orange-500 border border-white dark:border-[#0d0d0d]"></span>
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-bold tracking-tight uppercase italic text-orange-500">{t.verifyEmailTitle}</h2>
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-slate-600'}`}>
+                      {t.verifyEmailDesc.replace('{email}', user.email || '')}
+                    </p>
+                  </div>
+
+                  {authError && (
+                    <div className="w-full flex items-center gap-2 p-3.5 rounded-xl border border-red-500/20 bg-red-500/5 text-red-500 text-xs text-left">
+                      <AlertCircle size={16} className="shrink-0" />
+                      <span>{authError}</span>
+                    </div>
+                  )}
+
+                  <AnimatePresence>
+                    {resendSuccess && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95, y: -8 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -8 }}
+                        className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-xs text-left relative overflow-hidden ${
+                          isDarkMode 
+                            ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400' 
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-100/50'
+                        }`}
+                      >
+                        <motion.div
+                          initial={{ scale: 0, rotate: -45 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          transition={{ delay: 0.15, type: 'spring', stiffness: 300 }}
+                          className="shrink-0 mt-0.5"
+                        >
+                          <div className="relative">
+                            <CheckCircle size={18} className="text-emerald-500 dark:text-emerald-400" />
+                            <span className="absolute inset-0 rounded-full animate-ping bg-emerald-500/10 dark:bg-emerald-400/20" />
+                          </div>
+                        </motion.div>
+                        <div className="flex-1 space-y-0.5">
+                          <span className="font-semibold block text-[13px] text-emerald-600 dark:text-emerald-400 leading-none">
+                            {currentLang === 'pt' ? 'E-mail Enviado!' : currentLang === 'es' ? '¡Correo Enviado!' : 'Email Sent!'}
+                          </span>
+                          <span className="opacity-95 leading-relaxed text-emerald-700 dark:text-emerald-300/90">
+                            {currentLang === 'pt' ? 'Verifique sua caixa de entrada e pasta de spam.' : currentLang === 'es' ? 'Por favor, revise su bandeja de entrada y carpeta de spam.' : 'Please check your inbox and spam folder.'}
+                          </span>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => setResendSuccess(false)} 
+                          className={`p-1 -mr-1.5 -mt-1.5 rounded-full transition-colors ${
+                            isDarkMode ? 'hover:bg-white/5 text-emerald-500/50 hover:text-emerald-300' : 'hover:bg-emerald-100 text-emerald-600/70 hover:text-emerald-900'
+                          }`}
+                        >
+                          <X size={14} />
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="w-full space-y-3">
+                    <Button 
+                      type="button"
+                      className="w-full justify-center py-3.5 shadow-lg shadow-orange-600/20 text-lg" 
+                      onClick={handleCheckVerification}
+                      disabled={verificationChecking}
+                    >
+                      {verificationChecking ? (
+                        <>
+                          <Loader2 className="animate-spin w-5 h-5 mr-2" />
+                          {currentLang === 'pt' ? 'Verificando...' : currentLang === 'es' ? 'Verificando...' : 'Checking...'}
+                        </>
+                      ) : (
+                        t.checkVerificationButton
+                      )}
+                    </Button>
+
+                    <Button 
+                      type="button"
+                      variant="secondary"
+                      className="w-full justify-center py-3 text-sm font-semibold" 
+                      onClick={handleResendEmail}
+                      disabled={authLoading}
+                      isDarkMode={isDarkMode}
+                    >
+                      {authLoading ? <Loader2 className="animate-spin w-5 h-5 mr-2" /> : null}
+                      {t.resendButton}
+                    </Button>
+
+                    <Button 
+                      type="button"
+                      variant="ghost"
+                      className="w-full justify-center py-2 text-xs !text-red-500 hover:bg-red-500/5" 
+                      onClick={signOut}
+                      isDarkMode={isDarkMode}
+                    >
+                      {t.cancelButton}
+                    </Button>
+                  </div>
                 </div>
-                <Button 
-                  className="w-full justify-center py-4 text-lg shadow-xl shadow-orange-600/10" 
-                  onClick={signInWithGoogle}
-                >
-                  <img src="https://www.google.com/favicon.ico" alt="" className="w-5 h-5 mr-2" />
-                  {t.continueGoogle}
-                </Button>
-                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {t.terms}
-                </p>
-              </div>
+              ) : (
+                <div>
+                  {authMethod === 'social' ? (
+                    <div className="flex flex-col items-center text-center space-y-6">
+                      <BrandLogo variant="horizontal" size="lg" isDarkMode={isDarkMode} className="mb-2" />
+                      <div className="space-y-2">
+                        <h2 className="text-sm font-semibold tracking-widest text-orange-500 uppercase">{t.loginTitle}</h2>
+                        <p className={`${isDarkMode ? 'text-gray-400' : 'text-slate-600'}`}>{t.loginDesc}</p>
+                      </div>
+
+                      {authError && (
+                        <div className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-xs text-left relative animate-in fade-in slide-in-from-top-1 duration-200 ${isDarkMode ? 'border-red-500/20 bg-red-500/5 text-red-400' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                          <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-500" />
+                          <div className="flex-1">
+                            <span className="font-semibold block mb-0.5">{currentLang === 'pt' ? 'Falha na Autenticação' : currentLang === 'es' ? 'Fallo en la Autenticación' : 'Authentication Failed'}</span>
+                            <span className="opacity-95 leading-relaxed">{authError}</span>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => setAuthError('')} 
+                            className={`p-1 -mr-1.5 -mt-1.5 rounded-full transition-colors ${isDarkMode ? 'hover:bg-white/5 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900'}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="w-full space-y-3">
+                        <Button 
+                          type="button"
+                          className="w-full justify-center py-3.5 shadow-md font-semibold text-base" 
+                          onClick={handleGoogleLogin}
+                          disabled={authLoading}
+                        >
+                          {authLoading ? (
+                            <Loader2 className="animate-spin w-5 h-5 mr-3 shrink-0" />
+                          ) : (
+                            <img src="https://www.google.com/favicon.ico" alt="" className="w-5 h-5 mr-3 shrink-0" />
+                          )}
+                          {authLoading ? (currentLang === 'pt' ? 'Conectando...' : currentLang === 'es' ? 'Conectando...' : 'Connecting...') : t.continueGoogle}
+                        </Button>
+
+                        <Button 
+                          type="button"
+                          variant="secondary"
+                          className="w-full justify-center py-3.5 shadow-sm font-semibold text-base" 
+                          onClick={handleAppleLogin}
+                          isDarkMode={isDarkMode}
+                          disabled={authLoading}
+                        >
+                          {authLoading ? (
+                            <Loader2 className="animate-spin w-5 h-5 mr-3 shrink-0" />
+                          ) : (
+                            <svg className="w-5 h-5 mr-3 shrink-0 fill-current" viewBox="0 0 24 24">
+                              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-.96.04-2.13.64-2.82 1.45-.6.69-1.12 1.83-.98 2.94 1.07.08 2.15-.52 2.81-1.33z" />
+                            </svg>
+                          )}
+                          {authLoading ? (currentLang === 'pt' ? 'Conectando...' : currentLang === 'es' ? 'Conectando...' : 'Connecting...') : t.continueApple}
+                        </Button>
+
+                        <Button 
+                          type="button"
+                          variant="secondary"
+                          className="w-full justify-center py-3.5 shadow-sm font-semibold text-base" 
+                          onClick={() => { setAuthMethod('login'); setAuthError(''); }}
+                          isDarkMode={isDarkMode}
+                          disabled={authLoading}
+                        >
+                          <Mail className="w-5 h-5 mr-3 shrink-0 text-orange-500" />
+                          {t.continueEmail}
+                        </Button>
+                      </div>
+
+                      <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
+                        {t.terms}
+                      </p>
+                    </div>
+                  ) : authMethod === 'login' ? (
+                    <div className="flex flex-col space-y-6">
+                      <div className="flex items-center justify-between">
+                        <button 
+                          type="button"
+                          onClick={() => { if (!authLoading) { setAuthMethod('social'); setAuthError(''); } }}
+                          disabled={authLoading}
+                          className={`p-2 rounded-full transition-colors ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'hover:bg-white/5 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
+                        >
+                          <ArrowLeft size={20} />
+                        </button>
+                        <span className="text-xs font-bold uppercase tracking-widest text-orange-500">{t.loginButton}</span>
+                        <div className="w-8 h-8" />
+                      </div>
+
+                      <div className="space-y-1.5 text-center">
+                        <h2 className="text-2xl font-bold italic tracking-tight uppercase text-orange-500">{t.loginButton}</h2>
+                        <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>{t.enterEmailAndPasswordDesc}</p>
+                      </div>
+
+                      {authError && (
+                        <div className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-xs text-left relative animate-in fade-in slide-in-from-top-1 duration-200 ${isDarkMode ? 'border-red-500/20 bg-red-500/5 text-red-400' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                          <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-500" />
+                          <div className="flex-1">
+                            <span className="font-semibold block mb-0.5">{currentLang === 'pt' ? 'Falha no Login' : currentLang === 'es' ? 'Error de Inicio de Sesión' : 'Login Failed'}</span>
+                            <span className="opacity-95 leading-relaxed">{authError}</span>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => setAuthError('')} 
+                            className={`p-1 -mr-1.5 -mt-1.5 rounded-full transition-colors ${isDarkMode ? 'hover:bg-white/5 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900'}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+
+                      <form onSubmit={handleEmailLogin} className="space-y-4">
+                        <div className="space-y-1.5 relative">
+                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                          <input 
+                            type="email"
+                            required
+                            disabled={authLoading}
+                            placeholder={t.emailPlaceholder}
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className={`relative w-full rounded-2xl border pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-600/50 transition-all ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-[#121212] border-white/10 text-white placeholder-gray-500 focus:border-orange-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-orange-600 focus:bg-white'}`}
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 relative">
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                          <input 
+                            type={showPassword ? "text" : "password"}
+                            required
+                            disabled={authLoading}
+                            placeholder={t.passwordPlaceholder}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className={`relative w-full rounded-2xl border pl-11 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-600/50 transition-all ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-[#121212] border-white/10 text-white placeholder-gray-500 focus:border-orange-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-orange-600 focus:bg-white'}`}
+                          />
+                          {password && (
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 dark:hover:text-white transition-colors"
+                            >
+                              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex justify-end pr-1">
+                          <button
+                            type="button"
+                            disabled={authLoading}
+                            onClick={() => { if (!authLoading) { setAuthMethod('forgot'); setAuthError(''); setPasswordResetSuccess(false); } }}
+                            className={`text-xs font-semibold hover:underline ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                          >
+                            {t.forgotPassword}
+                          </button>
+                        </div>
+
+                        <Button 
+                          type="submit" 
+                          className="w-full justify-center py-3 text-sm font-semibold shadow-md shadow-orange-600/10"
+                          disabled={authLoading}
+                        >
+                          {authLoading ? (
+                            <>
+                              <Loader2 className="animate-spin w-5 h-5 mr-2" />
+                              {currentLang === 'pt' ? 'Entrando...' : currentLang === 'es' ? 'Entrando...' : 'Logging in...'}
+                            </>
+                          ) : (
+                            t.loginButton
+                          )}
+                        </Button>
+                      </form>
+
+                      <div className="text-center">
+                        <button 
+                          type="button"
+                          disabled={authLoading}
+                          onClick={() => { if (!authLoading) { setAuthMethod('signup'); setAuthError(''); } }}
+                          className={`text-xs font-semibold hover:underline ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          {t.dontHaveAccount}
+                        </button>
+                      </div>
+                    </div>
+                  ) : authMethod === 'forgot' ? (
+                    <div className="flex flex-col space-y-6">
+                      <div className="flex items-center justify-between">
+                        <button 
+                          type="button"
+                          onClick={() => { if (!authLoading) { setAuthMethod('login'); setAuthError(''); setPasswordResetSuccess(false); } }}
+                          disabled={authLoading}
+                          className={`p-2 rounded-full transition-colors ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'hover:bg-white/5 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
+                        >
+                          <ArrowLeft size={20} />
+                        </button>
+                        <span className="text-xs font-bold uppercase tracking-widest text-orange-500">{t.passwordResetTitle}</span>
+                        <div className="w-8 h-8" />
+                      </div>
+
+                      <div className="space-y-1.5 text-center">
+                        <h2 className="text-2xl font-bold italic tracking-tight uppercase text-orange-500">{t.passwordResetTitle}</h2>
+                        <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>{t.passwordResetDesc}</p>
+                      </div>
+
+                      {authError && (
+                        <div className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-xs text-left relative animate-in fade-in slide-in-from-top-1 duration-200 ${isDarkMode ? 'border-red-500/20 bg-red-500/5 text-red-400' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                          <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-500" />
+                          <div className="flex-1">
+                            <span className="font-semibold block mb-0.5">{currentLang === 'pt' ? 'Erro ao Enviar Link' : currentLang === 'es' ? 'Error al Enviar Enlace' : 'Send Link Failed'}</span>
+                            <span className="opacity-95 leading-relaxed">{authError}</span>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => setAuthError('')} 
+                            className={`p-1 -mr-1 -mt-1 rounded-full transition-colors ${isDarkMode ? 'hover:bg-white/5 text-gray-500 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900'}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+
+                      <AnimatePresence>
+                        {passwordResetSuccess && (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: -8 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -8 }}
+                            className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-xs text-left relative overflow-hidden ${
+                              isDarkMode 
+                                ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400' 
+                                : 'border-emerald-200 bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-100/50'
+                            }`}
+                          >
+                            <motion.div
+                              initial={{ scale: 0, rotate: -45 }}
+                              animate={{ scale: 1, rotate: 0 }}
+                              transition={{ delay: 0.15, type: 'spring', stiffness: 300 }}
+                              className="shrink-0 mt-0.5"
+                            >
+                              <div className="relative">
+                                <CheckCircle size={18} className="text-emerald-500 dark:text-emerald-400" />
+                                <span className="absolute inset-0 rounded-full animate-ping bg-emerald-500/10 dark:bg-emerald-400/20" />
+                              </div>
+                            </motion.div>
+                            <div className="flex-1 space-y-0.5">
+                              <span className="font-semibold block text-[13px] text-emerald-600 dark:text-emerald-400 leading-none">
+                                {currentLang === 'pt' ? 'Sucesso!' : currentLang === 'es' ? '¡Éxito!' : 'Success!'}
+                              </span>
+                              <span className="opacity-95 leading-relaxed text-emerald-700 dark:text-emerald-300/90">{t.resetLinkSent}</span>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => setPasswordResetSuccess(false)} 
+                              className={`p-1 -mr-1.5 -mt-1.5 rounded-full transition-colors ${
+                                isDarkMode ? 'hover:bg-white/5 text-emerald-500/50 hover:text-emerald-300' : 'hover:bg-emerald-100 text-emerald-600/70 hover:text-emerald-900'
+                              }`}
+                            >
+                              <X size={14} />
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <form onSubmit={handlePasswordResetSubmit} className="space-y-4">
+                        <div className="space-y-1.5 relative">
+                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                          <input 
+                            type="email"
+                            required
+                            disabled={authLoading}
+                            placeholder={t.emailPlaceholder}
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className={`relative w-full rounded-2xl border pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-600/50 transition-all ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-[#121212] border-white/10 text-white placeholder-gray-500 focus:border-orange-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-orange-600 focus:bg-white'}`}
+                          />
+                        </div>
+
+                        <Button 
+                          type="submit" 
+                          className="w-full justify-center py-3 text-sm font-semibold shadow-md shadow-orange-600/10"
+                          disabled={authLoading}
+                        >
+                          {authLoading ? (
+                            <>
+                              <Loader2 className="animate-spin w-5 h-5 mr-2" />
+                              {currentLang === 'pt' ? 'Enviando...' : currentLang === 'es' ? 'Enviando...' : 'Sending...'}
+                            </>
+                          ) : (
+                            t.sendResetLinkButton
+                          )}
+                        </Button>
+                      </form>
+
+                      <div className="text-center">
+                        <button 
+                          type="button"
+                          disabled={authLoading}
+                          onClick={() => { if (!authLoading) { setAuthMethod('login'); setAuthError(''); setPasswordResetSuccess(false); } }}
+                          className={`text-xs font-semibold hover:underline ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          {t.backToLogin}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col space-y-6">
+                      <div className="flex items-center justify-between">
+                        <button 
+                          type="button"
+                          onClick={() => { if (!authLoading) { setAuthMethod('social'); setAuthError(''); } }}
+                          disabled={authLoading}
+                          className={`p-2 rounded-full transition-colors ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'hover:bg-white/5 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
+                        >
+                          <ArrowLeft size={20} />
+                        </button>
+                        <span className="text-xs font-bold uppercase tracking-widest text-orange-500">{t.signupButton}</span>
+                        <div className="w-8 h-8" />
+                      </div>
+
+                      <div className="space-y-1.5 text-center">
+                        <h2 className="text-2xl font-bold italic tracking-tight uppercase text-orange-500">{t.signupButton}</h2>
+                        <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>{t.createAccountDesc}</p>
+                      </div>
+
+                      {authError && (
+                        <div className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-xs text-left relative animate-in fade-in slide-in-from-top-1 duration-200 ${isDarkMode ? 'border-red-500/20 bg-red-500/5 text-red-400' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                          <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-500" />
+                          <div className="flex-1">
+                            <span className="font-semibold block mb-0.5">{currentLang === 'pt' ? 'Erro no Cadastro' : currentLang === 'es' ? 'Error de Registro' : 'Sign Up Failed'}</span>
+                            <span className="opacity-95 leading-relaxed">{authError}</span>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => setAuthError('')} 
+                            className={`p-1 -mr-1 -mt-1 rounded-full transition-colors ${isDarkMode ? 'hover:bg-white/5 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900'}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+
+                      <form onSubmit={handleEmailSignUp} className="space-y-4">
+                        <div className="space-y-1.5 relative">
+                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                          <input 
+                            type="email"
+                            required
+                            disabled={authLoading}
+                            placeholder={t.emailPlaceholder}
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className={`relative w-full rounded-2xl border pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-600/50 transition-all ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'bg-[#121212] border-white/10 text-white placeholder-gray-500 focus:border-orange-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-orange-600 focus:bg-white'}`}
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 relative">
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                          <input 
+                            type={showPassword ? "text" : "password"}
+                            required
+                            disabled={authLoading}
+                            placeholder={t.passwordPlaceholder}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className={`relative w-full rounded-2xl border pl-11 pr-12 py-3 text-sm focus:outline-none focus:ring-2 transition-all ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${
+                              password.length > 0
+                                ? (() => {
+                                    const score = getPasswordStrength(password, currentLang).score;
+                                    if (score <= 1) return isDarkMode ? 'border-red-500/50 bg-[#121212] text-white focus:border-red-500 focus:ring-red-500/30' : 'border-red-300 bg-red-50/10 text-slate-900 focus:border-red-500 focus:ring-red-500/20';
+                                    if (score === 2) return isDarkMode ? 'border-yellow-500/50 bg-[#121212] text-white focus:border-yellow-500 focus:ring-yellow-500/30' : 'border-yellow-300 bg-yellow-50/10 text-slate-900 focus:border-yellow-500 focus:ring-yellow-500/20';
+                                    if (score === 3) return isDarkMode ? 'border-emerald-500/50 bg-[#121212] text-white focus:border-emerald-500 focus:ring-emerald-500/30' : 'border-emerald-300 bg-emerald-50/10 text-slate-900 focus:border-emerald-500 focus:ring-emerald-500/20';
+                                    return isDarkMode ? 'border-blue-500/50 bg-[#121212] text-white focus:border-blue-500 focus:ring-blue-500/30' : 'border-blue-300 bg-blue-50/10 text-slate-900 focus:border-blue-500 focus:ring-blue-500/20';
+                                  })()
+                                : isDarkMode ? 'bg-[#121212] border-white/10 text-white placeholder-gray-500 focus:border-orange-500 focus:ring-orange-600/50' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-orange-600 focus:bg-white focus:ring-orange-600/50'
+                            }`}
+                          />
+                          {password && (
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 dark:hover:text-white transition-colors"
+                            >
+                              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          )}
+
+                          {password.length > 0 && (() => {
+                            const strength = getPasswordStrength(password, currentLang);
+                            const reqs = getRequirementsText(currentLang);
+                            return (
+                              <div className="mt-2 space-y-2 text-left animate-in fade-in duration-200">
+                                <div className="flex items-center justify-between text-[11px] font-semibold">
+                                  <span className={isDarkMode ? "text-gray-400" : "text-slate-500"}>
+                                    {reqs.strengthLabel}:
+                                  </span>
+                                  <span className={`font-bold uppercase tracking-wider text-[10px] ${
+                                    strength.score <= 1 ? 'text-red-500 animate-pulse' :
+                                    strength.score === 2 ? 'text-yellow-500' :
+                                    strength.score === 3 ? 'text-emerald-500' : 'text-blue-500'
+                                  }`}>
+                                    {strength.label}
+                                  </span>
+                                </div>
+
+                                {/* Progress segments */}
+                                <div className="flex gap-1 h-1.5 w-full">
+                                  <div className={`flex-1 rounded-full transition-all duration-300 ${strength.score >= 1 ? strength.color : (isDarkMode ? 'bg-white/10' : 'bg-slate-200')}`} />
+                                  <div className={`flex-1 rounded-full transition-all duration-300 ${strength.score >= 2 ? strength.color : (isDarkMode ? 'bg-white/10' : 'bg-slate-200')}`} />
+                                  <div className={`flex-1 rounded-full transition-all duration-300 ${strength.score >= 3 ? strength.color : (isDarkMode ? 'bg-white/10' : 'bg-slate-200')}`} />
+                                  <div className={`flex-1 rounded-full transition-all duration-300 ${strength.score >= 4 ? strength.color : (isDarkMode ? 'bg-white/10' : 'bg-slate-200')}`} />
+                                </div>
+
+                                {/* Checklist code with micro-animations */}
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                                  <div className="flex items-center gap-1.5">
+                                    <motion.span
+                                      key={strength.checks.length ? 'checked_len' : 'unchecked_len'}
+                                      initial={{ scale: 0.8 }}
+                                      animate={{ scale: strength.checks.length ? [1, 1.25, 1] : 1 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="shrink-0"
+                                    >
+                                      <Check size={12} className={`transition-colors ${strength.checks.length ? 'text-green-500 font-bold' : (isDarkMode ? 'text-gray-600' : 'text-slate-300')}`} />
+                                    </motion.span>
+                                    <span className={`transition-all duration-300 ${strength.checks.length ? (isDarkMode ? 'text-gray-200 font-medium' : 'text-slate-800 font-medium') : (isDarkMode ? 'text-gray-500' : 'text-slate-400')}`}>{reqs.length}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <motion.span
+                                      key={strength.checks.mixed ? 'checked_mix' : 'unchecked_mix'}
+                                      initial={{ scale: 0.8 }}
+                                      animate={{ scale: strength.checks.mixed ? [1, 1.25, 1] : 1 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="shrink-0"
+                                    >
+                                      <Check size={12} className={`transition-colors ${strength.checks.mixed ? 'text-green-500 font-bold' : (isDarkMode ? 'text-gray-600' : 'text-slate-300')}`} />
+                                    </motion.span>
+                                    <span className={`transition-all duration-300 ${strength.checks.mixed ? (isDarkMode ? 'text-gray-200 font-medium' : 'text-slate-800 font-medium') : (isDarkMode ? 'text-gray-500' : 'text-slate-400')}`}>{reqs.mixed}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <motion.span
+                                      key={strength.checks.digit ? 'checked_dig' : 'unchecked_dig'}
+                                      initial={{ scale: 0.8 }}
+                                      animate={{ scale: strength.checks.digit ? [1, 1.25, 1] : 1 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="shrink-0"
+                                    >
+                                      <Check size={12} className={`transition-colors ${strength.checks.digit ? 'text-green-500 font-bold' : (isDarkMode ? 'text-gray-600' : 'text-slate-300')}`} />
+                                    </motion.span>
+                                    <span className={`transition-all duration-300 ${strength.checks.digit ? (isDarkMode ? 'text-gray-200 font-medium' : 'text-slate-800 font-medium') : (isDarkMode ? 'text-gray-500' : 'text-slate-400')}`}>{reqs.digit}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <motion.span
+                                      key={strength.checks.special ? 'checked_spec' : 'unchecked_spec'}
+                                      initial={{ scale: 0.8 }}
+                                      animate={{ scale: strength.checks.special ? [1, 1.25, 1] : 1 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="shrink-0"
+                                    >
+                                      <Check size={12} className={`transition-colors ${strength.checks.special ? 'text-green-500 font-bold' : (isDarkMode ? 'text-gray-600' : 'text-slate-300')}`} />
+                                    </motion.span>
+                                    <span className={`transition-all duration-300 ${strength.checks.special ? (isDarkMode ? 'text-gray-200 font-medium' : 'text-slate-800 font-medium') : (isDarkMode ? 'text-gray-500' : 'text-slate-400')}`}>{reqs.special}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        <Button 
+                          type="submit" 
+                          className="w-full justify-center py-3 text-sm font-semibold shadow-md shadow-orange-600/10"
+                          disabled={authLoading}
+                        >
+                          {authLoading ? (
+                            <>
+                              <Loader2 className="animate-spin w-5 h-5 mr-2" />
+                              {currentLang === 'pt' ? 'Criando Conta...' : currentLang === 'es' ? 'Creando Cuenta...' : 'Creating Account...'}
+                            </>
+                          ) : (
+                            t.signupButton
+                          )}
+                        </Button>
+                      </form>
+
+                      <div className="text-center">
+                        <button 
+                          type="button"
+                          disabled={authLoading}
+                          onClick={() => { if (!authLoading) { setAuthMethod('login'); setAuthError(''); } }}
+                          className={`text-xs font-semibold hover:underline ${authLoading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          {t.alreadyHaveAccount}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {view === 'landing' ? (
+      {view === 'landing' || (user && !user.emailVerified) ? (
         <main className="pt-20">
           {/* Hero Section */}
           <section className="relative min-h-[calc(100vh-80px)] flex items-center overflow-hidden py-12 lg:py-0">
@@ -1071,12 +2134,12 @@ export default function App() {
                     {apiStatus}
                   </motion.div>
                   
-                  <h1 className={`text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-bold leading-[0.9] tracking-tighter mb-10 italic ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  <h1 className={`text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-bold leading-[0.9] tracking-tighter mb-10 italic ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>
                     {t.heroTitle} <br />
                     <span className="text-orange-600 drop-shadow-[0_0_30px_rgba(234,88,12,0.1)]">{t.heroHighlight}</span>
                   </h1>
                   
-                  <p className={`text-lg sm:text-xl md:text-2xl mb-12 max-w-[540px] leading-relaxed font-light ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <p className={`text-lg sm:text-xl md:text-2xl mb-12 max-w-[540px] leading-relaxed font-light ${isDarkMode ? 'text-gray-400' : 'text-slate-600'}`}>
                     {t.hero.subtitle}
                   </p>
                   
@@ -1084,7 +2147,7 @@ export default function App() {
                     <Button onClick={handleStart} className="justify-center px-10 py-5 text-lg group shadow-xl shadow-orange-600/20 active:scale-95 transition-transform">
                       {t.startFree} <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
                     </Button>
-                    <Button variant="secondary" className={`justify-center px-10 py-5 text-lg group active:scale-95 transition-transform ${isDarkMode ? '' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+                    <Button variant="secondary" isDarkMode={isDarkMode} className={`justify-center px-10 py-5 text-lg group active:scale-95 transition-transform ${isDarkMode ? '' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm'}`}>
                       {t.watchDemo}
                     </Button>
                   </div>
@@ -1111,13 +2174,13 @@ export default function App() {
                     transition={{ delay: 1, duration: 2 }}
                     className="absolute -bottom-10 left-12 right-12 hidden lg:block"
                   >
-                    <div className="flex justify-between items-center px-6 py-3 border border-white/5 bg-black/40 backdrop-blur-xl rounded-2xl overflow-hidden shadow-2xl">
-                       <div className="flex items-center gap-4 text-orange-500/40 font-mono text-[8px] tracking-[0.3em] uppercase">
+                    <div className={`flex justify-between items-center px-6 py-3 border backdrop-blur-xl rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ${isDarkMode ? 'border-white/5 bg-black/40 shadow-slate-950/20' : 'border-slate-200 bg-white/90 shadow-md shadow-slate-900/5'}`}>
+                       <div className={`flex items-center gap-4 font-mono text-[8px] tracking-[0.3em] uppercase ${isDarkMode ? 'text-orange-500/40' : 'text-orange-600/60'}`}>
                          <span>{t.hero.cpuCore}</span>
                          <div className="w-1 h-1 bg-orange-600/40 rounded-full animate-pulse" />
                          <span>{t.hero.neuralLink}</span>
                        </div>
-                       <div className="text-orange-500/60 font-mono text-[8px] tracking-[0.1em] uppercase hidden sm:block">
+                       <div className={`font-mono text-[8px] tracking-[0.1em] uppercase hidden sm:block ${isDarkMode ? 'text-orange-500/60' : 'text-orange-600/80'}`}>
                          {t.hero.footerStatus}
                        </div>
                        <motion.div 
@@ -1136,7 +2199,7 @@ export default function App() {
           <AIActivityFeed isDarkMode={isDarkMode} t={t.activityFeed} />
 
           {/* Features Grid */}
-          <section id="features" className={`py-32 border-y ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
+          <section id="features" className={`py-32 border-y ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-100 border-slate-200/70'}`}>
             <div className="max-w-7xl mx-auto px-6">
               <h2 className="text-4xl font-bold mb-16 text-center italic">{t.pwrByPrecision}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1146,12 +2209,12 @@ export default function App() {
                   { icon: MessageSquare, title: t.studyTutor, desc: t.studyTutorDesc },
                   { icon: CheckCircle, title: t.quizGen, desc: t.quizGenDesc }
                 ].map((feat, i) => (
-                  <div key={i} className={`p-8 rounded-3xl border transition-all flex flex-col gap-4 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 hover:border-orange-600/50' : 'bg-white border-gray-200 hover:border-orange-200 hover:shadow-xl hover:shadow-orange-600/5'}`}>
+                  <div key={i} className={`p-8 rounded-3xl border transition-all flex flex-col gap-4 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 hover:border-orange-600/50' : 'bg-white border-slate-200 hover:border-orange-200 hover:shadow-xl hover:shadow-slate-900/5'}`}>
                     <div className="w-12 h-12 rounded-2xl bg-orange-600/10 flex items-center justify-center text-orange-500">
                       <feat.icon size={24} />
                     </div>
                     <h3 className="text-xl font-bold">{feat.title}</h3>
-                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-500' : 'text-gray-600'}`}>{feat.desc}</p>
+                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-500' : 'text-slate-600'}`}>{feat.desc}</p>
                   </div>
                 ))}
               </div>
@@ -1159,7 +2222,7 @@ export default function App() {
           </section>
 
           <div id="pricing">
-            <Pricing t={t} />
+            <Pricing t={t} isDarkMode={isDarkMode} />
           </div>
         </main>
       ) : (
@@ -1181,22 +2244,22 @@ export default function App() {
           {/* Sidebar */}
           <aside className={`
             fixed md:relative z-50 md:z-auto h-[calc(100vh-80px)] w-64 border-r p-6 space-y-2 transition-transform duration-300 ease-in-out
-            ${isDarkMode ? 'translate-x-0 bg-[#0a0a0a] border-white/5' : 'translate-x-0 bg-white border-gray-200'}
+            ${isDarkMode ? 'translate-x-0 bg-[#0a0a0a] border-white/5' : 'translate-x-0 bg-white/90 border-slate-200 shadow-sm'}
             ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           `}>
-            <div className={`text-xs font-bold uppercase tracking-widest mb-4 mt-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{t.menu}</div>
-            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${isDarkMode ? 'bg-orange-600/10 text-orange-500' : 'bg-orange-50 text-orange-600 shadow-sm'}`}>
+            <div className={`text-xs font-bold uppercase tracking-widest mb-4 mt-4 ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.menu}</div>
+            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${isDarkMode ? 'bg-orange-600/10 text-orange-500' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm'}`}>
               <LayoutDashboard size={20} /> {t.dashboard}
             </button>
-            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'}`}>
               <History size={20} /> {t.history}
             </button>
-            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'}`}>
               <Settings size={20} /> {t.settings}
             </button>
           </aside>
 
-          <section className={`flex-1 p-4 sm:p-8 overflow-y-auto ${isDarkMode ? '' : 'bg-gray-50/50'}`}>
+          <section className={`flex-1 p-4 sm:p-8 overflow-y-auto ${isDarkMode ? '' : 'bg-transparent'}`}>
             <div className="max-w-4xl mx-auto space-y-8">
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
@@ -1204,20 +2267,20 @@ export default function App() {
                 className="space-y-2"
               >
                 <h1 className="text-2xl sm:text-3xl font-bold">{t.welcome}</h1>
-                <p className={`text-sm sm:text-base italic ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{t.readyAnalyze}</p>
+                <p className={`text-sm sm:text-base italic ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.readyAnalyze}</p>
               </motion.div>
 
               {/* URL Input Area */}
-              <div className={`border p-6 sm:p-8 rounded-3xl space-y-6 shadow-xl shadow-black/5 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5' : 'bg-white border-gray-200'}`}>
+              <div className={`border p-6 sm:p-8 rounded-3xl space-y-6 shadow-xl shadow-black/5 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5' : 'bg-white border-slate-200 shadow-xl shadow-slate-900/5'}`}>
                 <div className="space-y-4">
-                  <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t.videoUrl}</label>
+                  <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-slate-600'}`}>{t.videoUrl}</label>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <input 
                       type="text" 
                       value={videoUrl}
                       onChange={(e) => setVideoUrl(e.target.value)}
                       placeholder="https://youtube.com/watch?v=..." 
-                      className={`flex-1 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-orange-600 outline-none transition-all text-sm sm:text-base ${isDarkMode ? 'bg-white/5 border-white/10 border' : 'bg-gray-50 border-gray-200 border text-gray-900'}`}
+                      className={`flex-1 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-orange-600 outline-none transition-all text-sm sm:text-base ${isDarkMode ? 'bg-white/5 border-white/10 border' : 'bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20'}`}
                     />
                     <Button 
                       onClick={handleAnalyze} 
@@ -1236,7 +2299,7 @@ export default function App() {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                   {[t.summary, t.quiz, t.mindmap, t.tutor].map((tool) => (
-                    <div key={tool} className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-xs sm:text-sm ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-gray-50 border-100 text-gray-600 font-medium'}`}>
+                    <div key={tool} className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-xs sm:text-sm ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-200 text-slate-600 font-medium'}`}>
                       <div className="w-1.5 h-1.5 rounded-full bg-orange-600 shrink-0" />
                       <span className="truncate">{tool}</span>
                     </div>
@@ -1264,7 +2327,7 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
-                        <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
                           <History size={14} /> {t.history}
                         </h3>
                         
@@ -1277,11 +2340,11 @@ export default function App() {
                             className={`w-full sm:w-64 pl-9 pr-4 py-2 rounded-xl text-xs outline-none transition-all border ${
                               isDarkMode 
                                 ? 'bg-white/5 border-white/10 text-white focus:border-orange-600/50 focus:bg-white/10' 
-                                : 'bg-white border-gray-200 text-gray-900 focus:border-orange-200 focus:shadow-sm'
+                                : 'bg-white border-slate-200 text-slate-950 focus:border-orange-300 focus:shadow-sm'
                             }`}
                           />
                           <div className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
-                            isDarkMode ? 'text-gray-500 group-focus-within:text-orange-500' : 'text-gray-400 group-focus-within:text-orange-600'
+                            isDarkMode ? 'text-gray-500 group-focus-within:text-orange-500' : 'text-slate-500 group-focus-within:text-orange-600'
                           }`}>
                             <Search size={14} className={searchQuery.length > 0 ? "scale-110" : ""} />
                           </div>
@@ -1304,19 +2367,19 @@ export default function App() {
                               initial={{ opacity: 0, x: -10 }}
                               animate={{ opacity: 1, x: 0 }}
                               onClick={() => setCurrentResult(item)}
-                              className={`group flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 hover:border-orange-600/50' : 'bg-white border-gray-100 hover:border-orange-200 shadow-sm shadow-black/5 hover:shadow-md'}`}
+                              className={`group flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 hover:border-orange-600/50' : 'bg-white border-slate-200 hover:border-orange-200 shadow-sm shadow-slate-900/5 hover:shadow-md'}`}
                             >
-                              <div className={`w-20 h-12 rounded-lg overflow-hidden shrink-0 relative ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                              <div className={`w-20 h-12 rounded-lg overflow-hidden shrink-0 relative ${isDarkMode ? 'bg-gray-800' : 'bg-slate-100'}`}>
                                 <img src={item.video?.thumbnail || item.thumbnail} alt="" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                  <Youtube size={16} className={`group-hover:text-white transition-colors ${isDarkMode ? 'text-white/50' : 'text-gray-400'}`} />
+                                  <Youtube size={16} className={`group-hover:text-white transition-colors ${isDarkMode ? 'text-white/50' : 'text-slate-400'}`} />
                                 </div>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <h4 className={`font-bold text-sm sm:text-base truncate group-hover:text-orange-500 transition-colors ${isDarkMode ? '' : 'text-gray-800'}`}>
+                                <h4 className={`font-bold text-sm sm:text-base truncate group-hover:text-orange-500 transition-colors ${isDarkMode ? '' : 'text-slate-900'}`}>
                                   {item.video?.title || item.title}
                                 </h4>
-                                <p className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-2">
+                                <p className={`text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
                                   <span className="text-orange-600/60 font-mono italic">{t.astraV3}</span>
                                   <span>•</span>
                                   <span>{new Date(item.createdAt?.toDate?.() || item.createdAt).toLocaleDateString()}</span>
@@ -1326,26 +2389,26 @@ export default function App() {
                             </motion.div>
                           ))
                         ) : searchQuery ? (
-                          <div className={`p-12 rounded-3xl border flex flex-col items-center justify-center text-center space-y-4 ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-gray-100 shadow-sm'}`}>
+                          <div className={`p-12 rounded-3xl border flex flex-col items-center justify-center text-center space-y-4 ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-slate-200 shadow-xl shadow-slate-900/5'}`}>
                             <div className="w-16 h-16 rounded-full bg-red-600/5 flex items-center justify-center text-red-500">
                               <Search size={32} />
                             </div>
                             <div className="space-y-1">
                               <h3 className="font-bold">{t.noResults} "{searchQuery}"</h3>
-                              <p className="text-sm text-gray-500">{t.adjustSearch}</p>
+                              <p className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.adjustSearch}</p>
                             </div>
                             <Button variant="ghost" onClick={() => setSearchQuery('')} className="text-xs">
                               {t.clearSearch}
                             </Button>
                           </div>
                         ) : (
-                          <div className={`p-12 rounded-3xl border flex flex-col items-center justify-center text-center space-y-4 ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-gray-100 shadow-sm'}`}>
+                          <div className={`p-12 rounded-3xl border flex flex-col items-center justify-center text-center space-y-4 ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-slate-200 shadow-xl shadow-slate-900/5'}`}>
                             <div className="w-16 h-16 rounded-full bg-orange-600/5 flex items-center justify-center text-orange-600">
                               <History size={32} />
                             </div>
                             <div className="space-y-1">
                               <h3 className="font-bold">{t.noHistory}</h3>
-                              <p className="text-sm text-gray-500">{t.noHistoryDesc}</p>
+                              <p className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.noHistoryDesc}</p>
                             </div>
                           </div>
                         )}
@@ -1353,7 +2416,7 @@ export default function App() {
                     </div>
 
                     <div className="space-y-4">
-                      <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs px-2 flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs px-2 flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
                         <Zap size={14} /> {t.premium}
                       </h3>
                       <div className="p-8 rounded-3xl bg-orange-600 flex flex-col items-center text-center space-y-4 shadow-orange-600/30 shadow-2xl relative overflow-hidden group">
@@ -1379,8 +2442,8 @@ export default function App() {
       )}
 
       {/* Footer */}
-      <footer className={`py-12 border-t text-center text-sm transition-colors ${isDarkMode ? 'border-white/5 text-gray-600' : 'border-gray-200 text-gray-400'}`}>
-        <p>© 2026 Astra.ai — {t.builtWithPrecision}</p>
+      <footer className={`py-12 border-t text-center text-sm transition-colors ${isDarkMode ? 'border-white/5 text-gray-600' : 'border-slate-200 text-slate-500'}`}>
+        <p>© 2026 Astra Learning AI — {t.builtWithPrecision}</p>
       </footer>
     </div>
   );

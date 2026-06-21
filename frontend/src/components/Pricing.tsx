@@ -7,9 +7,10 @@ import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
 interface Props {
   t: any;
+  isDarkMode?: boolean;
 }
 
-export const Pricing = ({ t }: Props) => {
+export const Pricing = ({ t, isDarkMode = true }: Props) => {
   const { user } = useAuth();
 
   const plans = [
@@ -95,7 +96,14 @@ export const Pricing = ({ t }: Props) => {
   };
 
   return (
-    <section id="pricing" className="py-24 px-4 bg-[#0a0a0a] text-white">
+    <section
+      id="pricing"
+      className={`py-24 px-4 transition-colors duration-300 ${
+        isDarkMode
+          ? 'bg-[#0a0a0a] text-white'
+          : 'bg-[#f6f7fb] text-slate-950 border-t border-slate-200'
+      }`}
+    >
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16 space-y-4">
           <motion.span 
@@ -111,7 +119,9 @@ export const Pricing = ({ t }: Props) => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-black italic tracking-tighter"
+            className={`text-4xl md:text-5xl font-black italic tracking-tighter ${
+              isDarkMode ? 'text-white' : 'text-slate-950'
+            }`}
           >
             {t.pricingHero}
           </motion.h2>
@@ -120,12 +130,14 @@ export const Pricing = ({ t }: Props) => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2 }}
-            className="text-gray-500 max-w-2xl mx-auto font-medium"
+            className={`max-w-2xl mx-auto font-medium ${
+              isDarkMode ? 'text-gray-500' : 'text-slate-600'
+            }`}
           >
             {t.pricingDesc}
           </motion.p>
         </div>
-
+ 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
           {plans.map((plan: any, index) => (
             <motion.div
@@ -137,8 +149,12 @@ export const Pricing = ({ t }: Props) => {
               whileHover={{ y: -10 }}
               className={`relative flex flex-col p-8 rounded-[2.5rem] transition-all duration-500 ${
                 plan.highlighted 
-                ? 'bg-gradient-to-b from-orange-600/20 to-transparent border-2 border-orange-600/50 shadow-[0_20px_50px_rgba(234,88,12,0.15)] z-10' 
-                : 'bg-white/[0.03] border border-white/10 hover:border-white/20'
+                ? isDarkMode 
+                  ? 'bg-gradient-to-b from-orange-600/20 to-transparent border-2 border-orange-600/50 shadow-[0_20px_50px_rgba(234,88,12,0.15)] z-10'
+                  : 'bg-gradient-to-b from-orange-50 to-white border-2 border-orange-300 shadow-2xl shadow-orange-600/10 z-10' 
+                : isDarkMode 
+                  ? 'bg-white/[0.03] border border-white/10 hover:border-white/20'
+                  : 'bg-white border border-slate-200 hover:border-orange-200 shadow-xl shadow-slate-900/5 hover:shadow-orange-600/10'
               }`}
             >
               {plan.highlighted && (
@@ -146,41 +162,67 @@ export const Pricing = ({ t }: Props) => {
                   {t.mostPopular}
                 </div>
               )}
-
+ 
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
-                  <span className={`text-xs font-black uppercase tracking-widest ${plan.highlighted ? 'text-orange-500' : 'text-gray-500'}`}>
+                  <span className={`text-xs font-black uppercase tracking-widest ${
+                    plan.highlighted 
+                      ? 'text-orange-500' 
+                      : isDarkMode 
+                        ? 'text-gray-500' 
+                        : 'text-slate-500'
+                  }`}>
                     {plan.target}
                   </span>
-                  {plan.id === 'free' && <Shield className="text-gray-600" size={20} />}
+                  {plan.id === 'free' && <Shield className={isDarkMode ? 'text-gray-600' : 'text-slate-400'} size={20} />}
                   {plan.id === 'basic' && <Rocket className="text-orange-600/50" size={20} />}
                   {plan.id === 'premium' && <Zap className="text-orange-500" size={20} />}
                 </div>
-                <h3 className="text-3xl font-black italic tracking-tight mb-2 uppercase">{plan.name}</h3>
+                <h3 className={`text-3xl font-black italic tracking-tight mb-2 uppercase ${
+                  isDarkMode ? 'text-white' : 'text-slate-950'
+                }`}>{plan.name}</h3>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-5xl font-black">{plan.price}</span>
-                  <span className="text-gray-500 text-sm font-bold uppercase tracking-widest">{plan.description}</span>
+                  <span className={`text-5xl font-black ${
+                    isDarkMode ? 'text-white' : 'text-slate-950'
+                  }`}>{plan.price}</span>
+                  <span className={`text-sm font-bold uppercase tracking-widest ${
+                    isDarkMode ? 'text-gray-500' : 'text-slate-500'
+                  }`}>{plan.description}</span>
                 </div>
               </div>
-
+ 
               <div className="space-y-6 mb-10 flex-1">
                 <div className="space-y-3">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.usageLimits}</h4>
+                  <h4 className={`text-[10px] font-black uppercase tracking-widest ${
+                    isDarkMode ? 'text-gray-400' : 'text-slate-500'
+                  }`}>{t.usageLimits}</h4>
                   <ul className="space-y-2">
                     {plan.limits.map((limit: string, lIdx: number) => (
-                      <li key={lIdx} className="flex gap-3 text-sm text-gray-300 font-medium">
+                      <li key={lIdx} className={`flex gap-3 text-sm font-medium ${
+                        isDarkMode ? 'text-gray-300' : 'text-slate-700'
+                      }`}>
                         <ArrowRight size={16} className="text-orange-600 shrink-0 mt-0.5" />
                         {limit}
                       </li>
                     ))}
                   </ul>
                 </div>
-
+ 
                 <div className="space-y-4">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.moreFeatures}</h4>
+                  <h4 className={`text-[10px] font-black uppercase tracking-widest ${
+                    isDarkMode ? 'text-gray-400' : 'text-slate-500'
+                  }`}>{t.moreFeatures}</h4>
                   <ul className="space-y-3">
                     {plan.features.map((feature: any, fIdx: number) => (
-                      <li key={fIdx} className={`flex gap-3 text-sm transition-opacity duration-300 ${feature.included ? 'text-white' : 'text-gray-600 opacity-50'}`}>
+                      <li key={fIdx} className={`flex gap-3 text-sm transition-opacity duration-300 ${
+                        feature.included 
+                          ? isDarkMode 
+                            ? 'text-white' 
+                            : 'text-slate-800' 
+                          : isDarkMode 
+                            ? 'text-gray-600 opacity-50' 
+                            : 'text-slate-400 opacity-70'
+                      }`}>
                         {feature.included ? (
                           <Check size={18} className="text-orange-600 shrink-0" />
                         ) : (
@@ -194,13 +236,15 @@ export const Pricing = ({ t }: Props) => {
                   </ul>
                 </div>
               </div>
-
+ 
               <button 
                 onClick={() => handleSubscribe(plan.id)}
                 className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all transform active:scale-95 ${
                   plan.highlighted 
                   ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-xl shadow-orange-600/20' 
-                  : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                  : isDarkMode
+                    ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                    : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-sm hover:border-orange-200'
                 }`}
               >
                 {plan.cta}
@@ -208,9 +252,11 @@ export const Pricing = ({ t }: Props) => {
             </motion.div>
           ))}
         </div>
-
+ 
         <div className="mt-16 text-center">
-          <p className="text-xs text-gray-600 font-medium tracking-widest uppercase">
+          <p className={`text-xs font-medium tracking-widest uppercase ${
+            isDarkMode ? 'text-gray-600' : 'text-slate-500'
+          }`}>
             {t.secureCloud}
           </p>
         </div>

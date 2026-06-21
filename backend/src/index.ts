@@ -211,7 +211,7 @@ async function initializeTutorSession(
       },
       outputAudioTranscription: {},
       inputAudioTranscription: {},
-      systemInstruction: `You are Astra AI, the ultimate neural study companion. You are guiding a student on the video: "${videoTitle}".\n\n` +
+      systemInstruction: `You are Astra Learning AI, the ultimate neural study companion. You are guiding a student on the video: "${videoTitle}".\n\n` +
       `Context from Video:\n${(transcript || "").substring(0, 15000)}\n\n` +
       `Pedagogical Guidelines:\n` +
       `1. Be the ultimate mentor. Don't just give answers—ask targeted questions that guide the user to the answer.\n` +
@@ -254,7 +254,7 @@ async function startServer() {
 
   // Status check endpoint
   app.get('/api/v1/status', (req: Request, res: Response) => {
-    res.json({ message: 'Astra.ai API is online' });
+    res.json({ message: 'Astra Learning AI API is online' });
   });
 
   // YouTube Info Endpoint

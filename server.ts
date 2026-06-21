@@ -228,7 +228,7 @@ async function initializeTutorSession(
       },
       outputAudioTranscription: {},
       inputAudioTranscription: {},
-      systemInstruction: `You are Astra AI, the ultimate neural study companion. You are guiding a student on the video: "${videoTitle}".\n\n` +
+      systemInstruction: `You are Astra Learning AI, the ultimate neural study companion. You are guiding a student on the video: "${videoTitle}".\n\n` +
       `Context from Video:\n${(transcript || "").substring(0, 15000)}\n\n` +
       `Pedagogical Guidelines:\n` +
       `1. Be the ultimate mentor. Don't just give answers—ask targeted questions that guide the user to the answer.\n` +
@@ -520,8 +520,8 @@ async function startServer() {
         const isPt = lang === 'pt';
         analysisData = {
           summary: isPt 
-            ? `Esta sessão foca no conteúdo de **${metadata.title}**. Embora a análise automatizada detalhada tenha encontrado uma limitação técnica no momento, você ainda pode explorar os conceitos fundamentais através da transcrição e do Tutor Astra.`
-            : `This session focuses on **${metadata.title}**. While our automated deep analysis encountered a brief technical limitation, you can still explore the core concepts using the transcript and the Astra Tutor.`,
+            ? `Esta sessão foca no conteúdo de **${metadata.title}**. Embora a análise automatizada detalhada tenha encontrado uma limitação técnica no momento, você ainda pode explorar os conceitos fundamentais através da transcrição e do Tutor Astra Learning AI.`
+            : `This session focuses on **${metadata.title}**. While our automated deep analysis encountered a brief technical limitation, you can still explore the core concepts using the transcript and the Astra Learning AI Tutor.`,
           key_points: [
             isPt ? `Tópico: ${metadata.title}` : `Topic: ${metadata.title}`,
             isPt ? `Criador: ${metadata.author_name || 'Desconhecido'}` : `Creator: ${metadata.author_name || 'Unknown'}`,
@@ -639,7 +639,7 @@ async function startServer() {
 
   // API Routes (Proxy or direct implementation)
   app.get("/api/v1/status", (req, res) => {
-    res.json({ message: "Astra.ai API is online" });
+    res.json({ message: "Astra Learning AI API is online" });
   });
 
   // Vite integration
@@ -727,7 +727,7 @@ async function startServer() {
   });
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Astra.ai integrated server running on http://localhost:${PORT}`);
+    console.log(`Astra Learning AI integrated server running on http://localhost:${PORT}`);
   });
 }
 

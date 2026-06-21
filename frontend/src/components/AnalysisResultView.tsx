@@ -64,20 +64,20 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
   };
 
   return (
-    <div className={`border rounded-3xl overflow-hidden flex flex-col h-[80vh] shadow-2xl transition-colors duration-300 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 shadow-black/50' : 'bg-white border-gray-200 shadow-black/10'}`}>
+    <div className={`border rounded-3xl overflow-hidden flex flex-col h-[80vh] shadow-2xl transition-colors duration-300 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 shadow-black/50' : 'bg-white border-slate-200 shadow-2xl shadow-slate-900/10'}`}>
       {/* Fallback Banner */}
       {data.mode === 'metadata_fallback' && (
-        <div className="bg-orange-600/10 border-b border-orange-600/20 px-6 py-4 flex flex-col gap-2">
+        <div className={`border-b px-6 py-4 flex flex-col gap-2 ${isDarkMode ? 'bg-orange-600/10 border-orange-600/20' : 'bg-orange-50 border-orange-200'}`}>
           <div className="flex items-center gap-3">
             <AlertTriangle size={14} className="text-orange-500 shrink-0" />
-            <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest leading-none">
+            <p className={`text-[10px] font-bold uppercase tracking-widest leading-none ${isDarkMode ? 'text-orange-500' : 'text-orange-700'}`}>
               {data.message || t.fallbackTranscript}
             </p>
           </div>
           {data.limitations && data.limitations.length > 0 && (
             <ul className="pl-7 space-y-1">
               {data.limitations.map((lim, idx) => (
-                <li key={idx} className="text-[9px] text-orange-400 opacity-80 list-disc">{lim}</li>
+                <li key={idx} className={`text-[9px] list-disc ${isDarkMode ? 'text-orange-400 opacity-80' : 'text-orange-600 font-medium'}`}>{lim}</li>
               ))}
             </ul>
           )}
@@ -85,7 +85,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
       )}
 
       {/* Tabs */}
-      <div className={`flex border-b p-1.5 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-gray-100 bg-gray-50'}`}>
+      <div className={`flex border-b p-1.5 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-slate-200 bg-slate-50'}`}>
         {(['summary', 'quiz', 'mindmap', 'tutor', 'transcript'] as const).map((tab) => (
           <button
             key={tab}
@@ -93,7 +93,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all duration-300 relative group overflow-hidden ${
               activeTab === tab 
                 ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' 
-                : isDarkMode ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
+                : isDarkMode ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-white font-medium'
             }`}
           >
             {activeTab === tab && (
@@ -113,7 +113,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
       </div>
 
       {/* Content Area */}
-      <div className={`flex-1 overflow-y-auto p-6 sm:p-10 custom-scrollbar relative ${isDarkMode ? 'bg-[radial-gradient(circle_at_50%_0%,rgba(255,100,0,0.03),transparent)]' : 'bg-[radial-gradient(circle_at_50%_0%,rgba(255,100,0,0.02),transparent)]'}`}>
+      <div className={`flex-1 overflow-y-auto p-6 sm:p-10 custom-scrollbar relative ${isDarkMode ? 'bg-[radial-gradient(circle_at_50%_0%,rgba(255,100,0,0.03),transparent)]' : 'bg-[radial-gradient(circle_at_50%_0%,rgba(255,100,0,0.035),transparent_45%),linear-gradient(to_bottom,#ffffff,#f8fafc)]'}`}>
         <AnimatePresence mode="wait">
           {activeTab === 'tutor' && (
             <motion.div
@@ -127,13 +127,13 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                 <div className={`w-20 h-20 bg-orange-600/20 rounded-3xl flex items-center justify-center mx-auto border transition-colors ${isDarkMode ? 'border-orange-600/30' : 'border-orange-200'}`}>
                   <MessageSquare size={40} className="text-orange-500" />
                 </div>
-                <h2 className={`text-3xl font-black transition-colors ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t.interactiveTutor}</h2>
-                <p className={`transition-colors ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t.tutorDesc}</p>
+                <h2 className={`text-3xl font-black transition-colors ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>{t.interactiveTutor}</h2>
+                <p className={`transition-colors ${isDarkMode ? 'text-gray-400' : 'text-slate-600'}`}>{t.tutorDesc}</p>
                 <div className="flex flex-wrap justify-center gap-3 py-4">
-                  <div className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-colors ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-500' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>
+                  <div className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-colors ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-500' : 'bg-slate-50 border-slate-200 text-slate-500 font-medium shadow-sm'}`}>
                     <Ear size={12} /> {t.lowLatency}
                   </div>
-                  <div className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-colors ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-500' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>
+                  <div className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-colors ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-500' : 'bg-slate-50 border-slate-200 text-slate-500 font-medium shadow-sm'}`}>
                     <BrainCircuit size={12} /> {t.videoAware}
                   </div>
                 </div>
@@ -157,7 +157,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
               exit={{ opacity: 0, x: -20 }}
               className={`prose max-w-none ${isDarkMode ? 'prose-invert' : ''} prose-orange`}
             >
-              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-4 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
+              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-4 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-3">
                   <div className="w-2 h-2 rounded-full bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.8)]" />
                   <span className="text-[10px] font-mono text-orange-600 tracking-[0.2em] font-bold uppercase">{t.synthesizedInsight}</span>
@@ -175,7 +175,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                     <h4 className="text-sm font-black uppercase tracking-widest text-orange-600">{t.keyTakeaways}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {data.key_points.map((point, idx) => (
-                        <div key={idx} className={`p-4 rounded-2xl border flex gap-3 transition-colors ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-gray-50 border-gray-100'}`}>
+                        <div key={idx} className={`p-4 rounded-2xl border flex gap-3 transition-colors ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-200 shadow-sm'}`}>
                           <CheckCircle size={16} className="text-orange-600 shrink-0 mt-0.5" />
                           <p className="text-sm leading-relaxed">{point}</p>
                         </div>
@@ -185,7 +185,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                 ) : (data as any).summaries?.actionable && (
                   <div className="space-y-4">
                     <h4 className="text-sm font-black uppercase tracking-widest text-orange-600">{t.actionableLessons}</h4>
-                    <div className={`p-6 rounded-2xl border transition-colors ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-gray-50 border-gray-100'}`}>
+                    <div className={`p-6 rounded-2xl border transition-colors ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
                       <div className="markdown-body">
                         <ReactMarkdown>{(data as any).summaries.actionable}</ReactMarkdown>
                       </div>
@@ -236,7 +236,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
 
               {quizQuestions.map((q, i) => (
                 <div key={i} className="space-y-4">
-                  <h3 className={`text-xl font-bold flex gap-3 transition-colors ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  <h3 className={`text-xl font-bold flex gap-3 transition-colors ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>
                     <span className="text-orange-600">Q{i + 1}.</span> {q.question}
                   </h3>
                   <div className="grid grid-cols-1 gap-3">
@@ -251,7 +251,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                                 ? 'bg-green-600/20 border-green-600 text-green-500'
                                 : 'bg-red-600/20 border-red-600 text-red-500'
                               : 'bg-orange-600/20 border-orange-600 text-orange-500 shadow-sm shadow-orange-600/10'
-                            : isDarkMode ? 'bg-white/5 border-white/5 text-gray-400' : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100'
+                            : isDarkMode ? 'bg-white/5 border-white/5 text-gray-400' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/80 shadow-sm'
                         }`}
                       >
                         {opt}
@@ -259,7 +259,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                     ))}
                   </div>
                   {showResults && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`mt-4 p-4 rounded-xl border text-sm italic transition-colors ${isDarkMode ? 'bg-blue-600/10 border-blue-600/20 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`mt-4 p-4 rounded-xl border text-sm italic transition-colors ${isDarkMode ? 'bg-blue-600/10 border-blue-600/20 text-blue-400' : 'bg-blue-50/80 border-blue-200 text-blue-700'}`}>
                       <strong>{t.rationale}:</strong> {q.explanation}
                     </motion.div>
                   )}
@@ -319,14 +319,14 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                     isDarkMode={isDarkMode}
                   />
                   
-                  <div className={`p-6 rounded-3xl border transition-colors ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                  <div className={`p-6 rounded-3xl border transition-colors ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-slate-50 border-slate-200 text-slate-600 shadow-sm'}`}>
                     <div className="flex items-start gap-4">
                       <div className="p-2 bg-orange-600/10 rounded-xl mt-1">
                         <Maximize2 size={16} className="text-orange-500" />
                       </div>
                       <div>
-                        <h4 className={`font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Interactive Exploration</h4>
-                        <p className="text-sm opacity-80 leading-relaxed">
+                        <h4 className={`font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>Interactive Exploration</h4>
+                        <p className="text-sm opacity-80 leading-relaxed font-medium">
                           Drag to pan, use scroll to zoom. This visual structure helps you understand how concepts relate to each other.
                         </p>
                       </div>
@@ -334,20 +334,20 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                   </div>
                 </div>
               ) : (
-                <div className={`flex flex-col items-center justify-center p-20 border-2 border-dashed rounded-[3rem] transition-colors ${isDarkMode ? 'border-white/10 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
+                <div className={`flex flex-col items-center justify-center p-20 border-2 border-dashed rounded-[3rem] transition-colors ${isDarkMode ? 'border-white/10 text-gray-500' : 'border-slate-300 text-slate-500 bg-slate-50/50'}`}>
                   <BrainCircuit size={48} className="mb-4 opacity-50" />
                   <p className="text-center italic font-medium">Mind map will be generated after the video analysis.</p>
                 </div>
               )}
 
-              <div className={`mt-8 p-8 border border-dashed rounded-[2rem] transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-gray-50'}`}>
+              <div className={`mt-8 p-8 border border-dashed rounded-[2rem] transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-slate-50'}`}>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div className="space-y-1">
-                    <h4 className={`text-lg font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    <h4 className={`text-lg font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>
                       Advanced Mind Map Tools
                       <span className="px-2 py-0.5 text-[8px] font-black uppercase tracking-widest bg-orange-600 text-white rounded-full">Coming Soon</span>
                     </h4>
-                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Planned Pro features for deep visual learning.</p>
+                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>{t.proFeaturesDesc || "Planned Pro features for deep visual learning."}</p>
                   </div>
                   <button className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:scale-105 transition-transform">
                     Join Pro Waitlist
@@ -363,13 +363,13 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                     { icon: <Save size={14} />, label: "Save Custom Maps", desc: "Cloud sync and persistent storage" },
                     { icon: <Zap size={14} />, label: "AI Map Expansion", desc: "Deepen nodes with AI context" },
                   ].map((feature, i) => (
-                    <div key={i} className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-white border-gray-100'}`}>
+                    <div key={i} className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
                       <div className="p-2 bg-orange-600/10 rounded-xl text-orange-500">
                         {feature.icon}
                       </div>
                       <div className="space-y-0.5">
-                        <span className={`text-[10px] font-bold tracking-wide ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{feature.label}</span>
-                        <p className={`text-[9px] opacity-60 leading-tight ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{feature.desc}</p>
+                        <span className={`text-[10px] font-bold tracking-wide ${isDarkMode ? 'text-gray-200' : 'text-slate-800'}`}>{feature.label}</span>
+                        <p className={`text-[9px] opacity-60 leading-tight ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>{feature.desc}</p>
                       </div>
                     </div>
                   ))}
@@ -386,7 +386,7 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
-              <div className={`flex items-center justify-between gap-3 mb-6 pb-4 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
+              <div className={`flex items-center justify-between gap-3 mb-6 pb-4 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-3">
                   <div className="w-2 h-2 rounded-full bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.8)]" />
                   <span className="text-[10px] font-mono text-orange-600 tracking-[0.2em] font-bold uppercase">{t.rawTranscript}</span>
@@ -401,12 +401,12 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
-                  className={`px-4 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10' : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                  className={`px-4 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`}
                 >
                   {t.downloadTxt}
                 </button>
               </div>
-              <div className={`p-8 rounded-[2rem] border transition-colors leading-relaxed opacity-80 text-sm sm:text-base ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-300' : 'bg-gray-50 border-gray-100 text-gray-700'}`}>
+              <div className={`p-8 rounded-[2rem] border transition-colors leading-relaxed opacity-80 text-sm sm:text-base ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
                 {data.transcript || t.noTranscript}
               </div>
             </motion.div>
@@ -414,8 +414,8 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
         </AnimatePresence>
       </div>
 
-      <div className={`p-4 border-t flex justify-end transition-colors ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
-        <button onClick={onClose} className={`transition-colors flex items-center gap-2 font-medium text-sm ${isDarkMode ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'}`}>
+      <div className={`p-4 border-t flex justify-end transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+        <button onClick={onClose} className={`transition-colors flex items-center gap-2 font-medium text-sm ${isDarkMode ? 'text-gray-500 hover:text-white' : 'text-slate-500 hover:text-slate-950 font-semibold'}`}>
           {t.closeAnalysis} <X size={16} />
         </button>
       </div>
