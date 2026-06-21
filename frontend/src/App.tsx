@@ -38,6 +38,7 @@ import { db, auth } from './lib/firebase';
 import { AnalysisResultView } from './components/AnalysisResultView';
 import { handleFirestoreError, OperationType } from './lib/firestoreUtils';
 import { Pricing } from './components/Pricing';
+import { FAQ } from './components/FAQ';
 import { AICore } from './components/AICore';
 import { AIActivityFeed } from './components/AIActivityFeed';
 import axios from 'axios';
@@ -51,6 +52,7 @@ const TRANSLATIONS = {
   pt: {
     features: "Funcionalidades",
     pricing: "Preços",
+    faq: "FAQ",
     signIn: "Entrar",
     startFree: "Começar Agora",
     watchDemo: "Ver Astra Learning AI em Ação",
@@ -305,6 +307,7 @@ const TRANSLATIONS = {
   en: {
     features: "Features",
     pricing: "Pricing",
+    faq: "FAQ",
     signIn: "Sign In",
     startFree: "Get Started Now",
     watchDemo: "See Astra Learning AI in Action",
@@ -559,6 +562,7 @@ const TRANSLATIONS = {
   es: {
     features: "Funcionalidades",
     pricing: "Precios",
+    faq: "FAQ",
     signIn: "Iniciar Sesión",
     startFree: "Empezar Ahora",
     watchDemo: "Ver Astra Learning AI en Acción",
@@ -1374,6 +1378,7 @@ export default function App() {
             <div className="hidden md:flex items-center gap-6 mr-6 transition-all">
               <a href="#features" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.features}</a>
               <a href="#pricing" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.pricing}</a>
+              <a href="#faq" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.faq}</a>
             </div>
             
             {/* Language Selector */}
@@ -2222,8 +2227,10 @@ export default function App() {
           </section>
 
           <div id="pricing">
-            <Pricing t={t} isDarkMode={isDarkMode} />
+            <Pricing t={t} isDarkMode={isDarkMode} lang={currentLang} />
           </div>
+
+          <FAQ lang={currentLang} isDarkMode={isDarkMode} />
         </main>
       ) : (
         /* Dashboard Interface */
