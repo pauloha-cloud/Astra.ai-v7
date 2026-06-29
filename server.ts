@@ -54,6 +54,27 @@ function getAI(): GoogleGenAI {
   return cachedAIClient;
 }
 
+async function generateContentWithRetry(ai: any, params: any, maxRetries = 3, baseDelayMs = 2000): Promise<any> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (err: any) {
+      attempt++;
+      const isTransient = err.status === 503 || err.status === 429 || 
+                          err.message?.includes("503") || err.message?.includes("429") ||
+                          err.message?.includes("high demand") || err.message?.includes("temporary");
+      if (isTransient && attempt < maxRetries) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
+        console.warn(`[Gemini] Model high demand/rate limit (status/msg: ${err.status || err.message}). Retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 // Helper to extract YouTube Video ID from various formats
 function extractVideoId(url: string | any): string | null {
   if (!url || typeof url !== 'string') {
@@ -220,12 +241,6 @@ async function initializeTutorSession(
       speechConfig: {
         voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
       },
-      generationConfig: {
-        responseModalities: ["AUDIO" as any],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
-        },
-      },
       outputAudioTranscription: {},
       inputAudioTranscription: {},
       systemInstruction: `You are Astra Learning AI, the ultimate neural study companion. You are guiding a student on the video: "${videoTitle}".\n\n` +
@@ -351,7 +366,7 @@ async function startServer() {
         }
         console.log("[Backend] Transcript fetch: SUCCESS");
       } catch (transErr: any) {
-        console.warn(`[Backend] Transcript fetch: FAILED - ${transErr.message}. Using metadata fallback.`);
+        console.log(`[Backend] Transcript fetch: Using metadata fallback.`);
         mode = "metadata_fallback";
       }
 
@@ -403,8 +418,8 @@ async function startServer() {
                 - tutor_questions: Relevant questions for deep learning.
                 - limitations: Mention that this analysis is based on metadata/title as the specific video transcript was unavailable.`;
 
-        const geminiResult = await getAI().models.generateContent({
-          model: "gemini-3-flash-preview",
+        const geminiResult = await generateContentWithRetry(getAI(), {
+          model: "gemini-3.5-flash",
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           config: {
             responseMimeType: "application/json",
@@ -595,8 +610,8 @@ async function startServer() {
       console.log(`[Backend] Generating extra questions for video "${title}" in: ${targetLang}`);
       
       const aiClient = getAI();
-      const response = await aiClient.models.generateContent({
-        model: "gemini-3-flash-preview",
+      const response = await generateContentWithRetry(aiClient, {
+        model: "gemini-3.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",

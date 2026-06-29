@@ -10,14 +10,13 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, googleProvider, appleProvider, db } from '../lib/firebase';
+import { auth, googleProvider, db } from '../lib/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
-  signInWithApple: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
@@ -74,14 +73,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const signInWithApple = async () => {
-    try {
-      await signInWithPopup(auth, appleProvider);
     } catch (error) {
       throw error;
     }
@@ -150,7 +141,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user, 
       loading, 
       signInWithGoogle, 
-      signInWithApple, 
       signUpWithEmail, 
       signInWithEmail, 
       sendVerificationEmail, 

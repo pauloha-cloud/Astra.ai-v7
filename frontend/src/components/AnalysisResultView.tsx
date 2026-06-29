@@ -32,10 +32,24 @@ interface Props {
   isDarkMode?: boolean;
   t: any;
   lang?: string;
+  activeTab?: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript';
+  setActiveTab?: (tab: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript') => void;
+  showInternalTabs?: boolean;
 }
 
-export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang = 'en' }: Props) => {
-  const [activeTab, setActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript'>('summary');
+export const AnalysisResultView = ({ 
+  data, 
+  onClose, 
+  isDarkMode = true, 
+  t, 
+  lang = 'en',
+  activeTab: externalActiveTab,
+  setActiveTab: externalSetActiveTab,
+  showInternalTabs = true
+}: Props) => {
+  const [internalActiveTab, setInternalActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript'>('summary');
+  const activeTab = externalActiveTab || internalActiveTab;
+  const setActiveTab = externalSetActiveTab || setInternalActiveTab;
   const [quizQuestions, setQuizQuestions] = useState(data.quiz);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
@@ -85,32 +99,34 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
       )}
 
       {/* Tabs */}
-      <div className={`flex border-b p-1.5 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-slate-200 bg-slate-50'}`}>
-        {(['summary', 'quiz', 'mindmap', 'tutor', 'transcript'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all duration-300 relative group overflow-hidden ${
-              activeTab === tab 
-                ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' 
-                : isDarkMode ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-white font-medium'
-            }`}
-          >
-            {activeTab === tab && (
-              <motion.div 
-                layoutId="activeTab"
-                className="absolute inset-0 bg-orange-600 -z-10"
-              />
-            )}
-            {tab === 'summary' && <BookOpen size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
-            {tab === 'quiz' && <CheckCircle size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
-            {tab === 'mindmap' && <BrainCircuit size={16} className={activeTab === tab ? 'rotate-12' : ''} />}
-            {tab === 'tutor' && <MessageSquare size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
-            {tab === 'transcript' && <FileText size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
-            <span className="capitalize font-bold text-[10px] sm:text-xs tracking-widest">{t[tab]}</span>
-          </button>
-        ))}
-      </div>
+      {showInternalTabs && (
+        <div className={`flex border-b p-1.5 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-slate-200 bg-slate-50'}`}>
+          {(['summary', 'quiz', 'mindmap', 'tutor', 'transcript'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all duration-300 relative group overflow-hidden ${
+                activeTab === tab 
+                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' 
+                  : isDarkMode ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-white font-medium'
+              }`}
+            >
+              {activeTab === tab && (
+                <motion.div 
+                  layoutId="activeTab"
+                  className="absolute inset-0 bg-orange-600 -z-10"
+                />
+              )}
+              {tab === 'summary' && <BookOpen size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
+              {tab === 'quiz' && <CheckCircle size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
+              {tab === 'mindmap' && <BrainCircuit size={16} className={activeTab === tab ? 'rotate-12' : ''} />}
+              {tab === 'tutor' && <MessageSquare size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
+              {tab === 'transcript' && <FileText size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
+              <span className="capitalize font-bold text-[10px] sm:text-xs tracking-widest">{t[tab]}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Content Area */}
       <div className={`flex-1 overflow-y-auto p-6 sm:p-10 custom-scrollbar relative ${isDarkMode ? 'bg-[radial-gradient(circle_at_50%_0%,rgba(255,100,0,0.03),transparent)]' : 'bg-[radial-gradient(circle_at_50%_0%,rgba(255,100,0,0.035),transparent_45%),linear-gradient(to_bottom,#ffffff,#f8fafc)]'}`}>
@@ -190,6 +206,26 @@ export const AnalysisResultView = ({ data, onClose, isDarkMode = true, t, lang =
                         <ReactMarkdown>{(data as any).summaries.actionable}</ReactMarkdown>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Collapsible Transcript Section */}
+                {!showInternalTabs && data.transcript && (
+                  <div className={`mt-8 pt-6 border-t transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+                    <details className="group">
+                      <summary className={`flex items-center justify-between cursor-pointer list-none font-bold text-sm sm:text-base ${isDarkMode ? 'text-gray-200 hover:text-white' : 'text-slate-800 hover:text-slate-950'}`}>
+                        <div className="flex items-center gap-2">
+                          <FileText size={16} className="text-orange-600" />
+                          <span>{t.transcript}</span>
+                        </div>
+                        <ChevronRight size={16} className="transition-transform group-open:rotate-90 text-orange-600" />
+                      </summary>
+                      <div className="mt-4">
+                        <div className={`p-6 rounded-2xl border text-xs sm:text-sm leading-relaxed max-h-60 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                          {data.transcript}
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>

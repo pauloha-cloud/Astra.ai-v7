@@ -69,6 +69,7 @@ const TRANSLATIONS = {
     quizGen: "Geração de Quizzes",
     quizGenDesc: "Avalie sua fixação de conteúdo com avaliações dinâmicas sob demanda.",
     welcome: "Bem-vindo de volta, Explorador",
+    welcomeBack: "Bem-vindo de volta, {name}",
     readyAnalyze: "Pronto para analisar outra obra-prima?",
     videoUrl: "URL do Vídeo no YouTube",
     analyze: "Analisar",
@@ -324,6 +325,7 @@ const TRANSLATIONS = {
     quizGen: "Quiz Generation",
     quizGenDesc: "Validate your comprehension instantly with dynamically generated assessments.",
     welcome: "Welcome back, Explorer",
+    welcomeBack: "Welcome back, {name}",
     readyAnalyze: "Ready to analyze another masterpiece?",
     videoUrl: "YouTube Video URL",
     analyze: "Analyze",
@@ -579,6 +581,7 @@ const TRANSLATIONS = {
     quizGen: "Generación de Cuestionarios",
     quizGenDesc: "Evalúa tu aprendizaje de inmediato con test creados de manera automática.",
     welcome: "Bienvenido de nuevo, Explorador",
+    welcomeBack: "Bienvenido de vuelta, {name}",
     readyAnalyze: "¿Listo para analizar otra obra maestra?",
     videoUrl: "URL del Vídeo de YouTube",
     analyze: "Analizar",
@@ -1032,11 +1035,22 @@ const formatAuthError = (code: string, message: string, lang: Language): string 
   }
 };
 
+function getFirstName(user: any) {
+  if (user?.displayName) {
+    return user.displayName.trim().split(" ")[0];
+  }
+
+  if (user?.email) {
+    return user.email.split("@")[0];
+  }
+
+  return null;
+}
+
 export default function App() {
   const { 
     user, 
     signInWithGoogle, 
-    signInWithApple, 
     signUpWithEmail, 
     signInWithEmail, 
     sendVerificationEmail, 
@@ -1067,6 +1081,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const [currentResult, setCurrentResult] = useState<AnalysisResult | null>(null);
+  const [activeTab, setActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript'>('summary');
   const [history, setHistory] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -1076,6 +1091,14 @@ export default function App() {
   }, [authMethod]);
 
   const t = TRANSLATIONS[currentLang];
+
+  const firstName = getFirstName(user);
+  const fallbackNames: Record<string, string> = {
+    pt: "Explorador",
+    en: "Explorer",
+    es: "Explorador",
+  };
+  const displayName = firstName || fallbackNames[currentLang] || "Explorer";
 
   useEffect(() => {
     setApiStatus(t.hero.badgeChecking);
@@ -1164,6 +1187,7 @@ export default function App() {
       }
 
       setCurrentResult(data);
+      setActiveTab('summary');
       fetchHistory();
       setVideoUrl('');
     } catch (error: any) {
@@ -1225,20 +1249,6 @@ export default function App() {
       setShowLoginModal(false);
     } catch (err: any) {
       console.warn("Google sign in error", err);
-      setAuthError(formatAuthError(err.code, err.message, currentLang));
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleAppleLogin = async () => {
-    setAuthError('');
-    setAuthLoading(true);
-    try {
-      await signInWithApple();
-      setShowLoginModal(false);
-    } catch (err: any) {
-      console.warn("Apple sign in error", err);
       setAuthError(formatAuthError(err.code, err.message, currentLang));
     } finally {
       setAuthLoading(false);
@@ -1641,24 +1651,6 @@ export default function App() {
                             <img src="https://www.google.com/favicon.ico" alt="" className="w-5 h-5 mr-3 shrink-0" />
                           )}
                           {authLoading ? (currentLang === 'pt' ? 'Conectando...' : currentLang === 'es' ? 'Conectando...' : 'Connecting...') : t.continueGoogle}
-                        </Button>
-
-                        <Button 
-                          type="button"
-                          variant="secondary"
-                          className="w-full justify-center py-3.5 shadow-sm font-semibold text-base" 
-                          onClick={handleAppleLogin}
-                          isDarkMode={isDarkMode}
-                          disabled={authLoading}
-                        >
-                          {authLoading ? (
-                            <Loader2 className="animate-spin w-5 h-5 mr-3 shrink-0" />
-                          ) : (
-                            <svg className="w-5 h-5 mr-3 shrink-0 fill-current" viewBox="0 0 24 24">
-                              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-.96.04-2.13.64-2.82 1.45-.6.69-1.12 1.83-.98 2.94 1.07.08 2.15-.52 2.81-1.33z" />
-                            </svg>
-                          )}
-                          {authLoading ? (currentLang === 'pt' ? 'Conectando...' : currentLang === 'es' ? 'Conectando...' : 'Connecting...') : t.continueApple}
                         </Button>
 
                         <Button 
@@ -2273,7 +2265,9 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-2"
               >
-                <h1 className="text-2xl sm:text-3xl font-bold">{t.welcome}</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold">
+                  {t.welcomeBack.replace("{name}", displayName)}
+                </h1>
                 <p className={`text-sm sm:text-base italic ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.readyAnalyze}</p>
               </motion.div>
 
@@ -2305,12 +2299,41 @@ export default function App() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-                  {[t.summary, t.quiz, t.mindmap, t.tutor].map((tool) => (
-                    <div key={tool} className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-xs sm:text-sm ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-200 text-slate-600 font-medium'}`}>
-                      <div className="w-1.5 h-1.5 rounded-full bg-orange-600 shrink-0" />
-                      <span className="truncate">{tool}</span>
-                    </div>
-                  ))}
+                  {([
+                    { id: 'tutor', label: t.tutor },
+                    { id: 'summary', label: t.summary },
+                    { id: 'quiz', label: t.quiz },
+                    { id: 'mindmap', label: t.mindmap }
+                  ] as const).map((btn) => {
+                    const hasAnalysisResult = Boolean(currentResult);
+                    const isActive = activeTab === btn.id && hasAnalysisResult;
+                    
+                    let btnClass = "";
+                    if (!hasAnalysisResult) {
+                      btnClass = isDarkMode
+                        ? "bg-white/5 text-gray-500 border-white/10 opacity-50 cursor-not-allowed"
+                        : "bg-slate-50 text-slate-400 border-slate-100 opacity-50 cursor-not-allowed";
+                    } else if (isActive) {
+                      btnClass = "bg-orange-600 text-white border-orange-500 shadow-lg shadow-orange-600/20";
+                    } else {
+                      btnClass = isDarkMode
+                        ? "bg-white/5 text-gray-300 border-white/10 hover:border-orange-500/40 hover:text-orange-400 cursor-pointer"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:border-orange-400 hover:text-orange-600 shadow-sm cursor-pointer";
+                    }
+
+                    return (
+                      <button
+                        key={btn.id}
+                        disabled={!hasAnalysisResult}
+                        onClick={() => hasAnalysisResult && setActiveTab(btn.id)}
+                        title={!hasAnalysisResult ? (currentLang === 'pt' ? 'Analise um vídeo primeiro.' : currentLang === 'es' ? 'Analiza un video primero.' : 'Analyze a video first.') : ''}
+                        className={`flex items-center justify-center gap-2 p-2 sm:p-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-250 ${btnClass}`}
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${isActive ? 'bg-white scale-125' : 'bg-orange-600'}`} />
+                        <span className="truncate">{btn.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2328,6 +2351,9 @@ export default function App() {
                       isDarkMode={isDarkMode}
                       t={t}
                       lang={currentLang}
+                      activeTab={activeTab}
+                      setActiveTab={setActiveTab}
+                      showInternalTabs={false}
                     />
                   </motion.div>
                 ) : (
@@ -2373,7 +2399,10 @@ export default function App() {
                               key={item.id}
                               initial={{ opacity: 0, x: -10 }}
                               animate={{ opacity: 1, x: 0 }}
-                              onClick={() => setCurrentResult(item)}
+                              onClick={() => {
+                                setCurrentResult(item);
+                                setActiveTab('summary');
+                              }}
                               className={`group flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 hover:border-orange-600/50' : 'bg-white border-slate-200 hover:border-orange-200 shadow-sm shadow-slate-900/5 hover:shadow-md'}`}
                             >
                               <div className={`w-20 h-12 rounded-lg overflow-hidden shrink-0 relative ${isDarkMode ? 'bg-gray-800' : 'bg-slate-100'}`}>

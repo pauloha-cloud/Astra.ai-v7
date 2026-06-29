@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Zap, Shield, Rocket, Crown, Clock, HelpCircle } from 'lucide-react';
+import { Check, Zap, Shield, Rocket, Clock, HelpCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -20,8 +20,6 @@ export const STRIPE_PRICE_IDS = {
   explorer_annual: "price_explorer_annual",
   pro_monthly: "price_pro_monthly",
   pro_annual: "price_pro_annual",
-  power_tutor_monthly: "price_power_tutor_monthly",
-  power_tutor_annual: "price_power_tutor_annual",
   addon_100_min: "price_addon_100_min",
   addon_500_min: "price_addon_500_min",
   addon_1000_min: "price_addon_1000_min"
@@ -34,10 +32,9 @@ const LOCAL_PRICING_LANG = {
     subtitle: "Escolha o plano que se aplica à sua jornada de aprendizagem. De exploradores casuais a profissionais de alto desempenho.",
     monthly: "Mensal",
     annual: "Anual",
-    saveBadge: "Economize 40%",
+    saveBadge: "Economize até 40%",
     billedAnnually: "Cobrado anualmente",
     mostPopular: "MAIS POPULAR",
-    intensiveUse: "USO INTENSIVO",
     secureCloud: "Garantia de segurança com checkout criptografado. Cancele quando quiser.",
     signInToChoose: "Por favor, entre para escolher um plano.",
     planUpdated: "Plano atualizado para",
@@ -56,22 +53,19 @@ const LOCAL_PRICING_LANG = {
     explainText: "O Voice Tutor usa minutos mensais porque conversas por voz consomem recursos de IA em tempo real. Isso garante uma experiência estável e sustentável.",
 
     // Plan Descriptions
-    starterDesc: "Para usuários que querem começar a estudar vídeos com IA de forma simples.",
-    explorerDesc: "Para estudantes frequentes que querem estudar com mais profundidade, produtividade e experimentar o Tutor por voz.",
+    starterDesc: "Para quem quer começar a estudar com IA de forma simples e acessível.",
+    explorerDesc: "Para estudantes frequentes que querem mais profundidade, produtividade e acesso inicial ao Tutor por voz.",
     proDesc: "Para professores, criadores, pesquisadores e usuários avançados que precisam de mais minutos de Tutor por voz.",
-    powerTutorDesc: "Para usuários intensivos que usam o Tutor por voz diariamente e precisam de uma experiência avançada de aprendizagem.",
 
     // Plan Targets
     starterTarget: "Para aprendizes casuais",
     explorerTarget: "Para estudantes ativos",
     proTarget: "Para profissionais",
-    powerTutorTarget: "Para uso avançado",
 
     // Plan CTAs
     starterCTA: "Começar com Starter",
     explorerCTA: "Assinar Explorer",
     proCTA: "Obter Pro",
-    powerTutorCTA: "Assinar Power Tutor",
 
     // Packages names
     package100: "+100 min",
@@ -92,54 +86,43 @@ const LOCAL_PRICING_LANG = {
       "Sem Voice Tutor"
     ],
     starterFeatures: [
-      "Tutor por texto limitado",
+      "Análise de vídeos do YouTube",
       "Resumos com IA",
       "Quizzes de revisão",
       "Mapas mentais básicos",
-      "Histórico de estudos limitado"
+      "Histórico limitado"
     ],
 
     explorerLimits: [
       "Até 150 análises por mês",
       "Prioridade padrão de processamento",
-      "30 minutos/mês de Voice Tutor"
+      "30 min/mês de Voice Tutor"
     ],
     explorerFeatures: [
-      "Tudo do Starter",
+      "Tudo no Starter",
       "Tutor por texto incluso",
-      "Compra de minutos extras disponível",
       "Mapas mentais avançados",
       "Geração de questões extras",
       "Multi-idioma PT/EN/ES",
-      "Histórico de estudos completo"
+      "Histórico completo",
+      "Compra de minutos extras disponível"
     ],
 
     proLimits: [
       "Até 300 análises por mês",
-      "Fila de processamento prioritária",
-      "300 minutos/mês de Voice Tutor"
+      "Fila prioritária",
+      "300 min/mês de Voice Tutor"
     ],
     proFeatures: [
-      "Tudo do Explorer",
+      "Tudo no Explorer",
+      "Tutor por texto incluso",
       "Tutor inteligente por voz ao vivo",
       "Exportações premium",
       "Prioridade de processamento",
       "Sem limite de duração de vídeos",
-      "Acesso antecipado a novas funções"
-    ],
-
-    powerTutorLimits: [
-      "Até 500 análises por mês",
-      "Fila máxima de prioridade",
-      "1.500 minutos/mês de Voice Tutor"
-    ],
-    powerTutorFeatures: [
-      "Tudo do Pro",
-      "Ideal para uso diário intensivo",
-      "Indicado para criadores de cursos",
-      "Indicado para pesquisadores",
+      "Acesso antecipado a novas funções",
       "Compra de minutos extras disponível"
-    ]
+    ],
   },
   en: {
     eyebrow: "PRICING PLANS",
@@ -147,10 +130,9 @@ const LOCAL_PRICING_LANG = {
     subtitle: "Choose the plan that fits your learning journey. From casual explorers to high-performance professionals.",
     monthly: "Monthly",
     annual: "Annual",
-    saveBadge: "Save 40%",
+    saveBadge: "Save up to 40%",
     billedAnnually: "Billed annually",
     mostPopular: "MOST POPULAR",
-    intensiveUse: "INTENSIVE USE",
     secureCloud: "Secured and encrypted checkout. Cancel anytime.",
     signInToChoose: "Please sign in to choose a plan.",
     planUpdated: "Plan updated to",
@@ -169,22 +151,19 @@ const LOCAL_PRICING_LANG = {
     explainText: "Voice Tutor uses monthly minutes because voice conversations consume real-time AI resources. This keeps the experience stable and sustainable.",
 
     // Plan Descriptions
-    starterDesc: "For users who want to start studying videos with AI in a simple way.",
-    explorerDesc: "For frequent learners who want deeper study, better productivity, and access to Voice Tutor.",
+    starterDesc: "For users who want to start studying with AI in a simple and affordable way.",
+    explorerDesc: "For frequent learners who want deeper study, better productivity, and initial access to Voice Tutor.",
     proDesc: "For teachers, creators, researchers, and power users who need more Voice Tutor minutes.",
-    powerTutorDesc: "For intensive users who use Voice Tutor daily and need an advanced learning experience.",
 
     // Plan Targets
     starterTarget: "For casual learners",
     explorerTarget: "For active students",
     proTarget: "For professionals",
-    powerTutorTarget: "For intensive use",
 
     // Plan CTAs
     starterCTA: "Start Starter",
     explorerCTA: "Subscribe Explorer",
     proCTA: "Get Pro",
-    powerTutorCTA: "Subscribe Power Tutor",
 
     // Packages names
     package100: "+100 min",
@@ -204,53 +183,42 @@ const LOCAL_PRICING_LANG = {
       "No Voice Tutor"
     ],
     starterFeatures: [
-      "Limited chat tutor",
+      "YouTube video analysis",
       "AI summaries",
       "Review quizzes",
       "Basic mind maps",
-      "Limited study history"
+      "Limited history"
     ],
 
     explorerLimits: [
       "Up to 150 analyses per month",
       "Standard processing priority",
-      "30 minutes/month of Voice Tutor"
+      "30 Voice Tutor min/month"
     ],
     explorerFeatures: [
       "Everything in Starter",
-      "Chat tutor included",
-      "Purchase extra minutes",
+      "Text tutor included",
       "Advanced mind maps",
       "Extra question generation",
       "Multi-language PT/EN/ES",
-      "Full study history"
+      "Full study history",
+      "Extra minutes available for purchase"
     ],
 
     proLimits: [
       "Up to 300 analyses per month",
-      "Priority processing queue",
-      "300 minutes/month of Voice Tutor"
+      "Priority queue",
+      "300 Voice Tutor min/month"
     ],
     proFeatures: [
       "Everything in Explorer",
-      "Live voice tutor",
+      "Text tutor included",
+      "Live intelligent Voice Tutor",
       "Premium exports",
       "Processing priority",
       "No video length limit",
-      "Early access to uploads, image analysis, and multi-file sessions"
-    ],
-
-    powerTutorLimits: [
-      "Up to 500 analyses per month",
-      "Maximum priority queue",
-      "1,500 minutes/month of Voice Tutor"
-    ],
-    powerTutorFeatures: [
-      "Everything in Pro",
-      "Ideal for heavy daily usage",
-      "Indicated for course creators",
-      "Indicated for researchers",
-      "Purchase extra minutes"
+      "Early access to new features",
+      "Extra minutes available for purchase"
     ]
   },
   es: {
@@ -259,10 +227,9 @@ const LOCAL_PRICING_LANG = {
     subtitle: "Elige el plan que se adapte a tu viaje de aprendizaje. Desde exploradores ocasionales hasta profesionales de alto rendimiento.",
     monthly: "Mensual",
     annual: "Anual",
-    saveBadge: "Ahorra 40%",
+    saveBadge: "Ahorra hasta 40%",
     billedAnnually: "Cobrado anualmente",
     mostPopular: "MÁS POPULAR",
-    intensiveUse: "USO INTENSIVO",
     secureCloud: "Garantía de seguridad en el pago cifrado. Cancela cuando quieras.",
     signInToChoose: "Por favor, inicia sesión para elegir un plan.",
     planUpdated: "Plan actualizado a",
@@ -281,22 +248,19 @@ const LOCAL_PRICING_LANG = {
     explainText: "El Tutor por Voz usa minutos mensuales porque las conversaciones por voz consumen recursos de IA en tiempo real. Esto mantiene la experiencia estable y sostenible.",
 
     // Plan Descriptions
-    starterDesc: "Para usuarios que quieren comenzar a estudiar videos con IA de forma sencilla.",
-    explorerDesc: "Para estudiantes frecuentes que quieren estudiar con más profundidad, productividad y acceso al Tutor por voz.",
+    starterDesc: "Para quienes quieren comenzar a estudiar con IA de forma simple y accesible.",
+    explorerDesc: "Para estudiantes frecuentes que quieren más profundidad, productividad y acceso inicial al Tutor por voz.",
     proDesc: "Para profesores, creadores, investigadores y usuarios avanzados que necesitan más minutos de Tutor por voz.",
-    powerTutorDesc: "Para usuarios intensivos que usan el Tutor por voz diariamente y necesitan una experiencia avanzada de aprendizaje.",
 
     // Plan Targets
     starterTarget: "Para estudiantes ocasionales",
     explorerTarget: "Para estudiantes activos",
     proTarget: "Para profesionales",
-    powerTutorTarget: "Para uso intensivo",
 
     // Plan CTAs
     starterCTA: "Comenzar con Starter",
     explorerCTA: "Suscribirse a Explorer",
     proCTA: "Obtener Pro",
-    powerTutorCTA: "Suscribirse a Power Tutor",
 
     // Packages names
     package100: "+100 min",
@@ -313,59 +277,69 @@ const LOCAL_PRICING_LANG = {
     starterLimits: [
       "Hasta 50 análisis al mes",
       "Videos de hasta 60 minutos",
-      "Sin Voice Tutor"
+      "Sin Tutor por Voz"
     ],
     starterFeatures: [
-      "Tutor por texto limitado",
-      "Resúmenes por inteligencia artificial",
-      "Cuestionarios de revisión con IA",
+      "Análisis de videos de YouTube",
+      "Resúmenes con IA",
+      "Cuestionarios de revisión",
       "Mapas mentales básicos",
-      "Historial de estudios limitado"
+      "Historial limitado"
     ],
 
     explorerLimits: [
       "Hasta 150 análisis al mes",
-      "Prioridad de procesamiento estándar",
-      "30 minutos/mes de Voice Tutor"
+      "Prioridad estándar de procesamiento",
+      "30 min/mes de Tutor por Voz"
     ],
     explorerFeatures: [
-      "Todo lo de Starter",
+      "Todo en Starter",
       "Tutor por texto incluido",
-      "Compra de minutos extras disponible",
-      "Mapas mentais avanzados",
-      "Generación de preguntas extras",
-      "Soporte multiidioma (PT/EN/ES)",
-      "Historial de estudios completo"
+      "Mapas mentales avanzados",
+      "Generación de preguntas extra",
+      "Multi-idioma PT/EN/ES",
+      "Historial completo",
+      "Compra de minutos extra disponible"
     ],
 
     proLimits: [
       "Hasta 300 análisis al mes",
-      "Cola de prioridad dedicada",
-      "300 minutos/mes de Voice Tutor"
+      "Cola prioritaria",
+      "300 min/mes de Tutor por Voz"
     ],
     proFeatures: [
-      "Todo lo de Explorer",
+      "Todo en Explorer",
+      "Tutor por texto incluido",
       "Tutor inteligente por voz en vivo",
       "Exportaciones premium",
       "Prioridad de procesamiento",
-      "Sin límite de duración de video",
-      "Acceso anticipado a cargas, análisis de imágenes y sesiones de múltiples archivos"
-    ],
-
-    powerTutorLimits: [
-      "Hasta 500 análisis al mes",
-      "Fila máxima de prioridad",
-      "1.500 minutos/mes de Voice Tutor"
-    ],
-    powerTutorFeatures: [
-      "Todo lo de Pro",
-      "Ideal para uso diario intensivo",
-      "Indicado para creadores de cursos",
-      "Indicado para investigadores",
-      "Compra de minutos extras disponible"
+      "Sin límite de duración de videos",
+      "Acceso anticipado a nuevas funciones",
+      "Compra de minutos extra disponible"
     ]
   }
 };
+
+// Pricing Helper Functions
+function calculateDiscountPercent(monthlyPrice: number, annualMonthlyPrice: number) {
+  return Math.round(((monthlyPrice - annualMonthlyPrice) / monthlyPrice) * 100);
+}
+
+function calculateAnnualTotal(annualMonthlyPrice: number) {
+  return annualMonthlyPrice * 12;
+}
+
+function getSaveText(percent: number, lang: string) {
+  if (lang === 'pt') return `Economize ${percent}%`;
+  if (lang === 'es') return `Ahorra ${percent}%`;
+  return `Save ${percent}%`;
+}
+
+function getBilledAnnuallyText(total: string, lang: string) {
+  if (lang === 'pt') return `Cobrado anualmente em $${total}`;
+  if (lang === 'es') return `Cobrado anualmente en $${total}`;
+  return `Billed annually at $${total}`;
+}
 
 export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
   const { user } = useAuth();
@@ -380,9 +354,8 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
       name: 'Starter',
       target: local.starterTarget,
       description: local.starterDesc,
-      monthlyPrice: '$9.99',
-      annualPrice: '$5.99',
-      oldPrice: '$9.99',
+      monthlyPrice: 9.90,
+      annualPrice: 5.90,
       limits: local.starterLimits,
       features: local.starterFeatures,
       cta: local.starterCTA,
@@ -394,9 +367,8 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
       name: 'Explorer',
       target: local.explorerTarget,
       description: local.explorerDesc,
-      monthlyPrice: '$19.99',
-      annualPrice: '$14.99',
-      oldPrice: '$19.99',
+      monthlyPrice: 19.90,
+      annualPrice: 14.90,
       limits: local.explorerLimits,
       features: local.explorerFeatures,
       cta: local.explorerCTA,
@@ -409,29 +381,13 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
       name: 'Pro',
       target: local.proTarget,
       description: local.proDesc,
-      monthlyPrice: '$39.99',
-      annualPrice: '$29.99',
-      oldPrice: '$39.99',
+      monthlyPrice: 39.90,
+      annualPrice: 29.90,
       limits: local.proLimits,
       features: local.proFeatures,
       cta: local.proCTA,
       icon: Zap,
       highlighted: false,
-    },
-    {
-      id: 'power_tutor',
-      name: 'Power Tutor',
-      target: local.powerTutorTarget,
-      description: local.powerTutorDesc,
-      monthlyPrice: '$119.00',
-      annualPrice: '$89.99',
-      oldPrice: '$119.00',
-      limits: local.powerTutorLimits,
-      features: local.powerTutorFeatures,
-      cta: local.powerTutorCTA,
-      icon: Crown,
-      highlighted: false,
-      badge: local.intensiveUse,
     },
   ];
 
@@ -476,10 +432,6 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
       } else if (planId === 'pro') {
         vLimit = 300;
         mAnalyses = 300;
-        maxVideoLen = 999999;
-      } else if (planId === 'power_tutor') {
-        vLimit = 1500;
-        mAnalyses = 500;
         maxVideoLen = 999999;
       }
 
@@ -585,24 +537,26 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
             <button
               type="button"
               onClick={() => setIsAnnual(true)}
-              className={`px-4 sm:px-5 py-2 text-xs sm:text-sm font-bold rounded-full transition-all duration-300 flex items-center gap-2 ${
+              className={`px-4 sm:px-5 py-2 text-xs sm:text-sm font-bold rounded-full transition-all duration-300 ${
                 isAnnual
                   ? 'bg-orange-600 text-white shadow-md'
                   : isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'
               }`}
             >
-              <span>{local.annual}</span>
-              <motion.span
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                className={`px-2 py-0.5 text-[9px] font-black rounded-full shadow-sm leading-none ${
-                  isAnnual 
-                    ? 'bg-black text-orange-500' 
-                    : 'bg-orange-600 text-white'
-                }`}
-              >
-                {local.saveBadge}
-              </motion.span>
+              <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                <span>{local.annual}</span>
+                <motion.span
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                  className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] leading-none whitespace-nowrap font-black shadow-sm ${
+                    isAnnual 
+                      ? 'bg-black text-orange-500' 
+                      : 'bg-orange-600 text-white'
+                  }`}
+                >
+                  {local.saveBadge}
+                </motion.span>
+              </div>
             </button>
           </div>
           
@@ -622,13 +576,24 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
           </AnimatePresence>
         </div>
 
-        {/* 4-Column Grid for Plans */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 xl:gap-8 items-stretch mb-24">
+        {/* 3-Column Grid for Plans */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 xl:gap-8 items-stretch max-w-5xl mx-auto mb-24">
           {plans.map((plan, index) => {
             const IconComponent = plan.icon;
-            const currentPrice = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+            
+            // Prices formatting
+            const displayPriceVal = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+            const displayPrice = `$${displayPriceVal.toFixed(2)}`;
+            const displayOldPrice = `$${plan.monthlyPrice.toFixed(2)}`;
+            
             const hasBadge = !!plan.badge;
             const isMostPopular = plan.id === 'explorer';
+            
+            // Savings calculations
+            const discountPercent = calculateDiscountPercent(plan.monthlyPrice, plan.annualPrice);
+            const saveText = getSaveText(discountPercent, langKey);
+            const annualTotal = calculateAnnualTotal(plan.annualPrice).toFixed(2);
+            const billedAnnuallyText = getBilledAnnuallyText(annualTotal, langKey);
             
             return (
               <motion.div
@@ -684,18 +649,18 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
                     {plan.name}
                   </h3>
 
-                  <p className={`text-xs font-semibold leading-relaxed mb-4 ${
+                  <p className={`text-xs font-semibold leading-relaxed mb-4 min-h-[48px] ${
                     isDarkMode ? 'text-gray-400' : 'text-slate-500'
                   }`}>
                     {plan.description}
                   </p>
 
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col gap-1.5">
                     <div className="flex items-baseline gap-1">
                       <span className={`text-3xl sm:text-4xl font-black tracking-tight ${
                         isDarkMode ? 'text-white' : 'text-slate-900'
                       }`}>
-                        {currentPrice}
+                        {displayPrice}
                       </span>
                       <span className={`text-[10px] font-bold uppercase tracking-wider ${
                         isDarkMode ? 'text-gray-450' : 'text-slate-500'
@@ -705,8 +670,23 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
                     </div>
 
                     {isAnnual && (
-                      <span className="text-[11px] font-bold text-gray-440 line-through tracking-wide opacity-75">
-                        {plan.oldPrice}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`text-xs font-bold line-through tracking-wide ${
+                          isDarkMode ? 'text-gray-500' : 'text-slate-450'
+                        }`}>
+                          {displayOldPrice}
+                        </span>
+                        <span className="px-2.5 py-0.5 text-[9px] font-black bg-orange-600 text-white rounded-full uppercase tracking-wider leading-none">
+                          {saveText}
+                        </span>
+                      </div>
+                    )}
+
+                    {isAnnual && (
+                      <span className={`text-[11px] font-bold mt-1 tracking-wide ${
+                        isDarkMode ? 'text-gray-450' : 'text-slate-600'
+                      }`}>
+                        {billedAnnuallyText}
                       </span>
                     )}
                   </div>
@@ -747,7 +727,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
                         <li key={fIdx} className={`flex gap-2 text-xs font-medium leading-normal ${
                           isDarkMode ? 'text-gray-300' : 'text-slate-700'
                         }`}>
-                          <Check size={14} className="text-orange-500 shrink-0 " />
+                          <Check size={14} className="text-orange-500 shrink-0 mt-0.5" />
                           <span>{feature}</span>
                         </li>
                       ))}
@@ -759,7 +739,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
                 <button 
                   type="button"
                   onClick={() => handleSubscribe(plan.id)}
-                  className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 group relative overflow-hidden shadow active:scale-95 ${
+                  className={`w-full py-3.5 mt-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 group relative overflow-hidden shadow active:scale-95 ${
                     isMostPopular 
                       ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/10' 
                       : isDarkMode

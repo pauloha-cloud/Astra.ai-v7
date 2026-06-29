@@ -55,6 +55,27 @@ function getAI(): GoogleGenAI {
   return cachedAIClient;
 }
 
+async function generateContentWithRetry(ai: any, params: any, maxRetries = 3, baseDelayMs = 2000): Promise<any> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (err: any) {
+      attempt++;
+      const isTransient = err.status === 503 || err.status === 429 || 
+                          err.message?.includes("503") || err.message?.includes("429") ||
+                          err.message?.includes("high demand") || err.message?.includes("temporary");
+      if (isTransient && attempt < maxRetries) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
+        console.warn(`[Gemini] Model high demand/rate limit (status/msg: ${err.status || err.message}). Retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 // Helper to extract YouTube Video ID from various formats
 function extractVideoId(url: string | any): string | null {
   if (!url || typeof url !== 'string') {
@@ -203,12 +224,6 @@ async function initializeTutorSession(
       speechConfig: {
         voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
       },
-      generationConfig: {
-        responseModalities: ["AUDIO" as any],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
-        },
-      },
       outputAudioTranscription: {},
       inputAudioTranscription: {},
       systemInstruction: `You are Astra Learning AI, the ultimate neural study companion. You are guiding a student on the video: "${videoTitle}".\n\n` +
@@ -329,8 +344,8 @@ async function startServer() {
              Transcript: ${(transcript || "").substring(0, 80000)}`
           : `Act as a subject matter expert. Based on the video title "${metadata.title}" by "${metadata.author_name || "Unknown"}", provide a detailed overview.`;
 
-        const response = await getAI().models.generateContent({
-          model: "gemini-3-flash-preview",
+        const response = await generateContentWithRetry(getAI(), {
+          model: "gemini-3.5-flash",
           contents: prompt,
           config: {
             responseMimeType: "application/json",
@@ -418,8 +433,8 @@ async function startServer() {
         Language: ${targetLang}
         Content: ${(content || "").substring(0, 30000)}`;
 
-      const response = await getAI().models.generateContent({
-        model: "gemini-3-flash-preview",
+      const response = await generateContentWithRetry(getAI(), {
+        model: "gemini-3.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
