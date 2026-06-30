@@ -11,132 +11,91 @@ import ReactFlow, {
   useEdgesState,
   Handle,
   Position,
-  Panel
+  Panel,
+  ReactFlowProvider,
+  useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { motion } from 'motion/react';
 import { 
-  Zap, 
   Plus, 
   Minus, 
   Layout, 
-  BookOpen, 
-  Lightbulb, 
-  Target, 
-  Layers, 
-  Cpu, 
-  Globe, 
-  Activity
+  Maximize2,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 
-const ICON_MAP: Record<string, any> = {
-  'BookOpen': BookOpen,
-  'Lightbulb': Lightbulb,
-  'Target': Target,
-  'Layers': Layers,
-  'Cpu': Cpu,
-  'Globe': Globe,
-  'Activity': Activity,
-  'Zap': Zap
-};
-
-const CATEGORY_COLORS: Record<string, { bg: string, text: string, border: string, accent: string, iconBg: string }> = {
-  'Concept': { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/20', accent: '#3b82f6', iconBg: 'bg-blue-500/20' },
-  'Example': { bg: 'bg-green-500/10', text: 'text-green-500', border: 'border-green-500/20', accent: '#10b981', iconBg: 'bg-green-500/20' },
-  'Detail': { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-purple-500/20', accent: '#a855f7', iconBg: 'bg-purple-500/20' },
-  'Definition': { bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/20', accent: '#f59e0b', iconBg: 'bg-amber-500/20' },
-  'Method': { bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20', accent: '#10b981', iconBg: 'bg-emerald-500/20' },
-  'Benefit': { bg: 'bg-pink-500/10', text: 'text-pink-500', border: 'border-pink-500/20', accent: '#ec4899', iconBg: 'bg-pink-500/20' },
-  'Risk': { bg: 'bg-rose-500/10', text: 'text-rose-500', border: 'border-rose-500/20', accent: '#f43f5e', iconBg: 'bg-rose-500/20' },
-  'Trend': { bg: 'bg-indigo-500/10', text: 'text-indigo-500', border: 'border-indigo-500/20', accent: '#6366f1', iconBg: 'bg-indigo-500/20' }
-};
+const THEME_COLORS = [
+  { accent: '#3b82f6', barBg: 'bg-blue-500' },
+  { accent: '#10b981', barBg: 'bg-emerald-500' },
+  { accent: '#8b5cf6', barBg: 'bg-violet-500' },
+  { accent: '#f59e0b', barBg: 'bg-amber-500' },
+  { accent: '#ec4899', barBg: 'bg-pink-500' },
+  { accent: '#f43f5e', barBg: 'bg-rose-500' },
+  { accent: '#6366f1', barBg: 'bg-indigo-500' },
+  { accent: '#14b8a6', barBg: 'bg-teal-500' }
+];
 
 interface CustomNodeProps {
   data: {
     label: string;
     isRoot?: boolean;
-    importance?: number;
-    category?: string;
-    icon?: string;
-    isDarkMode: boolean;
     hasChildren: boolean;
     isCollapsed: boolean;
     toggleNode: (id: string, e: React.MouseEvent) => void;
     id: string;
+    colorIndex?: number;
   };
 }
 
 const CustomNode = memo(({ data }: CustomNodeProps) => {
-  const { label, isRoot, importance, category, icon, isDarkMode, hasChildren, isCollapsed, toggleNode, id } = data;
+  const { label, isRoot, hasChildren, isCollapsed, toggleNode, id, colorIndex } = data;
   
-  const IconComponent = icon && ICON_MAP[icon] ? ICON_MAP[icon] : (isRoot ? Zap : BookOpen);
-  const catStyle = category ? CATEGORY_COLORS[category] || CATEGORY_COLORS['Concept'] : CATEGORY_COLORS['Concept'];
-  
-  const importanceScale = (importance || 3) / 5;
-  const fontSize = isRoot ? 'text-[12px]' : importanceScale > 0.8 ? 'text-[11px]' : 'text-[10px]';
-  const width = isRoot ? 'w-[260px]' : importanceScale > 0.8 ? 'w-[220px]' : 'w-[200px]';
+  const catStyle = typeof colorIndex === 'number' 
+    ? THEME_COLORS[colorIndex % THEME_COLORS.length] 
+    : THEME_COLORS[0];
 
   return (
     <motion.div 
-      initial={{ opacity: 0, scale: 0.9, y: 10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-      className={`relative px-4 py-4 rounded-2xl border flex items-center gap-3.5 transition-all duration-500 group ${width} ${
-        isRoot 
-          ? 'bg-gradient-to-br from-orange-600 to-orange-500 border-white/30 shadow-[0_15px_40px_-10px_rgba(234,88,12,0.5)] z-20 hover:scale-[1.02]' 
-          : isDarkMode 
-            ? `bg-white/5 backdrop-blur-xl ${catStyle.border} hover:bg-white/10 hover:border-white/20 shadow-xl shadow-black/20` 
-            : `bg-white ${catStyle.border} shadow-[0_10px_25px_-5px_rgba(0,0,0,0.05)] hover:shadow-[0_15px_30px_-5px_rgba(0,0,0,0.1)] border-opacity-50`
-      }`}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      className={`relative px-4 py-3 rounded-xl border flex items-center justify-between gap-3.5 transition-all duration-300 w-[210px] min-h-[50px] bg-[#0e131f] hover:bg-[#161c2c] text-left shadow-lg
+        ${isRoot 
+          ? 'border-slate-500 ring-2 ring-slate-400/10' 
+          : 'border-slate-800'
+        }`}
     >
-      <Handle type="target" position={Position.Left} className="!opacity-0" />
+      <Handle type="target" position={Position.Left} className="!opacity-0 !w-0 !h-0" />
       
-      <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 shadow-lg ${
-        isRoot ? 'bg-white/25 border border-white/20' : catStyle.iconBg
-      }`}>
-        <IconComponent 
-          size={18} 
-          className={isRoot ? 'text-white drop-shadow-sm' : catStyle.text} 
-          strokeWidth={isRoot ? 2.5 : 2}
-        />
-      </div>
+      {/* Side Accent Line */}
+      {!isRoot && (
+        <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${catStyle.barBg}`} />
+      )}
+      {isRoot && (
+        <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-slate-400" />
+      )}
 
-      <div className="flex-grow min-w-0 pr-1">
-        {category && !isRoot && (
-          <span className={`text-[9px] font-black uppercase tracking-[0.18em] opacity-90 block mb-1.5 ${catStyle.text}`}>
-            {category}
-          </span>
-        )}
-        <span className={`font-black leading-[1.3] uppercase tracking-tight line-clamp-3 ${fontSize} ${isRoot ? 'text-white' : isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+      {/* Label Text */}
+      <div className="flex-1 min-w-0 pl-1.5">
+        <p className="text-[11px] leading-[1.35] font-semibold text-slate-200 tracking-wide break-words">
           {label}
-        </span>
+        </p>
       </div>
 
+      {/* Expand/Collapse Handle */}
       {hasChildren && (
         <button 
           onClick={(e) => toggleNode(id, e)}
-          className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-xl border transition-all hover:scale-110 hover:shadow-lg
-            ${isRoot 
-              ? 'bg-white/20 border-white/40 text-white hover:bg-white/30' 
-              : isDarkMode 
-                ? 'bg-white/10 border-white/15 text-gray-400 hover:text-white hover:bg-white/20' 
-                : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-white'}
-          `}
+          className="shrink-0 w-5 h-5 flex items-center justify-center rounded-md border border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-100 hover:bg-slate-900 transition-all shadow-sm"
         >
-          {isCollapsed ? <Plus size={14} strokeWidth={3} /> : <Minus size={14} strokeWidth={3} />}
+          {isCollapsed ? <Plus size={10} strokeWidth={2.5} /> : <Minus size={10} strokeWidth={2.5} />}
         </button>
       )}
 
-      <Handle type="source" position={Position.Right} className="!opacity-0" />
-      
-      {importance >= 4 && !isRoot && (
-        <div className={`absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full animate-pulse border-[3px] border-black/10 ${catStyle.bg.replace('/10', '/100')}`} />
-      )}
-      
-      {isRoot && (
-        <div className="absolute -inset-1 blur-3xl opacity-20 bg-orange-600 -z-10 rounded-full" />
-      )}
+      <Handle type="source" position={Position.Right} className="!opacity-0 !w-0 !h-0" />
     </motion.div>
   );
 });
@@ -153,15 +112,14 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   
   dagreGraph.setGraph({ 
     rankdir: direction, 
-    marginx: 150, 
-    marginy: 150,
-    ranksep: isHorizontal ? 240 : 160,
-    nodesep: isHorizontal ? 80 : 200
+    marginx: 80, 
+    marginy: 60,
+    ranksep: isHorizontal ? 100 : 80,
+    nodesep: isHorizontal ? 24 : 120
   });
 
   nodes.forEach((node) => {
-    // Increase box size for better spacing distribution
-    dagreGraph.setNode(node.id, { width: 300, height: 140 });
+    dagreGraph.setNode(node.id, { width: 220, height: 60 });
   });
 
   edges.forEach((edge) => {
@@ -177,8 +135,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
       targetPosition: isHorizontal ? Position.Left : Position.Top,
       sourcePosition: isHorizontal ? Position.Right : Position.Bottom,
       position: {
-        x: nodeWithPosition.x - 150,
-        y: nodeWithPosition.y - 70,
+        x: nodeWithPosition.x - 110,
+        y: nodeWithPosition.y - 30,
       },
     };
   });
@@ -192,11 +150,17 @@ interface Props {
   isDarkMode?: boolean;
 }
 
-export const InteractiveMindMap = ({ data, centralTopic, isDarkMode = true }: Props) => {
+const InteractiveMindMapInner = ({ data, centralTopic, isDarkMode = true }: Props) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
   const [layout, setLayout] = useState<'LR' | 'TB'>('LR');
+  
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
+
+  const handleRecenter = useCallback(() => {
+    fitView({ padding: 0.2, duration: 600 });
+  }, [fitView]);
 
   const toggleNode = useCallback((nodeId: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -208,19 +172,39 @@ export const InteractiveMindMap = ({ data, centralTopic, isDarkMode = true }: Pr
     });
   }, []);
 
+  // Normalize data format
+  const normalizedData = useMemo(() => {
+    if (!data) return null;
+    
+    if (data.centralTopic && Array.isArray(data.nodes)) {
+      const transformNode = (node: any, depth = 1): any => {
+        return {
+          topic: node.label,
+          children: Array.isArray(node.children) ? node.children.map((c: any) => transformNode(c, depth + 1)) : []
+        };
+      };
+      
+      return {
+        topic: data.centralTopic,
+        children: data.nodes.map((n: any) => transformNode(n, 1))
+      };
+    }
+    
+    return data;
+  }, [data]);
+
   const masterGraph = useMemo(() => {
     const masterNodes: Node[] = [];
     const masterEdges: Edge[] = [];
     let idCounter = 0;
     const seenNodes = new Set<string>();
 
-    const addNode = (nodeData: any, parentId: string | null = null): string => {
+    const addNode = (nodeData: any, parentId: string | null = null, colorIndex?: number): string => {
       const label = typeof nodeData === 'string' ? nodeData : (nodeData.topic || nodeData.label || "Untitled");
       const nodeKey = `${parentId}-${label}`;
       
-      // Basic avoidance of exact duplicate child labels under same parent
       if (parentId && seenNodes.has(nodeKey)) {
-        return ""; // Skip
+        return "";
       }
       seenNodes.add(nodeKey);
 
@@ -234,10 +218,7 @@ export const InteractiveMindMap = ({ data, centralTopic, isDarkMode = true }: Pr
           label, 
           isRoot, 
           parentId,
-          importance: nodeData.importance || 3,
-          category: nodeData.category,
-          icon: nodeData.icon,
-          isDarkMode,
+          colorIndex,
           id
         },
         position: { x: 0, y: 0 },
@@ -255,31 +236,33 @@ export const InteractiveMindMap = ({ data, centralTopic, isDarkMode = true }: Pr
       return id;
     };
 
-    const rootId = addNode(typeof data === 'object' && data.topic ? data : (centralTopic || "Topic"));
+    const targetSource = normalizedData || {};
+    const rootId = addNode(typeof targetSource === 'object' && targetSource.topic ? targetSource : (centralTopic || "Topic"));
 
-    const parseRecursive = (nodeData: any, parentId: string) => {
+    const parseRecursive = (nodeData: any, parentId: string, parentColorIndex?: number) => {
       const children = nodeData.children || nodeData.subtopics;
       if (children && Array.isArray(children)) {
-        children.forEach(child => {
-          const childId = addNode(child, parentId);
-          if (typeof child === 'object') {
-            parseRecursive(child, childId);
+        children.forEach((child, index) => {
+          const childColorIndex = parentId === rootId ? index % THEME_COLORS.length : parentColorIndex;
+          const childId = addNode(child, parentId, childColorIndex);
+          if (typeof child === 'object' && childId) {
+            parseRecursive(child, childId, childColorIndex);
           }
         });
       }
     };
 
-    if (Array.isArray(data)) {
-      data.forEach(item => addNode(item, rootId));
-    } else if (typeof data === 'object' && data !== null) {
-      parseRecursive(data, rootId);
-    } else if (typeof data === 'string') {
-      const lines = data.split('\n').filter(l => l.trim().length > 0);
-      lines.forEach(line => addNode(line.trim(), rootId));
+    if (Array.isArray(targetSource)) {
+      targetSource.forEach((item, idx) => addNode(item, rootId, idx % THEME_COLORS.length));
+    } else if (typeof targetSource === 'object' && targetSource !== null) {
+      parseRecursive(targetSource, rootId);
+    } else if (typeof targetSource === 'string') {
+      const lines = targetSource.split('\n').filter(l => l.trim().length > 0);
+      lines.forEach((line, idx) => addNode(line.trim(), rootId, idx % THEME_COLORS.length));
     }
 
     return { masterNodes, masterEdges };
-  }, [data, centralTopic, isDarkMode]);
+  }, [normalizedData, centralTopic]);
 
   useEffect(() => {
     const { masterNodes, masterEdges } = masterGraph;
@@ -315,22 +298,23 @@ export const InteractiveMindMap = ({ data, centralTopic, isDarkMode = true }: Pr
       .filter(e => !hiddenNodes.has(e.source) && !hiddenNodes.has(e.target))
       .map(e => {
         const targetNode = masterNodes.find(n => n.id === e.target);
-        const category = targetNode?.data.category;
-        const catStyle = category ? CATEGORY_COLORS[category] || CATEGORY_COLORS['Concept'] : null;
+        const colorIndex = targetNode?.data.colorIndex;
+        const catStyle = typeof colorIndex === 'number' 
+          ? THEME_COLORS[colorIndex % THEME_COLORS.length] 
+          : THEME_COLORS[0];
         
         return {
           ...e,
-          animated: targetNode?.data.importance >= 4,
           style: { 
-            stroke: catStyle ? catStyle.accent : (isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'), 
-            strokeWidth: targetNode?.data.importance >= 4 ? 2.5 : 2,
-            opacity: targetNode?.data.importance >= 4 ? 0.8 : 0.4
+            stroke: catStyle.accent, 
+            strokeWidth: 1.5,
+            opacity: 0.22
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            width: 12,
-            height: 12,
-            color: catStyle ? catStyle.accent : (isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'),
+            width: 8,
+            height: 8,
+            color: catStyle.accent,
           },
         };
       });
@@ -343,10 +327,15 @@ export const InteractiveMindMap = ({ data, centralTopic, isDarkMode = true }: Pr
 
     setNodes([...layoutedNodes]);
     setEdges([...layoutedEdges]);
-  }, [masterGraph, collapsedNodes, isDarkMode, setNodes, setEdges, toggleNode, layout]);
+
+    setTimeout(() => {
+      fitView({ padding: 0.15, duration: 400 });
+    }, 60);
+
+  }, [masterGraph, collapsedNodes, setNodes, setEdges, toggleNode, layout, fitView]);
 
   return (
-    <div className={`w-full h-[500px] rounded-3xl overflow-hidden border relative ${isDarkMode ? 'bg-[#050505] border-white/5' : 'bg-gray-50 border-gray-200'}`}>
+    <div className="w-full h-[620px] rounded-3xl overflow-hidden border relative bg-[#060a13] border-slate-900 shadow-2xl">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -357,25 +346,45 @@ export const InteractiveMindMap = ({ data, centralTopic, isDarkMode = true }: Pr
         proOptions={{ hideAttribution: true }}
         minZoom={0.1}
         maxZoom={2}
+        nodesDraggable={true}
+        panOnDrag={true}
+        zoomOnScroll={true}
       >
         <Background 
-          variant={BackgroundVariant.Lines} 
-          color={isDarkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"} 
-          gap={40} 
-        />
-        <Controls 
-          showInteractive={false} 
-          className={`!border-none !shadow-2xl !rounded-xl overflow-hidden ${isDarkMode ? '!bg-white/10 !backdrop-blur-xl' : '!bg-white/80'}`} 
+          variant={BackgroundVariant.Dots} 
+          color="rgba(255,255,255,0.02)" 
+          gap={24} 
+          size={1.2}
         />
         
-        <Panel position="top-right" className="flex gap-2 p-4">
+        {/* Minimal Float Controls Panel */}
+        <Panel position="bottom-right" className="flex gap-2 p-3 bg-slate-950/80 backdrop-blur border border-slate-900 rounded-2xl shadow-xl">
+          <button
+            onClick={() => zoomIn()}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-colors"
+            title="Zoom In"
+          >
+            <ZoomIn size={15} />
+          </button>
+          <button
+            onClick={() => zoomOut()}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-colors"
+            title="Zoom Out"
+          >
+            <ZoomOut size={15} />
+          </button>
+          <button
+            onClick={handleRecenter}
+            className="p-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-slate-900 transition-colors flex items-center gap-1.5"
+            title="Recenter Map"
+          >
+            <Maximize2 size={12} />
+            Recenter
+          </button>
+          <div className="w-[1px] h-5 bg-slate-800 self-center mx-1" />
           <button
             onClick={() => setLayout(l => l === 'LR' ? 'TB' : 'LR')}
-            className={`p-2 rounded-xl border transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${
-              isDarkMode 
-                ? 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10' 
-                : 'bg-white border-gray-200 text-gray-500 hover:text-gray-900'
-            }`}
+            className="p-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-slate-900 transition-colors flex items-center gap-1.5"
           >
             <Layout size={12} />
             {layout === 'LR' ? 'Horizontal' : 'Vertical'}
@@ -383,5 +392,13 @@ export const InteractiveMindMap = ({ data, centralTopic, isDarkMode = true }: Pr
         </Panel>
       </ReactFlow>
     </div>
+  );
+};
+
+export const InteractiveMindMap = (props: Props) => {
+  return (
+    <ReactFlowProvider>
+      <InteractiveMindMapInner {...props} />
+    </ReactFlowProvider>
   );
 };

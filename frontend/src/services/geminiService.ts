@@ -34,9 +34,9 @@ export const analyzeVideoContent = async (title: string, transcript: string): Pr
   throw new Error("Deprecated. Analysis moved to backend.");
 };
 
-export const generateExtraQuestions = async (title: string, content: string, lang: string): Promise<AnalysisResult['quiz']> => {
+export const generateExtraQuestions = async (title: string, content: string, lang: string, count: number = 5): Promise<AnalysisResult['quiz']> => {
   try {
-    const response = await api.post('/generate-extra-questions', { title, content, lang });
+    const response = await api.post('/generate-extra-questions', { title, content, lang, count });
     return response.data.quiz || [];
   } catch (error) {
     console.error("Error generating extra questions from backend proxy:", error);

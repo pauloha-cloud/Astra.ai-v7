@@ -61,14 +61,32 @@ async function generateContentWithRetry(ai: any, params: any, maxRetries = 3, ba
       return await ai.models.generateContent(params);
     } catch (err: any) {
       attempt++;
+      const errMsg = err.message || "";
       const isTransient = err.status === 503 || err.status === 429 || 
-                          err.message?.includes("503") || err.message?.includes("429") ||
-                          err.message?.includes("high demand") || err.message?.includes("temporary");
-      if (isTransient && attempt < maxRetries) {
-        const delay = baseDelayMs * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
-        console.warn(`[Gemini] Model high demand/rate limit (status/msg: ${err.status || err.message}). Retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
+                          errMsg.includes("503") || errMsg.includes("429") ||
+                          errMsg.toLowerCase().includes("high demand") || 
+                          errMsg.toLowerCase().includes("temporary") ||
+                          errMsg.toLowerCase().includes("unavailable") ||
+                          errMsg.toLowerCase().includes("overloaded");
+      if (isTransient) {
+        if (params.model === "gemini-3.5-flash") {
+          console.warn(`[Gemini] Model gemini-3.5-flash is unavailable or overloaded. Falling back to gemini-3.1-flash-lite...`);
+          params.model = "gemini-3.1-flash-lite";
+          attempt = 0;
+          continue;
+        } else if (params.model === "gemini-3.1-flash-lite") {
+          console.warn(`[Gemini] Model gemini-3.1-flash-lite is unavailable or overloaded. Falling back to gemini-flash-latest...`);
+          params.model = "gemini-flash-latest";
+          attempt = 0;
+          continue;
+        }
+        
+        if (attempt < maxRetries) {
+          const delay = baseDelayMs * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
+          console.warn(`[Gemini] Model high demand/rate limit for ${params.model} (status: ${err.status}, msg: ${errMsg}). Retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
       }
       throw err;
     }
@@ -588,26 +606,29 @@ async function startServer() {
 
   // Extra Quiz Questions Generation Endpoint (Secure server-side proxy)
   app.post("/api/generate-extra-questions", async (req, res) => {
-    const { title, content, lang } = req.body;
+    const { title, content, lang, count = 5 } = req.body;
     try {
-      const langNames: Record<string, string> = {
-        'pt': 'Portuguese (Brazilian)',
-        'en': 'English',
-        'es': 'Spanish'
-      };
-      const targetLang = langNames[lang] || 'English';
+      const questionCount = count;
+      const videoTitle = title;
+      let prompt = "";
+      if (lang === 'pt') {
+        prompt = `Gere exatamente ${questionCount} questões de múltipla escolha com base somente no conteúdo do vídeo analisado. As perguntas devem estar diretamente relacionadas ao assunto do vídeo: ${videoTitle}. Use o resumo, principais pontos, transcrição ou contexto disponível. Não crie perguntas genéricas ou fora do conteúdo. Cada questão deve ter 4 alternativas, apenas uma resposta correta e uma explicação curta da resposta correta.
 
-      const prompt = `Based on the following content for the video "${title}", generate 5 additional challenging multiple-choice quiz questions.
-        
-        CRITICAL:
-        1. Content must be in ${targetLang}.
-        2. Response must be valid JSON only.
-        3. Questions must be different from common knowledge, focus on specific details in the content.
-        
-        Content:
-        ${(content || "").substring(0, 30000)}`;
+Conteúdo:
+${(content || "").substring(0, 30000)}`;
+      } else if (lang === 'es') {
+        prompt = `Genera exactamente ${questionCount} preguntas de opción múltiple basadas únicamente en el contenido del video analizado. Las preguntas deben estar directamente relacionadas con el tema del video: ${videoTitle}. Usa el resumen, los puntos clave, la transcripción o el contexto disponible. No crees preguntas genéricas ni fuera del contenido. Cada pregunta debe tener 4 alternativas, solo una respuesta correcta y una breve explicación de la respuesta correcta.
 
-      console.log(`[Backend] Generating extra questions for video "${title}" in: ${targetLang}`);
+Contenido:
+${(content || "").substring(0, 30000)}`;
+      } else {
+        prompt = `Generate exactly ${questionCount} multiple-choice questions based only on the analyzed video content. The questions must be directly related to the video's topic: ${videoTitle}. Use the summary, key points, transcript, or available context. Do not create generic questions or questions outside the content. Each question must have 4 options, only one correct answer, and a short explanation of the correct answer.
+
+Content:
+${(content || "").substring(0, 30000)}`;
+      }
+
+      console.log(`[Backend] Generating extra questions for video "${title}" in: ${lang}`);
       
       const aiClient = getAI();
       const response = await generateContentWithRetry(aiClient, {
@@ -643,6 +664,258 @@ async function startServer() {
     } catch (error: any) {
       console.error("[Backend] Error generating extra questions:", error);
       res.status(500).json({ error: error.message || "Failed to generate extra questions from Gemini" });
+    }
+  });
+
+  // Dedicated Mind Map Generation Endpoint
+  app.post("/api/generate-mindmap", async (req, res) => {
+    const { title, content, summary, keyTakeaways, actionableLessons, transcript, fallbackReason, lang } = req.body;
+    try {
+      const videoTitle = title || "Unknown Video";
+      const languageMap: Record<string, string> = {
+        pt: "Português",
+        es: "Español",
+        en: "English"
+      };
+      const languageName = languageMap[lang as string] || "English";
+
+      // Assemble the richest context possible
+      let videoContext = "";
+      if (summary) videoContext += `Summary:\n${summary}\n\n`;
+      if (keyTakeaways && keyTakeaways.length > 0) {
+        videoContext += `Key Takeaways:\n${Array.isArray(keyTakeaways) ? keyTakeaways.map(k => `- ${k}`).join("\n") : keyTakeaways}\n\n`;
+      }
+      if (actionableLessons && actionableLessons.length > 0) {
+        videoContext += `Actionable Lessons:\n${Array.isArray(actionableLessons) ? actionableLessons.map(l => `- ${l}`).join("\n") : actionableLessons}\n\n`;
+      }
+      if (fallbackReason) {
+        videoContext += `Fallback Reason (Technical issues): ${fallbackReason}\n\n`;
+      }
+      if (transcript && transcript !== "[N/A]") {
+        videoContext += `Transcript:\n${transcript.substring(0, 25000)}\n`;
+      } else if (content) {
+        videoContext += `Content:\n${content.substring(0, 25000)}\n`;
+      }
+
+      if (!videoContext.trim()) {
+        videoContext = `Video Title: ${videoTitle}`;
+      }
+
+      const basePrompt = `Você é um especialista em design instrucional e mapas mentais educacionais.
+
+Sua tarefa é criar um mapa mental profundo, hierárquico e didático com base exclusivamente no conteúdo do vídeo analisado.
+
+Tema/título do vídeo:
+${videoTitle}
+
+Conteúdo disponível:
+${videoContext}
+
+Idioma da interface:
+${languageName}
+
+Crie um mapa mental que ajude o estudante a entender, revisar e memorizar o assunto.
+
+Regras obrigatórias:
+1. Use somente informações presentes no conteúdo do vídeo, resumo, transcrição ou fallback disponível.
+2. Não invente informações.
+3. Não use nome do canal, autor, professor ou plataforma como ramo principal.
+4. Não transforme metadados em conceitos.
+5. Identifique o tema educacional central.
+6. Crie entre 6 e 10 ramos principais.
+7. Cada ramo principal deve ter pelo menos 3 subtópicos.
+8. Pelo menos 3 ramos devem ter terceiro nível de profundidade.
+9. O mapa deve ter entre 35 e 70 nós no total.
+10. Use labels curtos, claros e conceituais.
+11. Organize o conteúdo do geral para o específico.
+12. Inclua definições, fórmulas, etapas, exemplos, aplicações, relações e cuidados quando o vídeo mencionar.
+13. Gere o mapa no idioma atual da interface.
+14. Retorne somente JSON válido, sem markdown, sem comentários e sem texto fora do JSON.
+
+Formato obrigatório:
+{
+  "centralTopic": "Tema principal educacional",
+  "summary": "Resumo curto do mapa",
+  "nodes": [
+    {
+      "id": "node-1",
+      "label": "Ramo principal",
+      "description": "Descrição curta",
+      "level": 1,
+      "children": [
+        {
+          "id": "node-1-1",
+          "label": "Subtópico",
+          "description": "Descrição curta",
+          "level": 2,
+          "children": [
+            {
+              "id": "node-1-1-1",
+              "label": "Detalhe específico",
+              "description": "Descrição curta",
+              "level": 3,
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}`;
+
+      function countNodes(nodes: any[]): number {
+        return nodes.reduce((total: number, node: any) => {
+          return total + 1 + countNodes(node.children || []);
+        }, 0);
+      }
+
+      function collectAllLabels(nodes: any[]): string[] {
+        const labels: string[] = [];
+        nodes.forEach((node: any) => {
+          if (node.label) labels.push(node.label);
+          if (node.children?.length) {
+            labels.push(...collectAllLabels(node.children));
+          }
+        });
+        return labels;
+      }
+
+      function validateMindMap(mindMap: any): boolean {
+        if (!mindMap) return false;
+        if (!mindMap.centralTopic) return false;
+        if (!Array.isArray(mindMap.nodes)) return false;
+        if (mindMap.nodes.length < 6) return false;
+
+        const totalNodes = countNodes(mindMap.nodes);
+        if (totalNodes < 25) return false;
+
+        const branchesWithChildren = mindMap.nodes.filter(
+          (node: any) => Array.isArray(node.children) && node.children.length >= 3
+        );
+
+        if (branchesWithChildren.length < 6) return false;
+
+        const hasThirdLevel = mindMap.nodes.some((node: any) =>
+          node.children?.some((child: any) =>
+            child.children && child.children.length > 0
+          )
+        );
+
+        if (!hasThirdLevel) return false;
+
+        const invalidLabels = [
+          "youtube",
+          "aula completa",
+          "resumão",
+          "resumo",
+          "canal",
+          "professor",
+          "vídeo",
+          "video"
+        ];
+
+        const allLabels = collectAllLabels(mindMap.nodes).map((label: string) => label.toLowerCase());
+
+        const hasInvalidLabel = allLabels.some((label: string) =>
+          invalidLabels.some((invalid: string) => label === invalid || label.includes(invalid))
+        );
+
+        if (hasInvalidLabel) return false;
+
+        return true;
+      }
+
+      const nodeSchema = (depth: number): any => {
+        if (depth > 4) {
+          return {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              label: { type: Type.STRING },
+              description: { type: Type.STRING },
+              level: { type: Type.NUMBER },
+              children: { type: Type.ARRAY, items: { type: Type.OBJECT } }
+            },
+            required: ["id", "label", "description", "level", "children"]
+          };
+        }
+        return {
+          type: Type.OBJECT,
+          properties: {
+            id: { type: Type.STRING },
+            label: { type: Type.STRING },
+            description: { type: Type.STRING },
+            level: { type: Type.NUMBER },
+            children: {
+              type: Type.ARRAY,
+              items: nodeSchema(depth + 1)
+            }
+          },
+          required: ["id", "label", "description", "level", "children"]
+        };
+      };
+
+      const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+          centralTopic: { type: Type.STRING },
+          summary: { type: Type.STRING },
+          nodes: {
+            type: Type.ARRAY,
+            items: nodeSchema(1)
+          }
+        },
+        required: ["centralTopic", "summary", "nodes"]
+      };
+
+      let attempts = 0;
+      let mindMapData: any = null;
+      let finalPrompt = basePrompt;
+
+      while (attempts < 2) {
+        attempts++;
+        console.log(`[Backend] Generating mind map, attempt ${attempts}`);
+        
+        const response = await generateContentWithRetry(getAI(), {
+          model: "gemini-3.5-flash",
+          contents: finalPrompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: responseSchema
+          }
+        });
+
+        const text = response.text || "";
+        const parsed = safeParseAIJSON(text);
+
+        if (parsed && validateMindMap(parsed)) {
+          mindMapData = parsed;
+          console.log(`[Backend] Mind map validation succeeded! Found ${parsed.nodes.length} main branches.`);
+          break;
+        } else {
+          console.warn(`[Backend] Mind map validation failed on attempt ${attempts}.`);
+          if (attempts < 2) {
+            console.log("[Backend] Retrying with reinforced prompt for second attempt.");
+            finalPrompt = `${basePrompt}\n\nA resposta anterior foi superficial ou inválida. Gere uma versão mais profunda, com pelo menos 6 ramos principais, 25 nós totais e subtópicos educacionais reais baseados no vídeo.`;
+          }
+        }
+      }
+
+      if (!mindMapData) {
+        return res.status(422).json({ 
+          error: "SuficientDepthError", 
+          message: lang === 'pt' 
+            ? "Não foi possível gerar um mapa mental com profundidade suficiente. Tente novamente." 
+            : lang === 'es'
+              ? "No fue posible generar un mapa mental con suficiente profundidad. Inténtalo nuevamente."
+              : "Could not generate a sufficiently detailed mind map. Please try again."
+        });
+      }
+
+      res.json({ mindMap: mindMapData });
+    } catch (error: any) {
+      console.error("[Backend] Error generating mind map:", error);
+      res.status(500).json({ error: error.message || "Failed to generate mind map" });
     }
   });
 

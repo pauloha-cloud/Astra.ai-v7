@@ -235,8 +235,12 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   };
 
   useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     return () => {
       stopSession();
+      document.body.style.overflow = originalOverflow;
     };
   }, []);
 
@@ -283,11 +287,11 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   const visualState = isAiSpeaking ? 'speaking' : isAiThinking ? 'thinking' : isUserSpeaking ? 'listening' : 'idle';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-hidden">
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-[#0a0a0a] border border-white/10 rounded-3xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden shadow-2xl shadow-orange-600/10"
+        className="bg-[#0a0a0a] border border-white/10 rounded-3xl w-full max-w-4xl h-[calc(100dvh-2rem)] md:h-[80vh] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden shadow-2xl shadow-orange-600/10"
       >
         {/* Header */}
         <div className="p-6 border-b border-white/5 flex items-center justify-between">
@@ -705,7 +709,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
           </div>
 
           {/* Side Panel: Video and Controls */}
-          <div className="w-full md:w-80 bg-black/40 border-l border-white/5 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
+          <div className="w-full md:w-80 bg-black/40 border-l border-white/5 p-4 flex flex-col gap-4 md:overflow-hidden overflow-y-auto custom-scrollbar">
             {/* YouTube Player */}
             <div className="space-y-3">
               <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">{t.sourceMaterial}</h4>
@@ -784,7 +788,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="bg-[#0f0f0f] border border-white/10 rounded-[2rem] md:rounded-[2.5rem] w-full max-w-2xl max-h-[calc(100dvh-1rem)] overflow-y-auto custom-scrollbar shadow-2xl relative"
+              className="bg-[#0f0f0f] border border-white/10 rounded-[2rem] md:rounded-[2.5rem] w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar shadow-2xl relative"
             >
               <div className="p-5 sm:p-6 md:p-8 space-y-6 md:space-y-8">
                 {/* Header Side */}

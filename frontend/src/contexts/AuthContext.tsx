@@ -60,7 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentUser) {
         // Sync user to Firestore only when email is verified
         if (currentUser.emailVerified) {
-          await syncUserToFirestore(currentUser);
+          try {
+            await syncUserToFirestore(currentUser);
+          } catch (syncError) {
+            console.error("Failed to sync user to Firestore on auth change:", syncError);
+          }
         }
       }
       setUser(currentUser);
@@ -120,7 +124,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const updatedUser = auth.currentUser;
         setUser({ ...updatedUser });
         if (updatedUser.emailVerified) {
-          await syncUserToFirestore(updatedUser);
+          try {
+            await syncUserToFirestore(updatedUser);
+          } catch (syncError) {
+            console.error("Failed to sync user to Firestore on reload:", syncError);
+          }
         }
       } catch (error) {
         throw error;

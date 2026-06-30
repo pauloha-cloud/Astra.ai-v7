@@ -131,11 +131,22 @@ const TRANSLATIONS = {
     actionableLessons: "Lições Aplicáveis",
     rationale: "Justificativa",
     finishQuiz: "Finalizar Quiz",
+    generateQuiz: "Gerar Quiz",
+    generatingQuiz: "Gerando quiz...",
+    questionCount: "Quantidade de questões",
+    questions: "questões",
+    quizGenerateDesc: "Escolha quantas questões deseja gerar com base no conteúdo do vídeo.",
+    quizError: "Não foi possível gerar o quiz. Tente novamente ou analise outro vídeo.",
     yourScore: "SUA PONTUAÇÃO",
     tryAgain: "Tentar Novamente",
     generateMoreQuestions: "Gerar mais questões",
     aiGeneratingExtra: "IA gerando novos desafios...",
     proComingSoon: "Renderização avançada de mapa visual em breve no Pro.",
+    mindMapPromptBefore: "Clique para gerar um mapa mental com base no conteúdo do vídeo.",
+    mindMapGenerating: "Gerando mapa mental inteligente...",
+    mindMapSubtext: "Organizando conceitos, relações e tópicos principais do vídeo.",
+    mindMapError: "Não foi possível gerar o mapa mental. Tente novamente.",
+    generateMindMap: "Gerar Mapa Mental",
     rawTranscript: "Dados da Transcrição",
     downloadTxt: "Baixar .txt",
     noTranscript: "Nenhuma transcrição disponível para este vídeo.",
@@ -387,11 +398,22 @@ const TRANSLATIONS = {
     actionableLessons: "Actionable Lessons",
     rationale: "Rationale",
     finishQuiz: "Finish Quiz",
+    generateQuiz: "Generate Quiz",
+    generatingQuiz: "Generating quiz...",
+    questionCount: "Number of questions",
+    questions: "questions",
+    quizGenerateDesc: "Choose how many questions you want to generate based on the video content.",
+    quizError: "Could not generate the quiz. Try again or analyze another video.",
     yourScore: "YOUR SCORE",
     tryAgain: "Try Again",
     generateMoreQuestions: "Generate more questions",
     aiGeneratingExtra: "AI generating new challenges...",
     proComingSoon: "Advanced visual map rendering coming soon in Pro.",
+    mindMapPromptBefore: "Click to generate a mind map based on the video content.",
+    mindMapGenerating: "Generating intelligent mind map...",
+    mindMapSubtext: "Organizing concepts, relationships, and key topics from the video.",
+    mindMapError: "Could not generate the mind map. Please try again.",
+    generateMindMap: "Generate Mind Map",
     rawTranscript: "Raw Transcript Data",
     downloadTxt: "Download .txt",
     noTranscript: "No transcript available for this video.",
@@ -642,12 +664,23 @@ const TRANSLATIONS = {
     keyTakeaways: "Conclusiones Clave",
     actionableLessons: "Lecciones Aplicables",
     rationale: "Justificación",
-    finishQuiz: "Finalizar Cuestionario",
+    finishQuiz: "Finalizar Quiz",
+    generateQuiz: "Generar Quiz",
+    generatingQuiz: "Generando quiz...",
+    questionCount: "Cantidad de preguntas",
+    questions: "preguntas",
+    quizGenerateDesc: "Elige cuántas preguntas deseas generar con base en el contenido del video.",
+    quizError: "No fue posible generar el quiz. Inténtalo nuevamente o analiza otro video.",
     yourScore: "TU PUNTUACIÓN",
     tryAgain: "Reintentar",
     generateMoreQuestions: "Generar más preguntas",
     aiGeneratingExtra: "IA generando nuevos desafíos...",
     proComingSoon: "Renderizado avanzado de mapas visuales próximamente en Pro.",
+    mindMapPromptBefore: "Haz clic para generar un mapa mental basado en el contenido del video.",
+    mindMapGenerating: "Generando mapa mental inteligente...",
+    mindMapSubtext: "Organizando conceptos, relaciones y temas principales del video.",
+    mindMapError: "No fue posible generar el mapa mental. Inténtalo nuevamente.",
+    generateMindMap: "Generar Mapa Mental",
     rawTranscript: "Datos de Transcripción",
     downloadTxt: "Descargar .txt",
     noTranscript: "No hay transcripción disponible para este vídeo.",
@@ -1116,7 +1149,13 @@ export default function App() {
       const docs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setHistory(docs);
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/analyses`);
+      console.error("Failed to fetch history:", error);
+      try {
+        handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/analyses`);
+      } catch (err) {
+        // Swallow error to prevent crashing, just log the handled firestore details
+        console.error("Handled Firestore history error:", err);
+      }
     }
   };
 
@@ -1183,7 +1222,13 @@ export default function App() {
           createdAt: serverTimestamp()
         });
       } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, analysesPath);
+        console.error("Failed to save analysis to history:", error);
+        try {
+          handleFirestoreError(error, OperationType.CREATE, analysesPath);
+        } catch (err) {
+          // Swallow error to prevent crashing the main analysis result display, just log
+          console.error("Handled Firestore save error:", err);
+        }
       }
 
       setCurrentResult(data);
