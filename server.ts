@@ -188,6 +188,38 @@ function safeParseAIJSON(text: string): any {
   }
 }
 
+function getExplanationInstruction(level: string, lang: string): string {
+  const isPt = lang === 'pt';
+  const isEs = lang === 'es';
+
+  if (level === 'basic') {
+    if (isPt) {
+      return "Ajuste a profundidade da resposta para o nível BÁSICO: Explique tudo de forma simples e amigável, como se estivesse ensinando a um iniciante total. Evite jargões técnicos desnecessários, use analogias do dia a dia e forneça exemplos muito claros e introdutórios.";
+    } else if (isEs) {
+      return "Ajusta la profundidad de la respuesta al nivel BÁSICO: Explica todo de manera sencilla y amigable, como si estuvieras enseñando a un principiante absoluto. Evita tecnicismos innecesarios, utiliza analogías de la vida cotidiana y ofrece ejemplos muy claros e introduccionarios.";
+    } else {
+      return "Adjust the depth of response to BASIC level: Explain everything in a simple, friendly manner, as if teaching a complete beginner. Avoid unnecessary technical jargon, use everyday analogies, and provide very clear, introductory examples.";
+    }
+  } else if (level === 'advanced') {
+    if (isPt) {
+      return "Ajuste a profundidade da resposta para o nível AVANÇADO: Entregue explicações de alta profundidade técnica, completas e detalhadas. Use terminologia acadêmica/profissional precisa, explore conexões conceituais avançadas, sutilezas e ramificações complexas do assunto.";
+    } else if (isEs) {
+      return "Ajusta la profundidad de la respuesta al nivel AVANZADO: Entrega explicaciones de gran profundidad técnica, completas y detalladas. Utiliza terminología académica/profesional precisa, explora conexiones conceptuales avanzadas, sutilezas y ramificaciones complejas del tema.";
+    } else {
+      return "Adjust the depth of response to ADVANCED level: Deliver highly detailed, technically profound and comprehensive explanations. Use precise academic or professional terminology, explore advanced conceptual connections, nuances, and complex ramifications of the subject.";
+    }
+  } else {
+    // intermediate
+    if (isPt) {
+      return "Ajuste a profundidade da resposta para o nível INTERMEDIÁRIO: Forneça um equilíbrio perfeito entre clareza e profundidade. Explique os termos técnicos de forma didática, conecte conceitos relacionados e use exemplos práticos para fixação.";
+    } else if (isEs) {
+      return "Ajusta la profundidad de la respuesta al nivel INTERMEDIO: Proporciona un equilibrio perfecto entre claridad y profundidad. Explica los tecnicismos de forma didáctica, conecta conceptos relacionados y utiliza ejemplos prácticos para reforzar el aprendizaje.";
+    } else {
+      return "Adjust the depth of response to INTERMEDIO level: Provide a perfect balance between clarity and depth. Explain technical terms didactically, connect related concepts, and use practical examples for solid understanding.";
+    }
+  }
+}
+
 // Handle unhandled promise rejections to prevent process crashes
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[Backend] Unhandled Rejection at:', promise, 'reason:', reason);
@@ -201,7 +233,9 @@ process.on('unhandledRejection', (reason, promise) => {
 async function initializeTutorSession(
   videoTitle: string,
   transcript: string,
-  clientWs: any
+  clientWs: any,
+  explanationLevel: string = "intermediate",
+  lang: string = "en"
 ): Promise<any> {
   let aiClient: GoogleGenAI;
   
@@ -268,7 +302,9 @@ async function initializeTutorSession(
       `2. Use specific examples from the transcript to build your explanations.\n` +
       `3. If the user seems lost, simplify the concept using a real-world analogy.\n` +
       `4. Acknowledge the user's progress. Use phrases like "Exactly!", "Great catch", "You've got it".\n` +
-      `5. Keep your spoken responses concise and energetic. Aim for natural conversation patterns.`
+      `5. Keep your spoken responses concise and energetic. Aim for natural conversation patterns.\n\n` +
+      `EXPLANATION LEVEL DIRECTIVE (CRITICAL):\n` +
+      `${getExplanationInstruction(explanationLevel, lang)}`
     }
   });
 }
@@ -310,7 +346,7 @@ async function startServer() {
 
   // YouTube Info Endpoint
   app.post("/api/youtube-info", async (req, res) => {
-    const { url, youtube_url, lang = 'en' } = req.body;
+    const { url, youtube_url, lang = 'en', explanationLevel = 'intermediate' } = req.body;
     const targetUrl = url || youtube_url;
 
     const langNames: Record<string, string> = {
@@ -398,6 +434,9 @@ async function startServer() {
           ? `Analyze the following transcript for the video "${metadata.title}" by "${metadata.author_name || "Unknown"}". 
              Generate a comprehensive educational summary, key points, interactive quiz, and a simple high-level overview mind map.
              
+             EXPLANATION LEVEL DIRECTIVE (CRITICAL):
+             ${getExplanationInstruction(explanationLevel, lang)}
+             
              CRITICAL FOR MIND MAP GENERATION:
              1. Create a simple high-level mind map representing 3 to 5 core branches/categories radiating from the main topic.
              2. Each node should have a 'topic' (short, 1-3 words), 'importance' (1-5), 'category', and 'icon'.
@@ -413,6 +452,9 @@ async function startServer() {
              ${transcript.substring(0, 80000)}`
           : `Act as a subject matter expert. I don't have the transcript for the video titled "${metadata.title}" by "${metadata.author_name || "Unknown"}". 
              Based on this title, provide an educational analysis and overview of the subject matter.
+             
+             EXPLANATION LEVEL DIRECTIVE (CRITICAL):
+             ${getExplanationInstruction(explanationLevel, lang)}
              
              CRITICAL FOR MIND MAP GENERATION:
              1. Create a simple high-level mind map with 3-5 main core categories/branches radiating from the main topic.
@@ -589,23 +631,33 @@ async function startServer() {
 
   // Extra Quiz Questions Generation Endpoint (Secure server-side proxy)
   app.post("/api/generate-extra-questions", async (req, res) => {
-    const { title, content, lang, count = 5 } = req.body;
+    const { title, content, lang, count = 5, explanationLevel = 'intermediate' } = req.body;
     try {
       const questionCount = count;
       const videoTitle = title;
+      const explanationInstr = getExplanationInstruction(explanationLevel, lang);
       let prompt = "";
       if (lang === 'pt') {
         prompt = `Gere exatamente ${questionCount} questões de múltipla escolha com base somente no conteúdo do vídeo analisado. As perguntas devem estar diretamente relacionadas ao assunto do vídeo: ${videoTitle}. Use o resumo, principais pontos, transcrição ou contexto disponível. Não crie perguntas genéricas ou fora do conteúdo. Cada questão deve ter 4 alternativas, apenas uma resposta correta e uma explicação curta da resposta correta.
+
+EXPLANATION LEVEL DIRECTIVE (CRITICAL):
+${explanationInstr}
 
 Conteúdo:
 ${(content || "").substring(0, 30000)}`;
       } else if (lang === 'es') {
         prompt = `Genera exactamente ${questionCount} preguntas de opción múltiple basadas únicamente en el contenido del video analizado. Las preguntas deben estar directamente relacionadas con el tema del video: ${videoTitle}. Usa el resumen, los puntos clave, la transcripción o el contexto disponible. No crees preguntas genéricas ni fuera del contenido. Cada pregunta debe tener 4 alternativas, solo una respuesta correcta y una breve explicación de la respuesta correcta.
 
+EXPLANATION LEVEL DIRECTIVE (CRITICAL):
+${explanationInstr}
+
 Contenido:
 ${(content || "").substring(0, 30000)}`;
       } else {
         prompt = `Generate exactly ${questionCount} multiple-choice questions based only on the analyzed video content. The questions must be directly related to the video's topic: ${videoTitle}. Use the summary, key points, transcript, or available context. Do not create generic questions or questions outside the content. Each question must have 4 options, only one correct answer, and a short explanation of the correct answer.
+
+EXPLANATION LEVEL DIRECTIVE (CRITICAL):
+${explanationInstr}
 
 Content:
 ${(content || "").substring(0, 30000)}`;
@@ -652,7 +704,7 @@ ${(content || "").substring(0, 30000)}`;
 
   // Dedicated Mind Map Generation Endpoint
   app.post("/api/generate-mindmap", async (req, res) => {
-    const { title, content, summary, keyTakeaways, actionableLessons, transcript, fallbackReason, lang } = req.body;
+    const { title, content, summary, keyTakeaways, actionableLessons, transcript, fallbackReason, lang, explanationLevel = 'intermediate' } = req.body;
     try {
       const videoTitle = title || "Unknown Video";
       const languageMap: Record<string, string> = {
@@ -698,6 +750,9 @@ Idioma da interface:
 ${languageName}
 
 Crie um mapa mental que ajude o estudante a entender, revisar e memorizar o assunto.
+
+EXPLANATION LEVEL DIRECTIVE (CRITICAL):
+${getExplanationInstruction(explanationLevel, lang)}
 
 Regras obrigatórias:
 1. Use somente informações presentes no conteúdo do vídeo, resumo, transcrição ou fallback disponível.
@@ -958,10 +1013,10 @@ Formato obrigatório:
       try {
         const msg = JSON.parse(messageData.toString());
         if (msg.type === "setup") {
-          const { videoTitle, transcript } = msg;
-          console.log(`[Backend Tutor] Initializing separated Tutor Live Session for: "${videoTitle}"`);
+          const { videoTitle, transcript, explanationLevel = "intermediate", lang = "en" } = msg;
+          console.log(`[Backend Tutor] Initializing separated Tutor Live Session for: "${videoTitle}" (level: ${explanationLevel}, lang: ${lang})`);
 
-          session = await initializeTutorSession(videoTitle, transcript, clientWs);
+          session = await initializeTutorSession(videoTitle, transcript, clientWs, explanationLevel, lang);
         } else if (msg.type === "audio") {
           if (session) {
             session.sendRealtimeInput({

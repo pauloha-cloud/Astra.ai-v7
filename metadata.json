@@ -1,6 +1,6 @@
 {
-  "name": "Remix: Remix: Astra Learning AI",
-  "description": "Learn faster. Understand deeper with AI-powered video learning.",
+  "name": "Astra Learning AI",
+  "description": "Uma plataforma de estudos integrada para transformar vídeos do YouTube em resumos, mapas mentais, quizzes e aprendizado profundo.",
   "requestFramePermissions": [
     "camera",
     "microphone"

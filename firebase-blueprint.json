@@ -60,6 +60,18 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "video", "mode", "summary", "createdAt"]
+    },
+    "Preference": {
+      "title": "Preference",
+      "description": "User preferences for Astra Learning",
+      "type": "object",
+      "properties": {
+        "defaultStudyFormat": { "enum": ["summary", "quiz", "tutor", "mindmap"] },
+        "explanationLevel": { "enum": ["basic", "intermediate", "advanced"] },
+        "defaultQuizQuestionCount": { "enum": [5, 10, 15] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["defaultStudyFormat", "explanationLevel", "defaultQuizQuestionCount"]
     }
   },
   "firestore": {
@@ -70,6 +82,10 @@
     "/users/{userId}/analyses/{analysisId}": {
       "schema": "Analysis",
       "description": "Analyses performed by the user"
+    },
+    "/users/{userId}/preferences/{preferenceId}": {
+      "schema": "Preference",
+      "description": "User preferences"
     }
   }
 }

@@ -53,7 +53,9 @@ export const AnalysisResultView = ({
   const setActiveTab = externalSetActiveTab || setInternalActiveTab;
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [hasGenerated, setHasGenerated] = useState(false);
-  const [questionCount, setQuestionCount] = useState<number>(5);
+  const [questionCount, setQuestionCount] = useState<number>(() => {
+    return Number(localStorage.getItem('astra_pref_quiz_count')) || 5;
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [quizError, setQuizError] = useState<string | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
@@ -97,7 +99,8 @@ export const AnalysisResultView = ({
           actionableLessons: (data as any).actionable_lessons || (data as any).actionableLessons || [],
           transcript: data.transcript || "",
           fallbackReason: data.mode === 'metadata_fallback' ? (data.message || "Transcript unavailable") : "",
-          lang: lang
+          lang: lang,
+          explanationLevel: localStorage.getItem('astra_pref_level') || 'intermediate'
         })
       });
 
@@ -131,6 +134,8 @@ export const AnalysisResultView = ({
     setQuizAnswers({});
     setShowResults(false);
     setQuizError(null);
+    const savedCount = Number(localStorage.getItem('astra_pref_quiz_count')) || 5;
+    setQuestionCount(savedCount);
   }, [data.video?.videoId]);
 
   const calculateScore = () => {
@@ -147,7 +152,8 @@ export const AnalysisResultView = ({
     setQuizError(null);
     try {
       const content = data.transcript || data.summary || (data as any).summaries?.detailed || (data as any).summaries?.concise || data.key_points?.join("\n") || "";
-      const questions = await generateExtraQuestions(data.video?.title || 'Unknown', content, lang || 'en', questionCount);
+      const savedLevel = localStorage.getItem('astra_pref_level') || 'intermediate';
+      const questions = await generateExtraQuestions(data.video?.title || 'Unknown', content, lang || 'en', questionCount, savedLevel);
       if (questions && questions.length > 0) {
         setQuizQuestions(questions);
         setHasGenerated(true);
@@ -354,13 +360,13 @@ export const AnalysisResultView = ({
                       {t.questionCount || "Number of questions"}
                     </label>
                     <div className="flex justify-center gap-2">
-                      {[5, 6, 7, 8, 9, 10].map((num) => (
+                      {[5, 10, 15].map((num) => (
                         <button
                           key={num}
                           type="button"
                           onClick={() => setQuestionCount(num)}
                           disabled={isGenerating}
-                          className={`w-10 h-10 rounded-xl border text-sm font-bold transition-all ${
+                          className={`w-12 h-10 rounded-xl border text-sm font-bold transition-all cursor-pointer ${
                             questionCount === num
                               ? 'bg-orange-600 text-white border-orange-500 shadow-md shadow-orange-600/25'
                               : isDarkMode

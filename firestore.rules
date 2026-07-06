@@ -67,6 +67,12 @@ service cloud.firestore {
         && (data.get('tutor_questions', []) is list && data.get('tutor_questions', []).size() <= 20);
     }
 
+    function isValidPreference(data) {
+      return data.defaultStudyFormat in ['summary', 'quiz', 'tutor', 'mindmap']
+        && data.explanationLevel in ['basic', 'intermediate', 'advanced']
+        && data.defaultQuizQuestionCount in [5, 10, 15];
+    }
+
     // --- Rules ---
 
     match /users/{userId} {
@@ -84,6 +90,20 @@ service cloud.firestore {
         // plan only changeable by admin or remains same
         && (incoming().plan == existing().plan || isAdmin())
         && isValidUser(incoming());
+
+      // Sub-collection rule for preferences following Master Gate pattern (check parent)
+      match /preferences/{preferenceId} {
+        allow get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(preferenceId)
+          && exists(/databases/$(database)/documents/users/$(userId)) // Master Gate
+          && incoming().keys().hasAll(['defaultStudyFormat', 'explanationLevel', 'defaultQuizQuestionCount', 'updatedAt'])
+          && incoming().updatedAt == request.time
+          && isValidPreference(incoming());
+        allow update: if isOwner(userId)
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['defaultStudyFormat', 'explanationLevel', 'defaultQuizQuestionCount', 'updatedAt'])
+          && isValidPreference(incoming());
+      }
 
       // Sub-collection rule following Master Gate pattern (check parent)
       match /analyses/{analysisId} {

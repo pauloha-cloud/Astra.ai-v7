@@ -41,7 +41,7 @@ import {
 import { checkHealth, api } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
 import { analyzeVideoContent, AnalysisResult } from './services/geminiService';
-import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { AnalysisResultView } from './components/AnalysisResultView';
 import { handleFirestoreError, OperationType } from './lib/firestoreUtils';
@@ -51,6 +51,98 @@ import { AICore } from './components/AICore';
 import { AIActivityFeed } from './components/AIActivityFeed';
 import axios from 'axios';
 import { BrandLogo } from './components/BrandLogo';
+import { SettingsView } from './components/SettingsView';
+
+// User Preferences
+export interface UserPreferences {
+  defaultStudyFormat: 'summary' | 'quiz' | 'tutor' | 'mindmap';
+  explanationLevel: 'basic' | 'intermediate' | 'advanced';
+  defaultQuizQuestionCount: 5 | 10 | 15;
+}
+
+export const DEFAULT_PREFERENCES: UserPreferences = {
+  defaultStudyFormat: 'summary',
+  explanationLevel: 'intermediate',
+  defaultQuizQuestionCount: 5
+};
+
+const PREF_FORMAT_KEY = 'astra_pref_format';
+const PREF_LEVEL_KEY = 'astra_pref_level';
+const PREF_QUIZ_COUNT_KEY = 'astra_pref_quiz_count';
+
+export const loadLocalPreferences = (): UserPreferences => {
+  const format = localStorage.getItem(PREF_FORMAT_KEY);
+  const level = localStorage.getItem(PREF_LEVEL_KEY);
+  const quizCount = Number(localStorage.getItem(PREF_QUIZ_COUNT_KEY));
+
+  return {
+    defaultStudyFormat: (format === 'summary' || format === 'quiz' || format === 'tutor' || format === 'mindmap') ? format : DEFAULT_PREFERENCES.defaultStudyFormat,
+    explanationLevel: (level === 'basic' || level === 'intermediate' || level === 'advanced') ? level : DEFAULT_PREFERENCES.explanationLevel,
+    defaultQuizQuestionCount: (quizCount === 5 || quizCount === 10 || quizCount === 15) ? (quizCount as 5 | 10 | 15) : DEFAULT_PREFERENCES.defaultQuizQuestionCount
+  };
+};
+
+export const saveLocalPreferences = (prefs: UserPreferences) => {
+  localStorage.setItem(PREF_FORMAT_KEY, prefs.defaultStudyFormat);
+  localStorage.setItem(PREF_LEVEL_KEY, prefs.explanationLevel);
+  localStorage.setItem(PREF_QUIZ_COUNT_KEY, String(prefs.defaultQuizQuestionCount));
+};
+
+export const loadUserPreferences = async (userId?: string): Promise<UserPreferences> => {
+  const local = loadLocalPreferences();
+  if (!userId) {
+    return local;
+  }
+  try {
+    const prefRef = doc(db, 'users', userId, 'preferences', 'app');
+    const docSnap = await getDoc(prefRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const loaded: UserPreferences = {
+        defaultStudyFormat: (data.defaultStudyFormat === 'summary' || data.defaultStudyFormat === 'quiz' || data.defaultStudyFormat === 'tutor' || data.defaultStudyFormat === 'mindmap') ? data.defaultStudyFormat : local.defaultStudyFormat,
+        explanationLevel: (data.explanationLevel === 'basic' || data.explanationLevel === 'intermediate' || data.explanationLevel === 'advanced') ? data.explanationLevel : local.explanationLevel,
+        defaultQuizQuestionCount: (data.defaultQuizQuestionCount === 5 || data.defaultQuizQuestionCount === 10 || data.defaultQuizQuestionCount === 15) ? (data.defaultQuizQuestionCount as 5 | 10 | 15) : local.defaultQuizQuestionCount
+      };
+      saveLocalPreferences(loaded);
+      return loaded;
+    } else {
+      await saveUserPreferences(userId, local);
+      return local;
+    }
+  } catch (error) {
+    console.warn('[Preferences] Failed to load from Firestore, using local storage cache:', error);
+    return local;
+  }
+};
+
+export const saveUserPreferences = async (userId: string | undefined, prefs: UserPreferences): Promise<void> => {
+  saveLocalPreferences(prefs);
+  if (!userId) {
+    return;
+  }
+  try {
+    const prefRef = doc(db, 'users', userId, 'preferences', 'app');
+    await setDoc(prefRef, {
+      defaultStudyFormat: prefs.defaultStudyFormat,
+      explanationLevel: prefs.explanationLevel,
+      defaultQuizQuestionCount: prefs.defaultQuizQuestionCount,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.warn('[Preferences] Failed to save to Firestore:', error);
+  }
+};
+
+export const updateUserPreference = async <K extends keyof UserPreferences>(
+  userId: string | undefined,
+  key: K,
+  value: UserPreferences[K]
+): Promise<UserPreferences> => {
+  const prefs = loadLocalPreferences();
+  prefs[key] = value;
+  await saveUserPreferences(userId, prefs);
+  return prefs;
+};
 
 // Types
 type ComponentState = 'landing' | 'dashboard';
@@ -1123,6 +1215,7 @@ export default function App() {
   const [verificationChecking, setVerificationChecking] = useState(false);
   const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [view, setView] = useState<ComponentState>('landing');
+  const [dashboardSubView, setDashboardSubView] = useState<'panel' | 'settings'>('panel');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [apiStatus, setApiStatus] = useState<string>(''); 
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -1135,7 +1228,41 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const [currentResult, setCurrentResult] = useState<AnalysisResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript'>('summary');
+
+  // User preferences state
+  const [preferences, setPreferences] = useState<UserPreferences>(() => loadLocalPreferences());
+
+  const handleUpdatePreference = async <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
+    const updated = { ...preferences, [key]: value };
+    setPreferences(updated);
+    await saveUserPreferences(user?.uid, updated);
+  };
+
+  const [activeTab, setActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript'>(() => {
+    return loadLocalPreferences().defaultStudyFormat;
+  });
+
+  // Fetch and apply user preferences from Firestore when user changes
+  useEffect(() => {
+    const fetchAndApplyPrefs = async () => {
+      if (user) {
+        try {
+          const dbPrefs = await loadUserPreferences(user.uid);
+          setPreferences(dbPrefs);
+          if (dbPrefs.defaultStudyFormat) {
+            setActiveTab(dbPrefs.defaultStudyFormat);
+          }
+        } catch (error) {
+          console.warn('[Preferences] Error fetching user preferences:', error);
+        }
+      } else {
+        const localPrefs = loadLocalPreferences();
+        setPreferences(localPrefs);
+        setActiveTab(localPrefs.defaultStudyFormat);
+      }
+    };
+    fetchAndApplyPrefs();
+  }, [user]);
   const [history, setHistory] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -1197,6 +1324,7 @@ export default function App() {
     } else {
       setView('landing');
       setHistory([]);
+      setDashboardSubView('panel');
     }
   }, [user, verificationSuccess]);
 
@@ -1209,7 +1337,11 @@ export default function App() {
     try {
       // 1. Get info and analysis from backend
       console.log(`[Frontend] Requesting analysis for: "${videoUrl}" (lang: ${currentLang})`);
-      const response = await api.post('youtube-info', { url: videoUrl, lang: currentLang }, { timeout: 60000 });
+      const response = await api.post('youtube-info', { 
+        url: videoUrl, 
+        lang: currentLang,
+        explanationLevel: preferences.explanationLevel
+      }, { timeout: 60000 });
       const data = response.data as AnalysisResult;
       
       console.log(`[Frontend] Received analysis for: ${data.video.videoId} (Mode: ${data.mode})`);
@@ -1253,7 +1385,7 @@ export default function App() {
       }
 
       setCurrentResult(data);
-      setActiveTab('summary');
+      setActiveTab(preferences.defaultStudyFormat);
       fetchHistory();
       setVideoUrl('');
     } catch (error: any) {
@@ -2313,13 +2445,47 @@ export default function App() {
             ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           `}>
             <div className={`text-xs font-bold uppercase tracking-widest mb-4 mt-4 ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.menu}</div>
-            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${isDarkMode ? 'bg-orange-600/10 text-orange-500' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm'}`}>
+            <button 
+              onClick={() => {
+                setDashboardSubView('panel');
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all cursor-pointer ${
+                dashboardSubView === 'panel' 
+                  ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
+                  : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+              }`}
+            >
               <LayoutDashboard size={20} /> {t.dashboard}
             </button>
-            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'}`}>
+            <button 
+              onClick={() => {
+                setDashboardSubView('panel');
+                setIsSidebarOpen(false);
+                setTimeout(() => {
+                  const historySec = document.getElementById('history-section');
+                  if (historySec) {
+                    historySec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors cursor-pointer ${
+                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+              }`}
+            >
               <History size={20} /> {t.history}
             </button>
-            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors cursor-pointer ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'}`}>
+            <button 
+              onClick={() => {
+                setDashboardSubView('settings');
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all cursor-pointer ${
+                dashboardSubView === 'settings'
+                  ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
+                  : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+              }`}
+            >
               <Settings size={20} /> {t.settings}
             </button>
             <button 
@@ -2338,9 +2504,22 @@ export default function App() {
             </button>
           </aside>
 
-          <section className={`flex-1 p-4 sm:p-8 overflow-y-auto ${isDarkMode ? '' : 'bg-transparent'}`}>
+          <section id="main-scrollable-section" className={`flex-1 p-4 sm:p-8 overflow-y-auto ${isDarkMode ? '' : 'bg-transparent'}`}>
             <div className="max-w-[1440px] mx-auto w-full space-y-8">
-              <motion.div 
+              {dashboardSubView === 'settings' ? (
+                <SettingsView 
+                  user={user}
+                  currentLang={currentLang}
+                  setCurrentLang={setCurrentLang}
+                  isDarkMode={isDarkMode}
+                  setIsDarkMode={setIsDarkMode}
+                  signOut={signOut}
+                  preferences={preferences}
+                  onUpdatePreference={handleUpdatePreference}
+                />
+              ) : (
+                <>
+                  <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-2"
@@ -2480,7 +2659,7 @@ export default function App() {
                     </motion.div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
+                      <div id="history-section" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2 scroll-mt-6">
                         <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
                           <History size={14} /> {t.history}
                         </h3>
@@ -2522,7 +2701,7 @@ export default function App() {
                               animate={{ opacity: 1, x: 0 }}
                               onClick={() => {
                                 setCurrentResult(item);
-                                setActiveTab('summary');
+                                setActiveTab(preferences.defaultStudyFormat);
                               }}
                               className={`group flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 hover:border-orange-600/50' : 'bg-white border-slate-200 hover:border-orange-200 shadow-sm shadow-slate-900/5 hover:shadow-md'}`}
                             >
@@ -2594,6 +2773,8 @@ export default function App() {
                 </div>
               )}
               </AnimatePresence>
+                </>
+              )}
             </div>
           </section>
         </main>

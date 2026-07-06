@@ -930,7 +930,7 @@ The central theme **${topicName}** is a focused and dense learning structure. By
   return (
     <div className={`w-full h-[580px] xs:h-[660px] sm:h-[760px] md:h-[840px] lg:h-[880px] relative flex flex-col overflow-hidden transition-all bg-transparent`}>
       {/* Sleek Action Bar - Integrated directly at the top of the workspace canvas */}
-      <div className={`p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 shrink-0 transition-all ${
+      <div className={`p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-50 shrink-0 transition-all ${
         isDarkMode 
           ? 'bg-[#08080c]/90 border-zinc-900/80' 
           : 'bg-white border-slate-200/80 shadow-sm shadow-slate-100/50'
