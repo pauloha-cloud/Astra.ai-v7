@@ -19,7 +19,8 @@ import {
   Download,
   Save,
   FileJson,
-  Loader2
+  Loader2,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnalysisResult, generateExtraQuestions } from '../services/geminiService';
@@ -61,6 +62,18 @@ export const AnalysisResultView = ({
   const [localMindMap, setLocalMindMap] = useState<any>(null);
   const [isGeneratingMindMap, setIsGeneratingMindMap] = useState(false);
   const [mindMapError, setMindMapError] = useState<string | null>(null);
+  const [loadingStep, setLoadingStep] = useState(0);
+
+  useEffect(() => {
+    if (!isGeneratingMindMap) {
+      setLoadingStep(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => (prev + 1) % 4);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [isGeneratingMindMap]);
 
   useEffect(() => {
     setLocalMindMap(data.mind_map || (data as any).mindMap || null);
@@ -153,25 +166,6 @@ export const AnalysisResultView = ({
 
   return (
     <div className={`border rounded-3xl overflow-hidden flex flex-col min-h-[600px] shadow-2xl transition-colors duration-300 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 shadow-black/50' : 'bg-white border-slate-200 shadow-2xl shadow-slate-900/10'}`}>
-      {/* Fallback Banner */}
-      {data.mode === 'metadata_fallback' && (
-        <div className={`border-b px-6 py-4 flex flex-col gap-2 ${isDarkMode ? 'bg-orange-600/10 border-orange-600/20' : 'bg-orange-50 border-orange-200'}`}>
-          <div className="flex items-center gap-3">
-            <AlertTriangle size={14} className="text-orange-500 shrink-0" />
-            <p className={`text-[10px] font-bold uppercase tracking-widest leading-none ${isDarkMode ? 'text-orange-500' : 'text-orange-700'}`}>
-              {data.message || t.fallbackTranscript}
-            </p>
-          </div>
-          {data.limitations && data.limitations.length > 0 && (
-            <ul className="pl-7 space-y-1">
-              {data.limitations.map((lim, idx) => (
-                <li key={idx} className={`text-[9px] list-disc ${isDarkMode ? 'text-orange-400 opacity-80' : 'text-orange-600 font-medium'}`}>{lim}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
       {/* Tabs */}
       {showInternalTabs && (
         <div className={`flex border-b p-1.5 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-slate-200 bg-slate-50'}`}>
@@ -247,10 +241,24 @@ export const AnalysisResultView = ({
               exit={{ opacity: 0, x: -20 }}
               className={`prose max-w-none ${isDarkMode ? 'prose-invert' : ''} prose-orange`}
             >
-              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-4 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.8)]" />
-                  <span className="text-[10px] font-mono text-orange-600 tracking-[0.2em] font-bold uppercase">{t.synthesizedInsight}</span>
+              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+                <div className="space-y-1">
+                  <h2 className={`text-2xl sm:text-3xl font-extrabold tracking-tight m-0 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    {lang === 'pt' ? 'Seu Resumo' : lang === 'es' ? 'Tu Resumen' : 'Your Summary'}
+                  </h2>
+                  <p className={`text-sm m-0 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                    {lang === 'pt' ? 'Explore os principais tópicos extraídos do vídeo.' : lang === 'es' ? 'Explora los temas principales extraídos del video.' : 'Explore the main topics extracted from the video.'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${
+                    isDarkMode ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-orange-50 text-orange-700 border border-orange-100'
+                  }`}>
+                    {lang === 'pt' ? 'Fonte: ' : lang === 'es' ? 'Fuente: ' : 'Source: '}
+                    {data.mode === 'metadata_fallback' 
+                      ? (lang === 'pt' ? 'metadados' : lang === 'es' ? 'metadatos' : 'metadata')
+                      : (lang === 'pt' ? 'transcrição' : lang === 'es' ? 'transcripción' : 'transcript')}
+                  </span>
                 </div>
               </div>
               <div className="space-y-8">
@@ -378,10 +386,24 @@ export const AnalysisResultView = ({
                 </div>
               ) : (
                 <>
-                  <div className="flex justify-between items-center mb-8">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.8)]" />
-                      <span className="text-[10px] font-mono text-orange-600 tracking-[0.2em] font-bold uppercase">{t.quizGen}</span>
+                  <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 pb-6 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+                    <div className="space-y-1">
+                      <h2 className={`text-2xl sm:text-3xl font-extrabold tracking-tight m-0 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        {lang === 'pt' ? 'Seu Quiz' : lang === 'es' ? 'Tu Quiz' : 'Your Quiz'}
+                      </h2>
+                      <p className={`text-sm m-0 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                        {lang === 'pt' ? 'Teste seus conhecimentos sobre os principais tópicos do vídeo.' : lang === 'es' ? 'Pon a prueba tus conocimientos sobre los temas principales del video.' : 'Test your knowledge on the main topics of the video.'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                      <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${
+                        isDarkMode ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-orange-50 text-orange-700 border border-orange-100'
+                      }`}>
+                        {lang === 'pt' ? 'Fonte: ' : lang === 'es' ? 'Fuente: ' : 'Source: '}
+                        {data.mode === 'metadata_fallback' 
+                          ? (lang === 'pt' ? 'metadados' : lang === 'es' ? 'metadatos' : 'metadata')
+                          : (lang === 'pt' ? 'transcrição' : lang === 'es' ? 'transcripción' : 'transcript')}
+                      </span>
                     </div>
                   </div>
 
@@ -453,16 +475,7 @@ export const AnalysisResultView = ({
               exit={{ opacity: 0, y: -10 }}
               className="h-full flex flex-col space-y-6"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.8)]" />
-                  <span className="text-[10px] font-mono text-orange-600 tracking-[0.2em] font-bold uppercase">Visual Neural Map</span>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-orange-600/10 border border-orange-600/20 rounded-full">
-                  <Zap size={10} className="text-orange-500 fill-current" />
-                  <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Pro Preview</span>
-                </div>
-              </div>              {(() => {
+              {(() => {
                 const mindMapTexts = {
                   pt: {
                     beforeTitle: "Clique para gerar o mapa mental.",
@@ -505,11 +518,34 @@ export const AnalysisResultView = ({
                 const texts = mindMapTexts[lang as 'pt' | 'es' | 'en'] || mindMapTexts['en'];
 
                 if (isGeneratingMindMap) {
+                  const loadingStepsText = {
+                    pt: [
+                      "Analisando transcrição...",
+                      "Gerando mapa mental...",
+                      "Organizando tópicos...",
+                      "Renderizando mapa..."
+                    ],
+                    en: [
+                      "Analyzing transcript...",
+                      "Generating mind map...",
+                      "Organizing topics...",
+                      "Rendering map..."
+                    ],
+                    es: [
+                      "Analizando transcripción...",
+                      "Generando mapa mental...",
+                      "Organizando temas...",
+                      "Renderizando mapa..."
+                    ]
+                  };
+                  const stepTexts = loadingStepsText[lang as 'pt' | 'es' | 'en'] || loadingStepsText['en'];
+                  const currentStepText = stepTexts[loadingStep];
+
                   return (
                     <div className={`flex flex-col items-center justify-center p-20 border border-dashed rounded-[3rem] transition-colors ${isDarkMode ? 'border-orange-500/20 bg-orange-950/5 text-gray-400' : 'border-orange-500/30 bg-orange-50/20 text-slate-700 shadow-inner'} min-h-[450px]`}>
                       <Loader2 size={48} className="mb-6 text-orange-500 animate-spin" />
                       <h3 className={`text-xl font-bold mb-2 text-center ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        {texts.generatingTitle}
+                        {currentStepText}
                       </h3>
                       <p className={`text-sm text-center max-w-md ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
                         {texts.generatingSub}
@@ -537,40 +573,15 @@ export const AnalysisResultView = ({
 
                 if (localMindMap) {
                   return (
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-end">
-                        <button
-                          onClick={handleGenerateMindMap}
-                          className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
-                            isDarkMode 
-                              ? 'bg-orange-600/10 border-orange-500/20 text-orange-400 hover:bg-orange-600/20' 
-                              : 'bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 shadow-sm'
-                          }`}
-                        >
-                          <Zap size={12} className="fill-current" />
-                          {texts.btnRegenerate}
-                        </button>
-                      </div>
-                      
+                    <div className="space-y-6 animate-fade-in">
                       <InteractiveMindMap 
                         data={localMindMap} 
                         centralTopic={data.video?.title}
                         isDarkMode={isDarkMode}
+                        mode={data.mode}
+                        lang={lang}
+                        onRegenerate={handleGenerateMindMap}
                       />
-                      
-                      <div className={`p-6 rounded-3xl border transition-colors ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-slate-50 border-slate-200 text-slate-600 shadow-sm'}`}>
-                        <div className="flex items-start gap-4">
-                          <div className="p-2 bg-orange-600/10 rounded-xl mt-1">
-                            <Maximize2 size={16} className="text-orange-500" />
-                          </div>
-                          <div>
-                            <h4 className={`font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>{texts.explTitle}</h4>
-                            <p className="text-sm opacity-80 leading-relaxed font-medium">
-                              {texts.explDesc}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   );
                 }

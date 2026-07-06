@@ -396,18 +396,13 @@ async function startServer() {
         // Construct prompt
         const prompt = mode === "transcript" 
           ? `Analyze the following transcript for the video "${metadata.title}" by "${metadata.author_name || "Unknown"}". 
-             Generate a comprehensive educational summary, key points, interactive quiz, and a HIGHLY DETAILED hierarchical mind map.
+             Generate a comprehensive educational summary, key points, interactive quiz, and a simple high-level overview mind map.
              
              CRITICAL FOR MIND MAP GENERATION:
-             1. The mind map must be deep and wide. 
-             2. DO NOT return just 1 or 2 nodes. 
-             3. Generate 5-7 primary branches radiating from the main topic.
-             4. Each primary branch MUST have 3-5 child nodes (secondary branches).
-             5. Where applicable, add tertiary detail nodes under secondary branches.
-             6. Each node should have a 'topic' (short, 1-3 words), 'importance' (1-5), and 'category'.
-             7. Categories: 'Concept', 'Example', 'Detail', 'Definition', 'Method', 'Benefit', 'Risk', 'Trend'.
-             8. Icons: Use Lucide icon names like 'Zap', 'BookOpen', 'Target', 'Layers', 'Cpu', 'Globe', 'Activity', 'TrendingUp', 'CheckCircle', 'AlertCircle'.
-             9. Ensure the concepts flow logically and cover all major sections of the transcript.
+             1. Create a simple high-level mind map representing 3 to 5 core branches/categories radiating from the main topic.
+             2. Each node should have a 'topic' (short, 1-3 words), 'importance' (1-5), 'category', and 'icon'.
+             3. Categories: 'Concept', 'Example', 'Detail', 'Definition', 'Method', 'Benefit', 'Risk', 'Trend'.
+             5. Icons: Use Lucide icon names like 'Zap', 'BookOpen', 'Target', 'Layers', 'Cpu', 'Globe', 'Activity', 'TrendingUp', 'CheckCircle', 'AlertCircle'.
              
              GENERAL CRITICAL:
              1. Content must be in ${targetLang}.
@@ -420,9 +415,8 @@ async function startServer() {
              Based on this title, provide an educational analysis and overview of the subject matter.
              
              CRITICAL FOR MIND MAP GENERATION:
-             1. Create a RICH and deep hierarchical mind map from your knowledge of this topic.
-             2. Generate at least 6 main branches with 3-4 children each.
-             3. Use importance levels 1-5 and appropriate categories/icons.
+             1. Create a simple high-level mind map with 3-5 main core categories/branches radiating from the main topic.
+             2. Use importance levels 1-5, appropriate categories, and Lucide icons.
              
              OTHER CRITICAL:
              1. Content must be in ${targetLang}.
@@ -472,24 +466,13 @@ async function startServer() {
                           topic: { type: Type.STRING },
                           importance: { type: Type.NUMBER },
                           category: { type: Type.STRING },
-                          icon: { type: Type.STRING },
-                          children: { 
-                            type: Type.ARRAY, 
-                            items: { 
-                              type: Type.OBJECT,
-                              properties: {
-                                topic: { type: Type.STRING },
-                                importance: { type: Type.NUMBER },
-                                category: { type: Type.STRING },
-                                icon: { type: Type.STRING },
-                                children: { type: Type.ARRAY, items: { type: Type.OBJECT } }
-                              }
-                            } 
-                          }
-                        }
+                          icon: { type: Type.STRING }
+                        },
+                        required: ["topic"]
                       } 
                     }
-                  }
+                  },
+                  required: ["topic", "children"]
                 },
                 tutor_questions: { type: Type.ARRAY, items: { type: Type.STRING } },
                 limitations: { type: Type.ARRAY, items: { type: Type.STRING } }

@@ -28,7 +28,10 @@ import {
   AlertCircle,
   Check,
   Eye,
-  EyeOff
+  EyeOff,
+  GraduationCap,
+  Puzzle,
+  FileText
 } from 'lucide-react';
 import { checkHealth, api } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
@@ -2319,62 +2322,74 @@ export default function App() {
               {/* URL Input Area */}
               <div className={`border p-6 sm:p-8 rounded-3xl space-y-6 shadow-xl shadow-black/5 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5' : 'bg-white border-slate-200 shadow-xl shadow-slate-900/5'}`}>
                 <div className="space-y-4">
-                  <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-slate-600'}`}>{t.videoUrl}</label>
+                  <label className={`text-base sm:text-lg font-extrabold tracking-tight flex items-center gap-2 ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>
+                    <Youtube size={20} className="fill-current" />
+                    <span>
+                      {currentLang === 'pt' ? 'Analisar vídeo do YouTube' : currentLang === 'es' ? 'Analizar video de YouTube' : 'Analyze YouTube video'}
+                    </span>
+                  </label>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <input 
                       type="text" 
                       value={videoUrl}
                       onChange={(e) => setVideoUrl(e.target.value)}
                       placeholder="https://youtube.com/watch?v=..." 
-                      className={`flex-1 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-orange-600 outline-none transition-all text-sm sm:text-base ${isDarkMode ? 'bg-white/5 border-white/10 border' : 'bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20'}`}
+                      className={`flex-1 rounded-2xl px-6 h-14 outline-none transition-all text-sm sm:text-base ${
+                        isDarkMode 
+                          ? 'bg-[#09090b] border border-zinc-800 text-white placeholder-zinc-500/80 focus:border-orange-500/85 focus:ring-4 focus:ring-orange-500/10' 
+                          : 'bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-400 focus:ring-4 focus:ring-orange-500/10'
+                      }`}
                     />
                     <Button 
                       onClick={handleAnalyze} 
                       disabled={isAnalyzing || !videoUrl} 
-                      className="justify-center sm:w-auto shadow-lg shadow-orange-600/20"
+                      className="justify-center h-14 px-8 text-base font-bold rounded-2xl shadow-lg transition-all duration-300"
                     >
                       {isAnalyzing ? (
-                        <>
+                        <span className="flex items-center gap-2">
                           <Loader2 size={20} className="animate-spin" /> {analysisStatus}
-                        </>
+                        </span>
                       ) : (
-                        <>{t.analyze} <ArrowRight size={20} /></>
+                        <span className="flex items-center gap-2 group">
+                          <span>{t.analyze}</span>
+                          <ArrowRight size={20} className="transition-transform duration-300 group-hover:translate-x-1" />
+                        </span>
                       )}
                     </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   {([
-                    { id: 'tutor', label: t.tutor },
-                    { id: 'summary', label: t.summary },
-                    { id: 'quiz', label: t.quiz },
-                    { id: 'mindmap', label: t.mindmap }
+                    { id: 'tutor', label: t.tutor, icon: GraduationCap },
+                    { id: 'summary', label: t.summary, icon: FileText },
+                    { id: 'quiz', label: t.quiz, icon: Puzzle },
+                    { id: 'mindmap', label: t.mindmap, icon: BrainCircuit }
                   ] as const).map((btn) => {
-                    const hasAnalysisResult = Boolean(currentResult);
-                    const isActive = activeTab === btn.id && hasAnalysisResult;
+                    const isActive = activeTab === btn.id;
                     
                     let btnClass = "";
-                    if (!hasAnalysisResult) {
-                      btnClass = isDarkMode
-                        ? "bg-white/5 text-gray-500 border-white/10 opacity-50 cursor-not-allowed"
-                        : "bg-slate-50 text-slate-400 border-slate-100 opacity-50 cursor-not-allowed";
-                    } else if (isActive) {
-                      btnClass = "bg-orange-600 text-white border-orange-500 shadow-lg shadow-orange-600/20";
+                    let iconColor = "";
+                    if (isActive) {
+                      btnClass = "bg-gradient-to-r from-orange-600 to-amber-500 text-white border-orange-500 shadow-xl shadow-orange-600/30 font-extrabold scale-[1.01] hover:brightness-110";
+                      iconColor = "text-white";
                     } else {
                       btnClass = isDarkMode
-                        ? "bg-white/5 text-gray-300 border-white/10 hover:border-orange-500/40 hover:text-orange-400 cursor-pointer"
-                        : "bg-slate-50 text-slate-700 border-slate-200 hover:border-orange-400 hover:text-orange-600 shadow-sm cursor-pointer";
+                        ? "bg-[#0c0c0e] text-zinc-100 border-zinc-800/80 hover:border-orange-500/50 hover:bg-[#131317] hover:shadow-[0_0_20px_rgba(234,88,12,0.15)]"
+                        : "bg-white text-zinc-800 border-slate-200 hover:border-orange-400 hover:bg-slate-50/80 hover:shadow-md";
+                      iconColor = isDarkMode ? "text-orange-500" : "text-orange-600";
                     }
+
+                    const IconComponent = btn.icon;
 
                     return (
                       <button
                         key={btn.id}
-                        disabled={!hasAnalysisResult}
-                        onClick={() => hasAnalysisResult && setActiveTab(btn.id)}
-                        title={!hasAnalysisResult ? (currentLang === 'pt' ? 'Analise um vídeo primeiro.' : currentLang === 'es' ? 'Analiza un video primero.' : 'Analyze a video first.') : ''}
-                        className={`flex items-center justify-center gap-2 p-2 sm:p-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-250 ${btnClass}`}
+                        onClick={() => {
+                          setActiveTab(btn.id);
+                        }}
+                        className={`flex items-center justify-center gap-3.5 px-6 rounded-2xl md:rounded-3xl border text-base md:text-[17px] font-bold tracking-wide transition-all duration-300 h-16 sm:h-[72px] relative group overflow-hidden ${btnClass}`}
                       >
-                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${isActive ? 'bg-white scale-125' : 'bg-orange-600'}`} />
+                        <IconComponent size={26} className={`${iconColor} shrink-0 transition-transform duration-300 group-hover:scale-110`} />
                         <span className="truncate">{btn.label}</span>
                       </button>
                     );
@@ -2402,6 +2417,29 @@ export default function App() {
                     />
                   </motion.div>
                 ) : (
+                  <div className="space-y-8">
+                    {/* Pre-analysis empty state card */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`border-2 border-dashed p-10 rounded-[2.5rem] flex flex-col items-center justify-center text-center space-y-4 transition-all duration-300 ${
+                        isDarkMode 
+                          ? 'bg-[#0c0c0e]/60 border-orange-500/20 text-zinc-300' 
+                          : 'bg-white border-orange-500/30 text-slate-700 shadow-sm'
+                      }`}
+                    >
+                      <div className="w-16 h-16 rounded-3xl bg-orange-600/10 flex items-center justify-center text-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.15)] animate-pulse">
+                        <BrainCircuit size={32} />
+                      </div>
+                      <div className="space-y-2 max-w-lg">
+                        <h3 className={`text-lg sm:text-xl font-bold tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-slate-900'}`}>
+                          {currentLang === 'pt' ? 'Cole uma URL do YouTube e escolha uma funcionalidade para começar.' : currentLang === 'es' ? 'Pegue una URL de YouTube y elija una función para comenzar.' : 'Paste a YouTube URL and choose a feature to get started.'}
+                        </h3>
+                        <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                          {currentLang === 'pt' ? 'O Astra analisará o vídeo usando Inteligência Artificial e gerará o conteúdo escolhido.' : currentLang === 'es' ? 'Astra analizará el video utilizando Inteligencia Artificial y generará el contenido elegido.' : 'Astra will analyze the video using Artificial Intelligence and generate the chosen content.'}
+                        </p>
+                      </div>
+                    </motion.div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
@@ -2515,7 +2553,8 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
               </AnimatePresence>
             </div>
           </section>
