@@ -31,7 +31,12 @@ import {
   EyeOff,
   GraduationCap,
   Puzzle,
-  FileText
+  FileText,
+  Sparkles,
+  Edit2,
+  Layout,
+  Download,
+  Save
 } from 'lucide-react';
 import { checkHealth, api } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
@@ -85,6 +90,10 @@ const TRANSLATIONS = {
     dashboard: "Painel",
     history: "Histórico",
     settings: "Configurações",
+    newFeatures: "Novas Features",
+    soon: "Em breve",
+    newFeaturesTitle: "Novas Features",
+    newFeaturesSub: "Recursos planejados para melhorar sua experiência com mapas mentais.",
     exit: "Sair",
     loginTitle: "BEM-VINDO AO ASTRA LEARNING AI",
     loginDesc: "Junte-se a milhares de estudantes e pesquisadores transformando sua forma de aprender.",
@@ -352,6 +361,10 @@ const TRANSLATIONS = {
     dashboard: "Dashboard",
     history: "History",
     settings: "Settings",
+    newFeatures: "New Features",
+    soon: "Soon",
+    newFeaturesTitle: "New Features",
+    newFeaturesSub: "Planned features to enhance your mind mapping experience.",
     exit: "Exit",
     loginTitle: "WELCOME TO ASTRA LEARNING AI",
     loginDesc: "Join thousands of students and researchers transforming how they learn.",
@@ -619,6 +632,10 @@ const TRANSLATIONS = {
     dashboard: "Panel",
     history: "Historial",
     settings: "Ajustes",
+    newFeatures: "Nuevas Features",
+    soon: "Muy pronto",
+    newFeaturesTitle: "Nuevas Características",
+    newFeaturesSub: "Funcionalidades planeadas para mejorar tu experiencia con mapas mentais.",
     exit: "Salir",
     loginTitle: "BIENVENIDO A ASTRA LEARNING AI",
     loginDesc: "Únete a miles de estudiantes e investigadores transformando su forma de aprender.",
@@ -1111,6 +1128,7 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentLang, setCurrentLang] = useState<Language>('pt');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isFeaturesModalOpen, setIsFeaturesModalOpen] = useState(false);
 
   // Analysis State
   const [videoUrl, setVideoUrl] = useState('');
@@ -2301,8 +2319,22 @@ export default function App() {
             <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'}`}>
               <History size={20} /> {t.history}
             </button>
-            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'}`}>
+            <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors cursor-pointer ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'}`}>
               <Settings size={20} /> {t.settings}
+            </button>
+            <button 
+              onClick={() => setIsFeaturesModalOpen(true)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium transition-colors cursor-pointer ${
+                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles size={20} className="text-orange-500" />
+                <span className="text-left">{t.newFeatures}</span>
+              </div>
+              <span className="px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest bg-orange-600/10 text-orange-500 border border-orange-500/20 rounded-full shrink-0">
+                {t.soon}
+              </span>
             </button>
           </aside>
 
@@ -2566,6 +2598,220 @@ export default function App() {
           </section>
         </main>
       )}
+
+      {/* Modal for Novas Features (Roadmap) */}
+      <AnimatePresence>
+        {isFeaturesModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsFeaturesModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className={`relative w-full max-w-2xl rounded-[2rem] border p-6 sm:p-8 shadow-2xl overflow-y-auto max-h-[90vh] z-10 transition-colors ${
+                isDarkMode 
+                  ? 'bg-[#0c0d12] border-zinc-800 text-white shadow-black' 
+                  : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+              }`}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setIsFeaturesModalOpen(false)}
+                className={`absolute top-6 right-6 p-2 rounded-xl transition-colors cursor-pointer ${
+                  isDarkMode ? 'hover:bg-zinc-900 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <X size={20} />
+              </button>
+
+              {/* Title & Description */}
+              <div className="flex items-start gap-4 mb-2 pr-8">
+                <div className="p-3 bg-orange-600/10 rounded-2xl text-orange-500 shrink-0">
+                  <Sparkles size={24} className="animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black">{t.newFeaturesTitle}</h2>
+                  <p className={`text-xs sm:text-sm mt-1 leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                    {t.newFeaturesSub}
+                  </p>
+                </div>
+              </div>
+
+              {/* Separation Divider */}
+              <div className={`h-px w-full my-6 ${isDarkMode ? 'bg-zinc-800/80' : 'bg-slate-100'}`} />
+
+              {/* List of features */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(() => {
+                  const items = {
+                    pt: [
+                      {
+                        icon: <Edit2 size={16} />,
+                        title: "Editing",
+                        desc: "Edite textos e reorganize os nós do mapa mental.",
+                        badge: "Em breve",
+                        badgeColor: "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                      },
+                      {
+                        icon: <Layout size={16} />,
+                        title: "Advanced Branching",
+                        desc: "Expanda e recolha ramificações avançadas.",
+                        badge: "Planejado",
+                        badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      },
+                      {
+                        icon: <Download size={16} />,
+                        title: "Export as Image",
+                        desc: "Exporte o mapa como imagem em alta qualidade.",
+                        badge: "Planejado",
+                        badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      },
+                      {
+                        icon: <Save size={16} />,
+                        title: "Save Custom Maps",
+                        desc: "Salve mapas personalizados na sua conta.",
+                        badge: "Pro Preview",
+                        badgeColor: "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                      },
+                      {
+                        icon: <Zap size={16} />,
+                        title: "AI Map Expansion",
+                        desc: "Expanda tópicos automaticamente com ajuda da IA.",
+                        badge: "Em breve",
+                        badgeColor: "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                      }
+                    ],
+                    en: [
+                      {
+                        icon: <Edit2 size={16} />,
+                        title: "Editing",
+                        desc: "Edit text and reorganize mind map nodes.",
+                        badge: "Soon",
+                        badgeColor: "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                      },
+                      {
+                        icon: <Layout size={16} />,
+                        title: "Advanced Branching",
+                        desc: "Expand and collapse advanced branches.",
+                        badge: "Planned",
+                        badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      },
+                      {
+                        icon: <Download size={16} />,
+                        title: "Export as Image",
+                        desc: "Export the map as a high-quality image.",
+                        badge: "Planned",
+                        badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      },
+                      {
+                        icon: <Save size={16} />,
+                        title: "Save Custom Maps",
+                        desc: "Save custom maps to your account.",
+                        badge: "Pro Preview",
+                        badgeColor: "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                      },
+                      {
+                        icon: <Zap size={16} />,
+                        title: "AI Map Expansion",
+                        desc: "Automatically expand topics with AI assistance.",
+                        badge: "Soon",
+                        badgeColor: "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                      }
+                    ],
+                    es: [
+                      {
+                        icon: <Edit2 size={16} />,
+                        title: "Editing",
+                        desc: "Edite textos y reorganice los nodos del mapa mental.",
+                        badge: "Muy pronto",
+                        badgeColor: "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                      },
+                      {
+                        icon: <Layout size={16} />,
+                        title: "Advanced Branching",
+                        desc: "Expanda y contraiga ramas avanzadas.",
+                        badge: "Planeado",
+                        badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      },
+                      {
+                        icon: <Download size={16} />,
+                        title: "Export as Image",
+                        desc: "Exporte el mapa como una imagen de alta calidad.",
+                        badge: "Planeado",
+                        badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      },
+                      {
+                        icon: <Save size={16} />,
+                        title: "Save Custom Maps",
+                        desc: "Guarde mapas personalizados en su cuenta.",
+                        badge: "Pro Preview",
+                        badgeColor: "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                      },
+                      {
+                        icon: <Zap size={16} />,
+                        title: "AI Map Expansion",
+                        desc: "Expanda temas automáticamente con ayuda de la IA.",
+                        badge: "Muy pronto",
+                        badgeColor: "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                      }
+                    ]
+                  };
+
+                  const currentFeatures = items[currentLang] || items.en;
+
+                  return currentFeatures.map((feat, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 transition-all ${
+                        isDarkMode 
+                          ? 'bg-[#12131a]/50 border-zinc-800/80 hover:bg-[#12131a] hover:border-orange-500/30' 
+                          : 'bg-[#fafbfc] border-slate-200 hover:bg-white hover:shadow-lg hover:shadow-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="p-2 bg-orange-600/10 rounded-xl text-orange-500">
+                          {feat.icon}
+                        </div>
+                        <span className={`px-2.5 py-0.5 text-[8px] font-bold uppercase tracking-widest border rounded-full ${feat.badgeColor}`}>
+                          {feat.badge}
+                        </span>
+                      </div>
+                      <div className="space-y-1 mt-1">
+                        <h4 className="text-sm font-bold tracking-tight">{feat.title}</h4>
+                        <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                          {feat.desc}
+                        </p>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              {/* Join Waitlist Footer */}
+              <div className={`mt-8 p-4 rounded-2xl border text-center space-y-3 ${
+                isDarkMode ? 'bg-[#0f1115] border-zinc-800/80' : 'bg-slate-50 border-slate-100'
+              }`}>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-slate-600'}`}>
+                  {currentLang === 'pt' ? 'Quer acesso antecipado aos recursos Premium?' : currentLang === 'es' ? '¿Quieres acceso anticipado a las funciones Premium?' : 'Want early access to premium features?'}
+                </p>
+                <button className="px-6 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:scale-[1.03] active:scale-95 transition-all cursor-pointer">
+                  {currentLang === 'pt' ? 'Entrar na Lista de Espera Pro' : currentLang === 'es' ? 'Unirse a la Lista de Espera Pro' : 'Join Pro Waitlist'}
+                </button>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <footer className={`py-12 border-t text-center text-sm transition-colors ${isDarkMode ? 'border-white/5 text-gray-600' : 'border-slate-200 text-slate-500'}`}>

@@ -69,13 +69,14 @@ interface CustomNodeProps {
     id: string;
     colorIndex?: number;
     isDarkMode?: boolean;
+    lang?: string;
   };
   targetPosition?: Position;
   sourcePosition?: Position;
 }
 
 const CustomNode = memo(({ id, data, targetPosition = Position.Left, sourcePosition = Position.Right }: CustomNodeProps) => {
-  const { label, description, level = 2, isRoot, hasChildren, isCollapsed, toggleNode, colorIndex, isDarkMode = true } = data;
+  const { label, description, level = 2, isRoot, hasChildren, isCollapsed, toggleNode, colorIndex, isDarkMode = true, lang = 'pt' } = data;
   
   const catStyle = typeof colorIndex === 'number' 
     ? THEME_COLORS[colorIndex % THEME_COLORS.length] 
@@ -140,6 +141,10 @@ const CustomNode = memo(({ id, data, targetPosition = Position.Left, sourcePosit
         {hasChildren && (
           <button 
             onClick={(e) => toggleNode(id, e)}
+            title={isCollapsed 
+              ? (lang === 'pt' ? 'Expandir tópico' : lang === 'es' ? 'Expandir tema' : 'Expand topic') 
+              : (lang === 'pt' ? 'Recolher tópico' : lang === 'es' ? 'Contraer tema' : 'Collapse topic')
+            }
             className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-lg border transition-all shadow-sm mt-0.5 cursor-pointer ${
               isDarkMode 
                 ? 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white hover:bg-zinc-900 hover:border-zinc-700' 
@@ -695,7 +700,8 @@ The central theme **${topicName}** is a focused and dense learning structure. By
           hasChildren: masterEdges.some(e => e.source === n.id),
           isCollapsed: collapsedNodes.has(n.id),
           toggleNode,
-          isDarkMode
+          isDarkMode,
+          lang
         }
       }));
 
@@ -920,7 +926,7 @@ The central theme **${topicName}** is a focused and dense learning structure. By
   };
 
   return (
-    <div className={`w-full h-[580px] xs:h-[640px] sm:h-[720px] md:h-[780px] relative flex flex-col overflow-hidden transition-all bg-transparent`}>
+    <div className={`w-full h-[580px] xs:h-[660px] sm:h-[760px] md:h-[840px] lg:h-[880px] relative flex flex-col overflow-hidden transition-all bg-transparent`}>
       {/* Sleek Action Bar - Integrated directly at the top of the workspace canvas */}
       <div className={`p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 shrink-0 transition-all ${
         isDarkMode 
@@ -1191,32 +1197,6 @@ The central theme **${topicName}** is a focused and dense learning structure. By
             >
               <Maximize2 size={12} />
               <span className="hidden sm:inline">{lang === 'pt' ? 'Centralizar' : lang === 'es' ? 'Centrar' : 'Recenter'}</span>
-            </button>
-
-            {/* Subtle Divisor */}
-            <div className={`w-px h-5 my-auto shrink-0 ${isDarkMode ? 'bg-zinc-800' : 'bg-slate-200'}`} />
-
-            <button
-              type="button"
-              onClick={handleExpandAll}
-              className={`p-2 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title={hTexts.btnExpandAll}
-            >
-              <ChevronDown size={14} className="shrink-0" />
-              <span className="hidden sm:inline">{hTexts.btnExpandAll}</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleCollapseAll}
-              className={`p-2 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title={hTexts.btnCollapseAll}
-            >
-              <ChevronUp size={14} className="shrink-0" />
-              <span className="hidden sm:inline">{hTexts.btnCollapseAll}</span>
             </button>
           </Panel>
         </ReactFlow>

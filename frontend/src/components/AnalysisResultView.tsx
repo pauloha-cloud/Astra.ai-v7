@@ -612,44 +612,6 @@ export const AnalysisResultView = ({
                 );
               })()}
 
-              {/* Wrapped in a padded container to preserve layout margins when outer content area is p-0 */}
-              <div className="px-6 sm:px-10 pb-10 mt-8">
-                <div className={`p-8 border border-dashed rounded-[2rem] transition-all ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-slate-50'}`}>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                    <div className="space-y-1">
-                      <h4 className={`text-lg font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>
-                        Advanced Mind Map Tools
-                        <span className="px-2 py-0.5 text-[8px] font-black uppercase tracking-widest bg-orange-600 text-white rounded-full">Coming Soon</span>
-                      </h4>
-                      <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>{t.proFeaturesDesc || "Planned Pro features for deep visual learning."}</p>
-                    </div>
-                    <button className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:scale-105 transition-transform">
-                      Join Pro Waitlist
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[
-                      { icon: <Edit2 size={14} />, label: "Node Editing", desc: "Modify text and reorder nodes" },
-                      { icon: <Layout size={14} />, label: "Advanced Branching", desc: "Collapse and expand branches" },
-                      { icon: <Download size={14} />, label: "Export as Image", desc: "High-quality PNG/SVG for study" },
-                      { icon: <FileJson size={14} />, label: "Export as JSON", desc: "Structured data for other tools" },
-                      { icon: <Save size={14} />, label: "Save Custom Maps", desc: "Cloud sync and persistent storage" },
-                      { icon: <Zap size={14} />, label: "AI Map Expansion", desc: "Deepen nodes with AI context" },
-                    ].map((feature, i) => (
-                      <div key={i} className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
-                        <div className="p-2 bg-orange-600/10 rounded-xl text-orange-500">
-                          {feature.icon}
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className={`text-[10px] font-bold tracking-wide ${isDarkMode ? 'text-gray-200' : 'text-slate-800'}`}>{feature.label}</span>
-                          <p className={`text-[9px] opacity-60 leading-tight ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>{feature.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
             </motion.div>
           )}
 
