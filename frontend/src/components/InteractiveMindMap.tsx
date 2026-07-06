@@ -11,7 +11,6 @@ import ReactFlow, {
   useEdgesState,
   Handle,
   Position,
-  Panel,
   ReactFlowProvider,
   useReactFlow
 } from 'reactflow';
@@ -42,7 +41,10 @@ import {
   Sparkles,
   Check,
   AlertCircle,
-  Brain
+  Brain,
+  Lightbulb,
+  HelpCircle,
+  Target
 } from 'lucide-react';
 
 const THEME_COLORS = [
@@ -305,10 +307,10 @@ const headerTexts = {
 const askTexts = {
   pt: {
     placeholder: "Pergunte sobre este mapa mental...",
-    explain: "💡 Explique o tema central",
-    quiz: "❓ Gere um quiz",
-    summary: "📝 Resuma pontos",
-    examples: "🎯 Exemplos práticos",
+    explain: "Explique o tema central",
+    quiz: "Gere um quiz",
+    summary: "Resuma pontos",
+    examples: "Exemplos práticos",
     loading: "Astra AI está analisando...",
     aiTitle: "Astra AI Assistente",
     close: "Fechar",
@@ -319,24 +321,24 @@ const askTexts = {
   },
   es: {
     placeholder: "Pregunta sobre este mapa mental...",
-    explain: "💡 Explicar tema central",
-    quiz: "❓ Generar un quiz",
-    summary: "📝 Resumir puntos",
-    examples: "🎯 Ejemplos prácticos",
+    explain: "Explicar tema central",
+    quiz: "Generar un quiz",
+    summary: "Resumir puntos",
+    examples: "Ejemplos prácticos",
     loading: "Astra AI está analizando...",
     aiTitle: "Astra AI Asistente",
     close: "Cerrar",
     correct: "¡Correcto!",
     incorrect: "Incorrecto. ¡Inténtalo de nuevo!",
     backToMap: "Volver al mapa",
-    clickNodeHint: "Sugerencia: ¡También puedes hacer clic en cualquier casilla del mapa para preguntar sobre ella!"
+    clickNodeHint: "Sugerencia: ¡También puedes hacer clic en qualquer casilla del mapa para preguntar sobre ella!"
   },
   en: {
     placeholder: "Ask about this mind map...",
-    explain: "💡 Explain central theme",
-    quiz: "❓ Generate a quiz",
-    summary: "📝 Summarize points",
-    examples: "🎯 Practical examples",
+    explain: "Explain central theme",
+    quiz: "Generate a quiz",
+    summary: "Summarize points",
+    examples: "Practical examples",
     loading: "Astra AI is analyzing...",
     aiTitle: "Astra AI Assistant",
     close: "Close",
@@ -1133,6 +1135,46 @@ The central theme **${topicName}** is a focused and dense learning structure. By
 
       {/* The Map view canvas - Fills the rest of the workspace container */}
       <div className="flex-1 w-full relative overflow-hidden bg-transparent">
+        {/* Map Controls positioned absolutely in the top-right */}
+        <div className={`absolute top-5 right-5 z-40 pointer-events-auto flex items-center gap-2 p-1.5 backdrop-blur border rounded-full shadow-xl shrink-0 transition-colors ${
+          isDarkMode 
+            ? 'bg-zinc-950/95 border-zinc-800/85 text-zinc-300 shadow-black/40' 
+            : 'bg-white border-slate-200 text-slate-700 shadow-slate-100/60'
+        }`}>
+          <button
+            type="button"
+            onClick={() => zoomIn()}
+            className={`p-2 rounded-full transition-colors shrink-0 ${
+              isDarkMode ? 'text-slate-400 hover:text-white hover:bg-zinc-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+            title="Zoom In"
+          >
+            <ZoomIn size={14} className="shrink-0" />
+          </button>
+          <button
+            type="button"
+            onClick={() => zoomOut()}
+            className={`p-2 rounded-full transition-colors shrink-0 ${
+              isDarkMode ? 'text-slate-400 hover:text-white hover:bg-zinc-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+            title="Zoom Out"
+          >
+            <ZoomOut size={14} className="shrink-0" />
+          </button>
+          <div className={`w-px h-4 shrink-0 ${isDarkMode ? 'bg-zinc-800' : 'bg-slate-200'}`} />
+          <button
+            type="button"
+            onClick={handleRecenter}
+            className={`p-2 px-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              isDarkMode ? 'text-slate-400 hover:text-white hover:bg-zinc-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+            title="Recenter Map"
+          >
+            <Maximize2 size={12} className="shrink-0" />
+            <span>{lang === 'pt' ? 'Centralizar' : lang === 'es' ? 'Centrar' : 'Recenter'}</span>
+          </button>
+        </div>
+
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -1160,280 +1202,236 @@ The central theme **${topicName}** is a focused and dense learning structure. By
             gap={24} 
             size={1.2}
           />
-
-          {/* Minimal Float Controls Panel */}
-          <Panel position={isMobile ? "top-right" : "bottom-right"} className={`flex gap-2 p-2.5 backdrop-blur border rounded-2xl shadow-lg transition-colors ${
-            isDarkMode 
-              ? 'bg-slate-950/80 border-slate-900' 
-              : 'bg-white/80 border-slate-200'
-          }`}>
-            <button
-              type="button"
-              onClick={() => zoomIn()}
-              className={`p-2 rounded-xl transition-colors ${
-                isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title="Zoom In"
-            >
-              <ZoomIn size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => zoomOut()}
-              className={`p-2 rounded-xl transition-colors ${
-                isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title="Zoom Out"
-            >
-              <ZoomOut size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={handleRecenter}
-              className={`p-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title="Recenter Map"
-            >
-              <Maximize2 size={12} />
-              <span className="hidden sm:inline">{lang === 'pt' ? 'Centralizar' : lang === 'es' ? 'Centrar' : 'Recenter'}</span>
-            </button>
-          </Panel>
         </ReactFlow>
 
-        {/* --- FLOATING AI INTERACTION POPUP PANEL (PHASE 4) --- */}
-        {isAiLoading && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={`absolute bottom-24 left-4 right-4 md:left-6 md:right-auto md:w-[420px] p-5 rounded-3xl border shadow-2xl z-30 flex items-center gap-3 backdrop-blur-md ${
-              isDarkMode 
-                ? 'bg-[#0a0c16]/95 border-orange-500/20 text-zinc-100 shadow-[0_0_50px_rgba(249,115,22,0.15)]' 
-                : 'bg-white/95 border-slate-200 text-slate-800 shadow-[0_0_50px_rgba(249,115,22,0.08)]'
-            }`}
-          >
-            <RefreshCw size={18} className="text-orange-500 animate-spin shrink-0" />
-            <span className="text-xs font-bold tracking-wide uppercase">{tAsk.loading}</span>
-          </motion.div>
-        )}
-
-        {aiResponse && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            className={`absolute bottom-24 left-4 right-4 md:left-6 md:right-auto md:w-[420px] max-h-[440px] overflow-y-auto rounded-3xl border shadow-2xl z-30 p-5 backdrop-blur-md flex flex-col gap-4 ${
-              isDarkMode 
-                ? 'bg-[#0a0c16]/95 border-orange-500/20 text-zinc-100 shadow-[0_0_50px_rgba(249,115,22,0.15)]' 
-                : 'bg-white/95 border-slate-200 text-slate-800 shadow-[0_0_50px_rgba(249,115,22,0.08)]'
-            }`}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b pb-3 border-slate-200/40 dark:border-zinc-800/60">
-              <div className="flex items-center gap-2">
-                <Sparkles size={16} className="text-orange-500 animate-pulse" />
-                <h4 className="text-xs sm:text-sm font-black tracking-tight">{aiResponse.title}</h4>
-              </div>
-              <button
-                onClick={() => setAiResponse(null)}
-                className={`p-1 rounded-lg transition-colors cursor-pointer ${
-                  isDarkMode ? 'hover:bg-zinc-800 text-zinc-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            {/* Content Area */}
-            <div className="text-xs leading-relaxed overflow-y-auto pr-1 flex-1">
-              {aiResponse.type === 'markdown' ? (
-                <div className="whitespace-pre-line space-y-2 dark:text-zinc-300 text-slate-700">
-                  {aiResponse.content}
-                </div>
-              ) : (
-                /* Interactive Quiz */
-                <div className="space-y-4">
-                  {aiResponse.questions.map((q: any, qIdx: number) => (
-                    <div key={qIdx} className="space-y-2 p-3 rounded-2xl dark:bg-zinc-900/40 bg-slate-50/50 border dark:border-zinc-800/40 border-slate-150">
-                      <p className="font-bold text-xs">{qIdx + 1}. {q.question}</p>
-                      <div className="space-y-1.5">
-                        {q.options.map((opt: string, oIdx: number) => {
-                          const isSelected = selectedAnswerIdx[qIdx] === oIdx;
-                          const isCorrect = q.correctIdx === oIdx;
-                          let optStyle = isDarkMode 
-                            ? 'bg-zinc-900/30 border-zinc-800 hover:bg-zinc-800/40 text-zinc-300' 
-                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs';
-                          
-                          if (selectedAnswerIdx[qIdx] !== undefined) {
-                            if (isSelected) {
-                              optStyle = isCorrect
-                                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-semibold'
-                                : 'bg-rose-500/10 border-rose-500 text-rose-400 font-semibold';
-                            } else if (isCorrect) {
-                              optStyle = 'bg-emerald-500/5 border-emerald-500/40 text-emerald-500/80';
-                            }
-                          }
-
-                          return (
-                            <button
-                              key={oIdx}
-                              disabled={selectedAnswerIdx[qIdx] !== undefined}
-                              onClick={() => {
-                                setSelectedAnswerIdx(prev => ({ ...prev, [qIdx]: oIdx }));
-                              }}
-                              className={`w-full text-left p-2.5 rounded-xl border text-[11px] transition-all flex items-center justify-between gap-2 cursor-pointer ${optStyle}`}
-                            >
-                              <span>{opt}</span>
-                              {selectedAnswerIdx[qIdx] !== undefined && isSelected && (
-                                isCorrect 
-                                  ? <Check size={12} className="text-emerald-500 shrink-0" />
-                                  : <X size={12} className="text-rose-500 shrink-0" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {selectedAnswerIdx[qIdx] !== undefined && (
-                        <p className={`text-[10px] mt-2 transition-opacity duration-300 ${
-                          selectedAnswerIdx[qIdx] === q.correctIdx 
-                            ? 'text-emerald-500 font-semibold' 
-                            : 'text-rose-500/80 font-medium'
-                        }`}>
-                          {selectedAnswerIdx[qIdx] === q.correctIdx ? `✓ ${q.explanation}` : `✗ ${tAsk.incorrect}`}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-
         {/* --- FLOATING BAR OF INTERACTION (PHASE 4) --- */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-lg px-4 z-20 flex flex-col items-center gap-2">
+        <div className="fixed bottom-6 left-0 right-0 px-4 z-50 flex flex-col items-center gap-2 pointer-events-none">
+          {/* --- FLOATING AI INTERACTION POPUP PANEL (PHASE 4) --- */}
+          {isAiLoading && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`w-full max-w-lg md:w-[450px] p-5 rounded-3xl border shadow-2xl z-30 flex items-center gap-3 backdrop-blur-md pointer-events-auto mb-2 ${
+                isDarkMode 
+                  ? 'bg-[#0a0c16]/95 border-orange-500/20 text-zinc-100 shadow-[0_0_50px_rgba(249,115,22,0.15)]' 
+                  : 'bg-white/95 border-slate-200 text-slate-800 shadow-[0_0_50px_rgba(249,115,22,0.08)]'
+              }`}
+            >
+              <RefreshCw size={18} className="text-orange-500 animate-spin shrink-0" />
+              <span className="text-xs font-bold tracking-wide uppercase">{tAsk.loading}</span>
+            </motion.div>
+          )}
+
+          {aiResponse && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className={`w-full max-w-lg md:w-[450px] max-h-[380px] sm:max-h-[440px] overflow-y-auto rounded-3xl border shadow-2xl z-30 p-5 backdrop-blur-md flex flex-col gap-4 custom-scrollbar pointer-events-auto mb-2 ${
+                isDarkMode 
+                  ? 'bg-[#0a0c16]/95 border-orange-500/20 text-zinc-100 shadow-[0_0_50px_rgba(249,115,22,0.15)]' 
+                  : 'bg-white/95 border-slate-200 text-slate-800 shadow-[0_0_50px_rgba(249,115,22,0.08)]'
+              }`}
+            >
+              {/* Header */}
+              <div className={`flex items-center justify-between border-b pb-3 ${isDarkMode ? 'border-zinc-800/60' : 'border-slate-200'}`}>
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} className={`animate-pulse ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`} />
+                  <h4 className={`text-xs sm:text-sm font-black tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-slate-900'}`}>{aiResponse.title}</h4>
+                </div>
+                <button
+                  onClick={() => setAiResponse(null)}
+                  className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                    isDarkMode ? 'hover:bg-zinc-800 text-zinc-400 hover:text-white' : 'hover:bg-slate-150 text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Content Area */}
+              <div className="text-xs leading-relaxed overflow-y-auto pr-1 flex-1 custom-scrollbar">
+                {aiResponse.type === 'markdown' ? (
+                  <div className={`whitespace-pre-line space-y-2 ${isDarkMode ? 'text-zinc-300' : 'text-slate-700'}`}>
+                    {aiResponse.content}
+                  </div>
+                ) : (
+                  /* Interactive Quiz */
+                  <div className="space-y-4">
+                    {aiResponse.questions.map((q: any, qIdx: number) => (
+                      <div key={qIdx} className={`space-y-2 p-3 rounded-2xl border ${
+                        isDarkMode 
+                          ? 'bg-zinc-900/40 border-zinc-800/40 text-zinc-300' 
+                          : 'bg-slate-50/50 border-slate-200 text-slate-800'
+                      }`}>
+                        <p className={`font-bold text-xs ${isDarkMode ? 'text-zinc-100' : 'text-slate-900'}`}>{qIdx + 1}. {q.question}</p>
+                        <div className="space-y-1.5">
+                          {q.options.map((opt: string, oIdx: number) => {
+                            const isSelected = selectedAnswerIdx[qIdx] === oIdx;
+                            const isCorrect = q.correctIdx === oIdx;
+                            let optStyle = isDarkMode 
+                              ? 'bg-zinc-900/30 border-zinc-800 hover:bg-zinc-800/40 text-zinc-300' 
+                              : 'bg-white border-slate-200 hover:bg-orange-50/30 hover:border-orange-200/80 text-slate-700 shadow-xs';
+                            
+                            if (selectedAnswerIdx[qIdx] !== undefined) {
+                              if (isSelected) {
+                                optStyle = isCorrect
+                                  ? isDarkMode
+                                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-semibold'
+                                    : 'bg-emerald-50 border-emerald-400 text-emerald-700 font-semibold'
+                                  : isDarkMode
+                                    ? 'bg-rose-500/10 border-rose-500 text-rose-400 font-semibold'
+                                    : 'bg-rose-50 border-rose-400 text-rose-700 font-semibold';
+                              } else if (isCorrect) {
+                                optStyle = isDarkMode
+                                  ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-500/80'
+                                  : 'bg-emerald-500/5 border-emerald-300 text-emerald-600 font-medium';
+                              }
+                            }
+
+                            return (
+                              <button
+                                key={oIdx}
+                                disabled={selectedAnswerIdx[qIdx] !== undefined}
+                                onClick={() => {
+                                  setSelectedAnswerIdx(prev => ({ ...prev, [qIdx]: oIdx }));
+                                }}
+                                className={`w-full text-left p-2.5 rounded-xl border text-[11px] transition-all flex items-center justify-between gap-2 cursor-pointer ${optStyle}`}
+                              >
+                                <span>{opt}</span>
+                                {selectedAnswerIdx[qIdx] !== undefined && isSelected && (
+                                  isCorrect 
+                                    ? <Check size={12} className="text-emerald-500 shrink-0" />
+                                    : <X size={12} className="text-rose-500 shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {selectedAnswerIdx[qIdx] !== undefined && (
+                          <p className={`text-[10px] mt-2 transition-opacity duration-300 ${
+                            selectedAnswerIdx[qIdx] === q.correctIdx 
+                              ? 'text-emerald-500 font-semibold' 
+                              : 'text-rose-500/80 font-medium'
+                          }`}>
+                            {selectedAnswerIdx[qIdx] === q.correctIdx ? `✓ ${q.explanation}` : `✗ ${tAsk.incorrect}`}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* Predefined suggestion chips */}
           {isInputFocused && (
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-row overflow-x-auto gap-1.5 justify-start md:justify-center mb-1 max-w-full scrollbar-none py-1.5 px-3 md:px-0 scroll-smooth w-full"
+              className="flex flex-row flex-nowrap overflow-x-auto gap-2 justify-start md:justify-center mb-1 max-w-full scrollbar-none py-1.5 px-4 md:px-0 scroll-smooth w-full max-w-4xl pointer-events-auto"
             >
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault(); // prevent input blur
-                  const q = lang === 'pt' ? 'Explique o tema central' : lang === 'es' ? 'Explicar tema central' : 'Explain central theme';
-                  setQuestion(q);
-                  handleSend(q);
-                }}
-                className={`px-2.5 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer shrink-0 ${
-                  isDarkMode 
-                    ? 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white' 
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950 shadow-sm'
-                }`}
-              >
-                {tAsk.explain}
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  const q = lang === 'pt' ? 'Gere um quiz sobre o mapa' : lang === 'es' ? 'Generar un quiz sobre el mapa' : 'Generate a quiz about the map';
-                  setQuestion(q);
-                  handleSend(q);
-                }}
-                className={`px-2.5 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer shrink-0 ${
-                  isDarkMode 
-                    ? 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white' 
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950 shadow-sm'
-                }`}
-              >
-                {tAsk.quiz}
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  const q = lang === 'pt' ? 'Resuma pontos do mapa' : lang === 'es' ? 'Resumir puntos del mapa' : 'Summarize points of the map';
-                  setQuestion(q);
-                  handleSend(q);
-                }}
-                className={`px-2.5 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer shrink-0 ${
-                  isDarkMode 
-                    ? 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white' 
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950 shadow-sm'
-                }`}
-              >
-                {tAsk.summary}
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  const q = lang === 'pt' ? 'Exemplos práticos' : lang === 'es' ? 'Ejemplos prácticos' : 'Practical examples';
-                  setQuestion(q);
-                  handleSend(q);
-                }}
-                className={`px-2.5 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer shrink-0 ${
-                  isDarkMode 
-                    ? 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white' 
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950 shadow-sm'
-                }`}
-              >
-                {tAsk.examples}
-              </button>
+              {[
+                {
+                  key: 'explain',
+                  label: tAsk.explain,
+                  query: lang === 'pt' ? 'Explique o tema central' : lang === 'es' ? 'Explicar tema central' : 'Explain central theme',
+                  icon: Lightbulb
+                },
+                {
+                  key: 'quiz',
+                  label: tAsk.quiz,
+                  query: lang === 'pt' ? 'Gere um quiz sobre o mapa' : lang === 'es' ? 'Generar un quiz sobre el mapa' : 'Generate a quiz about the map',
+                  icon: HelpCircle
+                },
+                {
+                  key: 'summary',
+                  label: tAsk.summary,
+                  query: lang === 'pt' ? 'Resuma pontos do mapa' : lang === 'es' ? 'Resumir pontos del mapa' : 'Summarize points of the map',
+                  icon: FileText
+                },
+                {
+                  key: 'examples',
+                  label: tAsk.examples,
+                  query: lang === 'pt' ? 'Exemplos práticos' : lang === 'es' ? 'Ejemplos prácticos' : 'Practical examples',
+                  icon: Target
+                }
+              ].map((action) => {
+                const IconComponent = action.icon;
+                return (
+                  <button
+                    key={action.key}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // prevent input blur
+                      setQuestion(action.query);
+                      handleSend(action.query);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] sm:text-xs font-semibold border transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                      isDarkMode 
+                        ? 'bg-zinc-950/80 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white' 
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-[#fff9f5] hover:border-orange-200 hover:text-slate-950 shadow-xs'
+                    }`}
+                  >
+                    <IconComponent size={14} className={`shrink-0 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`} />
+                    <span>{action.label}</span>
+                  </button>
+                );
+              })}
             </motion.div>
           )}
 
-          {/* Main Input Field bar */}
-          <div className={`w-full relative flex items-center rounded-full border shadow-2xl transition-all p-1 ${
-            isDarkMode 
-              ? `${isInputFocused ? 'border-orange-500/40 ring-2 ring-orange-500/10' : 'border-zinc-800/80'} bg-zinc-950/95 shadow-black/40` 
-              : `${isInputFocused ? 'border-orange-500/40 ring-2 ring-orange-500/10' : 'border-slate-200'} bg-white shadow-slate-100/60`
-          }`}>
-            <div className="pl-3.5 pr-2 py-2 flex items-center justify-center shrink-0">
-              <Brain size={15} className={isInputFocused ? 'text-orange-500 animate-pulse' : isDarkMode ? 'text-zinc-500' : 'text-slate-400'} />
+          {/* Chat Input Container */}
+          <div className="w-full max-w-2xl flex flex-col gap-1.5 pointer-events-auto">
+            <div className={`w-full relative flex items-center rounded-full border shadow-2xl transition-all p-1 ${
+              isDarkMode 
+                ? `${isInputFocused ? 'border-orange-500/40 ring-2 ring-orange-500/10' : 'border-zinc-800/80'} bg-zinc-950/95 shadow-black/40` 
+                : `${isInputFocused ? 'border-orange-500/40 ring-2 ring-orange-500/10' : 'border-slate-200'} bg-white shadow-slate-100/60`
+            }`}>
+              <div className="pl-3.5 pr-2 py-2 flex items-center justify-center shrink-0">
+                <Brain size={15} className={isInputFocused ? 'text-orange-500 animate-pulse' : isDarkMode ? 'text-zinc-500' : 'text-slate-400'} />
+              </div>
+
+              <input
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setTimeout(() => setIsInputFocused(false), 200)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSend();
+                  }
+                }}
+                placeholder={tAsk.placeholder}
+                className={`w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-xs py-1.5 pr-10 ${
+                  isDarkMode ? 'text-zinc-100 placeholder-zinc-500' : 'text-slate-900 placeholder-slate-400'
+                }`}
+              />
+
+              {/* Send button */}
+              <button
+                onClick={() => handleSend()}
+                disabled={!question.trim()}
+                className={`absolute right-1.5 top-1.5 bottom-1.5 aspect-square rounded-full flex items-center justify-center transition-all ${
+                  question.trim() 
+                    ? 'bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 active:scale-95 cursor-pointer shadow-md shadow-orange-600/10' 
+                    : `${isDarkMode ? 'bg-zinc-900 text-zinc-600' : 'bg-slate-100 text-slate-400'} cursor-not-allowed`
+                }`}
+              >
+                <Send size={11} className="transform" />
+              </button>
             </div>
 
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onFocus={() => setIsInputFocused(true)}
-              onBlur={() => setTimeout(() => setIsInputFocused(false), 200)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSend();
-                }
-              }}
-              placeholder={tAsk.placeholder}
-              className={`w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-xs py-1.5 pr-10 ${
-                isDarkMode ? 'text-zinc-100 placeholder-zinc-500' : 'text-slate-900 placeholder-slate-400'
-              }`}
-            />
-
-            {/* Send button */}
-            <button
-              onClick={() => handleSend()}
-              disabled={!question.trim()}
-              className={`absolute right-1.5 top-1.5 bottom-1.5 aspect-square rounded-full flex items-center justify-center transition-all ${
-                question.trim() 
-                  ? 'bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 active:scale-95 cursor-pointer shadow-md shadow-orange-600/10' 
-                  : `${isDarkMode ? 'bg-zinc-900 text-zinc-600' : 'bg-slate-100 text-slate-400'} cursor-not-allowed`
-              }`}
-            >
-              <Send size={11} className="transform" />
-            </button>
+            {/* Hint text */}
+            {isInputFocused && (
+              <span className={`text-[9px] font-medium tracking-wide animate-fade-in text-center md:text-left ${
+                isDarkMode ? 'text-zinc-500' : 'text-slate-400'
+              }`}>
+                {tAsk.clickNodeHint}
+              </span>
+            )}
           </div>
-          
-          {/* Hint text */}
-          {isInputFocused && (
-            <span className={`text-[9px] font-medium tracking-wide animate-fade-in ${
-              isDarkMode ? 'text-zinc-500' : 'text-slate-400'
-            }`}>
-              {tAsk.clickNodeHint}
-            </span>
-          )}
         </div>
       </div>
     </div>
