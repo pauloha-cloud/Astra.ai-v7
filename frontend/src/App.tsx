@@ -2307,7 +2307,7 @@ export default function App() {
           </aside>
 
           <section className={`flex-1 p-4 sm:p-8 overflow-y-auto ${isDarkMode ? '' : 'bg-transparent'}`}>
-            <div className="max-w-4xl mx-auto space-y-8">
+            <div className="max-w-[1440px] mx-auto w-full space-y-8">
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2319,81 +2319,87 @@ export default function App() {
                 <p className={`text-sm sm:text-base italic ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.readyAnalyze}</p>
               </motion.div>
 
-              {/* URL Input Area */}
-              <div className={`border p-6 sm:p-8 rounded-3xl space-y-6 shadow-xl shadow-black/5 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5' : 'bg-white border-slate-200 shadow-xl shadow-slate-900/5'}`}>
-                <div className="space-y-4">
-                  <label className={`text-base sm:text-lg font-extrabold tracking-tight flex items-center gap-2 ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>
-                    <Youtube size={20} className="fill-current" />
-                    <span>
-                      {currentLang === 'pt' ? 'Analisar vídeo do YouTube' : currentLang === 'es' ? 'Analizar video de YouTube' : 'Analyze YouTube video'}
-                    </span>
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <input 
-                      type="text" 
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="https://youtube.com/watch?v=..." 
-                      className={`flex-1 rounded-2xl px-6 h-14 outline-none transition-all text-sm sm:text-base ${
-                        isDarkMode 
-                          ? 'bg-[#09090b] border border-zinc-800 text-white placeholder-zinc-500/80 focus:border-orange-500/85 focus:ring-4 focus:ring-orange-500/10' 
-                          : 'bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-400 focus:ring-4 focus:ring-orange-500/10'
-                      }`}
-                    />
+              {/* Compact Command Bar */}
+              <div className={`border p-4 rounded-3xl space-y-4 shadow-lg transition-all ${
+                isDarkMode 
+                  ? 'bg-[#08080a] border-zinc-800/80 shadow-black/20' 
+                  : 'bg-white border-slate-200 shadow-slate-100/50'
+              }`}>
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                  {/* Left part: URL Input with YouTube inline icon & action */}
+                  <div className="flex-1 flex flex-col sm:flex-row items-stretch gap-3">
+                    <div className="relative flex-1 flex items-center">
+                      <div className="absolute left-4 text-orange-500 shrink-0">
+                        <Youtube size={20} className="fill-current" />
+                      </div>
+                      <input 
+                        type="text" 
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        placeholder="https://youtube.com/watch?v=..." 
+                        className={`w-full rounded-xl pl-12 pr-4 h-12 outline-none transition-all text-sm sm:text-base border ${
+                          isDarkMode 
+                            ? 'bg-[#030304]/80 border-zinc-800/80 text-white placeholder-zinc-600 focus:border-orange-500/85 focus:ring-4 focus:ring-orange-500/5' 
+                            : 'bg-[#f8fafc] border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-400 focus:ring-4 focus:ring-orange-500/5'
+                        }`}
+                      />
+                    </div>
                     <Button 
                       onClick={handleAnalyze} 
                       disabled={isAnalyzing || !videoUrl} 
-                      className="justify-center h-14 px-8 text-base font-bold rounded-2xl shadow-lg transition-all duration-300"
+                      className="justify-center h-12 px-6 text-sm font-extrabold rounded-xl shadow-md transition-all duration-300 shrink-0"
                     >
                       {isAnalyzing ? (
                         <span className="flex items-center gap-2">
-                          <Loader2 size={20} className="animate-spin" /> {analysisStatus}
+                          <Loader2 size={16} className="animate-spin" /> {analysisStatus}
                         </span>
                       ) : (
-                        <span className="flex items-center gap-2 group">
+                        <span className="flex items-center gap-1.5 group">
                           <span>{t.analyze}</span>
-                          <ArrowRight size={20} className="transition-transform duration-300 group-hover:translate-x-1" />
+                          <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
                         </span>
                       )}
                     </Button>
                   </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                  {([
-                    { id: 'tutor', label: t.tutor, icon: GraduationCap },
-                    { id: 'summary', label: t.summary, icon: FileText },
-                    { id: 'quiz', label: t.quiz, icon: Puzzle },
-                    { id: 'mindmap', label: t.mindmap, icon: BrainCircuit }
-                  ] as const).map((btn) => {
-                    const isActive = activeTab === btn.id;
-                    
-                    let btnClass = "";
-                    let iconColor = "";
-                    if (isActive) {
-                      btnClass = "bg-gradient-to-r from-orange-600 to-amber-500 text-white border-orange-500 shadow-xl shadow-orange-600/30 font-extrabold scale-[1.01] hover:brightness-110";
-                      iconColor = "text-white";
-                    } else {
-                      btnClass = isDarkMode
-                        ? "bg-[#0c0c0e] text-zinc-100 border-zinc-800/80 hover:border-orange-500/50 hover:bg-[#131317] hover:shadow-[0_0_20px_rgba(234,88,12,0.15)]"
-                        : "bg-white text-zinc-800 border-slate-200 hover:border-orange-400 hover:bg-slate-50/80 hover:shadow-md";
-                      iconColor = isDarkMode ? "text-orange-500" : "text-orange-600";
-                    }
 
-                    const IconComponent = btn.icon;
+                  {/* Right part: Features buttons as premium segment pill buttons */}
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+                    {([
+                      { id: 'tutor', label: t.tutor, icon: GraduationCap },
+                      { id: 'summary', label: t.summary, icon: FileText },
+                      { id: 'quiz', label: t.quiz, icon: Puzzle },
+                      { id: 'mindmap', label: t.mindmap, icon: BrainCircuit }
+                    ] as const).map((btn) => {
+                      const isActive = activeTab === btn.id;
+                      
+                      let btnClass = "";
+                      let iconColor = "";
+                      if (isActive) {
+                        btnClass = "bg-gradient-to-r from-orange-600 to-amber-500 text-white border-orange-500 shadow-md shadow-orange-600/20 font-extrabold scale-[1.01] hover:brightness-110";
+                        iconColor = "text-white";
+                      } else {
+                        btnClass = isDarkMode
+                          ? "bg-[#0c0c0e] text-zinc-300 border-zinc-800/80 hover:border-orange-500/50 hover:bg-[#131317] hover:text-white"
+                          : "bg-[#f8fafc] text-slate-700 border-slate-200 hover:border-orange-400 hover:bg-white hover:text-slate-900 hover:shadow-sm";
+                        iconColor = isDarkMode ? "text-orange-500" : "text-orange-600";
+                      }
 
-                    return (
-                      <button
-                        key={btn.id}
-                        onClick={() => {
-                          setActiveTab(btn.id);
-                        }}
-                        className={`flex items-center justify-center gap-3.5 px-6 rounded-2xl md:rounded-3xl border text-base md:text-[17px] font-bold tracking-wide transition-all duration-300 h-16 sm:h-[72px] relative group overflow-hidden ${btnClass}`}
-                      >
-                        <IconComponent size={26} className={`${iconColor} shrink-0 transition-transform duration-300 group-hover:scale-110`} />
-                        <span className="truncate">{btn.label}</span>
-                      </button>
-                    );
-                  })}
+                      const IconComponent = btn.icon;
+
+                      return (
+                        <button
+                          key={btn.id}
+                          onClick={() => {
+                            setActiveTab(btn.id);
+                          }}
+                          className={`flex items-center justify-center gap-2 px-4.5 rounded-xl border text-xs sm:text-sm font-extrabold tracking-wide transition-all duration-300 h-12 relative group overflow-hidden cursor-pointer ${btnClass}`}
+                        >
+                          <IconComponent size={18} className={`${iconColor} shrink-0 transition-transform duration-300 group-hover:scale-110`} />
+                          <span className="truncate">{btn.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
