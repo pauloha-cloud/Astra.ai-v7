@@ -957,6 +957,135 @@ Formato obrigatório:
     }
   });
 
+  // Real-time Interaction Endpoint with Gemini for Mind Map Chat
+  app.post("/api/mindmap-chat", async (req, res) => {
+    const { question, centralTopic, mindMap, videoTitle, summary, transcript, mode, lang = 'pt', explanationLevel = 'intermediate' } = req.body;
+
+    if (!question || !question.trim()) {
+      return res.status(400).json({ error: "Question is required" });
+    }
+
+    try {
+      const languageMap: Record<string, string> = {
+        pt: "Português",
+        es: "Español",
+        en: "English"
+      };
+      const languageName = languageMap[lang as string] || "English";
+
+      const maxTranscriptLength = 12000;
+      const truncatedTranscript = transcript && typeof transcript === 'string'
+        ? (transcript.length > maxTranscriptLength ? `${transcript.substring(0, maxTranscriptLength)}... [Truncated for context length limit]` : transcript)
+        : "N/A";
+
+      const mindMapContext = mindMap ? JSON.stringify(mindMap, null, 2) : "N/A";
+
+      let levelDirective = "";
+      if (explanationLevel === 'basic') {
+        levelDirective = `Use simples linguagem, explicação curta, exemplos fáceis e evite termos técnicos complexos.`;
+      } else if (explanationLevel === 'advanced') {
+        levelDirective = `Use explicação mais profunda, linguagem técnica e precisa, faça conexões conceituais avançadas e traga exemplos completos e robustos.`;
+      } else {
+        levelDirective = `Use explicação didática equilibrada, detalhes moderados e exemplos práticos.`;
+      }
+
+      const prompt = `Você é o tutor inteligente do Astra Learning. Seu objetivo é ajudar o usuário a responder às dúvidas referentes ao mapa mental gerado para o vídeo de estudo.
+
+Responda à pergunta do usuário usando como base o contexto do mapa mental, o resumo e a transcrição do vídeo analisado.
+
+Pergunta do usuário:
+"${question}"
+
+Tema central do mapa mental:
+${centralTopic || "Desconhecido"}
+
+Título do vídeo:
+${videoTitle || "Desconhecido"}
+
+Contexto do mapa mental (Nós, níveis e descrições):
+${mindMapContext}
+
+Resumo disponível:
+${summary || "N/A"}
+
+Transcrição disponível:
+${truncatedTranscript}
+
+Origem dos dados / Modo:
+${mode || "N/A"}
+
+Idioma da resposta:
+${languageName} (A resposta deve ser obrigatoriamente neste idioma)
+
+Nível de explicação desejado:
+${explanationLevel}
+Diretriz de nível: ${levelDirective}
+
+Regras:
+1. Responda diretamente e objetivamente à pergunta do usuário de forma amigável, clara e didática.
+2. Se a pergunta mencionar um nó ou conceito específico do mapa, dê foco total a ele em vez de falar sobre o mapa de forma genérica.
+3. Se o usuário estiver pedindo um quiz/teste/perguntas sobre o mapa mental (ou a pergunta contiver palavras-chave como "quiz", "teste", "pergunta", "test", "question"), defina o campo "type" como "quiz" e gere de 2 a 3 perguntas interativas e altamente contextualizadas. Caso contrário, defina "type" como "markdown".
+4. Não use templates de resposta estática ou fixa. A resposta deve ser dinâmica e parecer uma conversa real com uma IA.
+5. Não diga para o usuário mudar para outra aba (ex: "mude para a aba Tutor"), a menos que seja estritamente necessário para um recurso não disponível aqui. Tente resolver a dúvida do usuário no próprio chat.
+6. Use markdown para formatar a resposta no campo "content" (negrito, listas, tópicos) de forma elegante e muito legível.
+7. Se o contexto do mapa/vídeo for insuficiente para responder à pergunta diretamente, use seu conhecimento geral para responder ao tema associado, mencionando sutilmente de maneira amigável que complementou a resposta com base no assunto do mapa/metadados.
+8. Nunca mencione termos de infraestrutura interna ou que você está em um iframe ou contêiner.
+
+Retorne obrigatoriamente no formato JSON definido na especificação do responseSchema.`;
+
+      const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+          type: { type: Type.STRING, description: "Tipo de resposta. Deve ser 'markdown' ou 'quiz'." },
+          title: { type: Type.STRING, description: "Título curto elegante e relevante para a resposta ou mini-quiz." },
+          content: { type: Type.STRING, description: "Resposta didática em markdown explicando o tema solicitado pelo usuário. Requerido se o tipo for 'markdown'." },
+          questions: {
+            type: Type.ARRAY,
+            description: "Uma lista de 2 a 3 perguntas de múltipla escolha se o tipo for 'quiz'. Deixe vazio se o tipo for 'markdown'.",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING, description: "O enunciado da pergunta de múltipla escolha." },
+                options: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Exatamente 3 ou 4 alternativas curtas." },
+                correctIdx: { type: Type.NUMBER, description: "Índice (0 a 3) da resposta correta no array de opções." },
+                explanation: { type: Type.STRING, description: "Explicação curta e didática da resposta correta." }
+              },
+              required: ["question", "options", "correctIdx", "explanation"]
+            }
+          }
+        },
+        required: ["type", "title"]
+      };
+
+      const response = await generateContentWithRetry(getAI(), {
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: responseSchema
+        }
+      });
+
+      const text = response.text || "";
+      let parsedResponse;
+      try {
+        parsedResponse = JSON.parse(text);
+      } catch (err) {
+        console.error("[Backend] Error parsing JSON response for mindmap-chat, text:", text);
+        parsedResponse = {
+          type: "markdown",
+          title: lang === 'pt' ? "Explicação da IA" : lang === 'es' ? "Explicación de la IA" : "AI Explanation",
+          content: text
+        };
+      }
+
+      res.json(parsedResponse);
+    } catch (error: any) {
+      console.error("[Backend] Error in mindmap-chat:", error);
+      res.status(500).json({ error: error.message || "Failed to generate mind map chat response" });
+    }
+  });
+
   // Global Error Handler
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error("Unhandled Application Error:", err);

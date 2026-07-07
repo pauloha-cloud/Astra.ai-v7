@@ -36,12 +36,14 @@ import {
   Edit2,
   Layout,
   Download,
-  Save
+  Save,
+  MoreVertical,
+  Trash2
 } from 'lucide-react';
 import { checkHealth, api } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
 import { analyzeVideoContent, AnalysisResult } from './services/geminiService';
-import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc, limit, deleteDoc } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { AnalysisResultView } from './components/AnalysisResultView';
 import { handleFirestoreError, OperationType } from './lib/firestoreUtils';
@@ -59,6 +61,94 @@ export interface UserPreferences {
   explanationLevel: 'basic' | 'intermediate' | 'advanced';
   defaultQuizQuestionCount: 5 | 10 | 15;
 }
+
+export function extractYouTubeVideoId(url: string | any): string | null {
+  if (!url || typeof url !== 'string') {
+    return null;
+  }
+  const cleanUrl = url.trim();
+  try {
+    const urlWithProtocol = cleanUrl.includes('://') ? cleanUrl : `https://${cleanUrl}`;
+    const urlObj = new URL(urlWithProtocol);
+    
+    if (urlObj.hostname === 'youtu.be') {
+      const id = urlObj.pathname.slice(1).split(/[?#&]/)[0];
+      if (id.length === 11) {
+        return id;
+      }
+    }
+    
+    if (urlObj.hostname.includes('youtube.com')) {
+      const v = urlObj.searchParams.get('v');
+      if (v && v.length === 11) {
+        return v;
+      }
+      
+      const pathParts = urlObj.pathname.split('/');
+      const idFromPath = pathParts.find(part => part.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(part));
+      if (idFromPath) {
+        return idFromPath;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const patterns = [
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /embed\/([a-zA-Z0-9_-]{11})/,
+    /shorts\/([a-zA-Z0-9_-]{11})/,
+    /live\/([a-zA-Z0-9_-]{11})/,
+    /v\/([a-zA-Z0-9_-]{11})/
+  ];
+
+  for (const pattern of patterns) {
+    const match = cleanUrl.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
+    return cleanUrl;
+  }
+
+  return null;
+}
+
+export const processHistory = (rawHistory: any[]): any[] => {
+  const uniqueMap = new Map<string, any>();
+
+  // Sort rawHistory so that we process them: most recent first.
+  const sorted = [...rawHistory].sort((a, b) => {
+    const valA = a.lastAnalyzedAt || a.createdAt;
+    const valB = b.lastAnalyzedAt || b.createdAt;
+    const timeA = valA ? new Date(valA.toDate?.() || valA).getTime() : 0;
+    const timeB = valB ? new Date(valB.toDate?.() || valB).getTime() : 0;
+    return timeB - timeA;
+  });
+
+  for (const item of sorted) {
+    let videoId = item.video?.videoId || item.videoId;
+    if (!videoId) {
+      const url = item.video?.url || item.url;
+      if (url) {
+        videoId = extractYouTubeVideoId(url);
+      }
+    }
+    const key = videoId || `${item.video?.title || item.title || ''}_${item.video?.url || item.url || ''}`;
+    
+    if (key && !uniqueMap.has(key)) {
+      uniqueMap.set(key, {
+        ...item,
+        videoId: videoId || undefined
+      });
+    }
+  }
+
+  return Array.from(uniqueMap.values()).slice(0, 10);
+};
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
   defaultStudyFormat: 'summary',
@@ -181,6 +271,15 @@ const TRANSLATIONS = {
     menu: "Menu",
     dashboard: "Painel",
     history: "Histórico",
+    historyLimitDesc: "Mostrando os 10 vídeos mais recentes.",
+    clearHistory: "Limpar Histórico",
+    confirmRemoveVideo: "Deseja remover este vídeo do histórico?",
+    confirmClearHistory: "Deseja limpar todo o histórico? Esta ação não pode ser desfeita.",
+    cancel: "Cancelar",
+    remove: "Remover",
+    clearAll: "Limpar tudo",
+    removeSuccess: "Vídeo removido do histórico!",
+    clearSuccess: "Histórico limpo!",
     settings: "Configurações",
     newFeatures: "Novas Features",
     soon: "Em breve",
@@ -452,6 +551,15 @@ const TRANSLATIONS = {
     menu: "Menu",
     dashboard: "Dashboard",
     history: "History",
+    historyLimitDesc: "Showing the 10 most recent videos.",
+    clearHistory: "Clear History",
+    confirmRemoveVideo: "Do you want to remove this video from history?",
+    confirmClearHistory: "Do you want to clear the entire history? This action cannot be undone.",
+    cancel: "Cancel",
+    remove: "Remove",
+    clearAll: "Clear all",
+    removeSuccess: "Video removed from history!",
+    clearSuccess: "History cleared!",
     settings: "Settings",
     newFeatures: "New Features",
     soon: "Soon",
@@ -723,6 +831,15 @@ const TRANSLATIONS = {
     menu: "Menú",
     dashboard: "Panel",
     history: "Historial",
+    historyLimitDesc: "Mostrando los 10 videos más recientes.",
+    clearHistory: "Limpiar Historial",
+    confirmRemoveVideo: "¿Deseas eliminar este video del historial?",
+    confirmClearHistory: "¿Deseas limpiar todo el historial? Esta acción no se puede deshacer.",
+    cancel: "Cancelar",
+    remove: "Eliminar",
+    clearAll: "Limpiar todo",
+    removeSuccess: "¡Video eliminado del historial!",
+    clearSuccess: "¡Historial limpiado!",
     settings: "Ajustes",
     newFeatures: "Nuevas Features",
     soon: "Muy pronto",
@@ -1229,6 +1346,56 @@ export default function App() {
   const [analysisStatus, setAnalysisStatus] = useState('');
   const [currentResult, setCurrentResult] = useState<AnalysisResult | null>(null);
 
+  // History delete/clear state
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [confirmModalType, setConfirmModalType] = useState<'delete_item' | 'clear_all'>('delete_item');
+  const [itemToDelete, setItemToDelete] = useState<any | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const confirmDeleteAction = async () => {
+    if (!user) return;
+    setIsDeleting(true);
+    try {
+      if (confirmModalType === 'delete_item' && itemToDelete) {
+        // Delete a single item
+        const docRef = doc(db, 'users', user.uid, 'analyses', itemToDelete.id);
+        await deleteDoc(docRef);
+
+        // If the deleted item is currently opened, reset currentResult
+        const currentId = currentResult?.video?.videoId || (currentResult as any)?.id || (currentResult as any)?.videoId;
+        const deletedId = itemToDelete.id || itemToDelete.video?.videoId || itemToDelete.videoId;
+        if (currentResult && currentId === deletedId) {
+          setCurrentResult(null);
+        }
+      } else if (confirmModalType === 'clear_all') {
+        // Clear all items in user's analyses collection
+        const q = query(collection(db, 'users', user.uid, 'analyses'));
+        const querySnapshot = await getDocs(q);
+        const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+
+        // Reset current active result if any
+        setCurrentResult(null);
+      }
+      
+      // Close active menu and refresh history
+      setActiveMenuId(null);
+      setItemToDelete(null);
+      setIsConfirmModalOpen(false);
+      await fetchHistory();
+    } catch (error) {
+      console.error("Failed to perform delete action:", error);
+      try {
+        handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/analyses`);
+      } catch (err) {
+        console.error("Handled deletion Firestore error:", err);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // User preferences state
   const [preferences, setPreferences] = useState<UserPreferences>(() => loadLocalPreferences());
 
@@ -1289,13 +1456,16 @@ export default function App() {
   const fetchHistory = async () => {
     if (!user) return;
     try {
+      // Query up to 40 items to ensure we have enough to find 10 unique ones even with legacy duplicates
       const q = query(
         collection(db, 'users', user.uid, 'analyses'),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
+        limit(40)
       );
       const querySnapshot = await getDocs(q);
       const docs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setHistory(docs);
+      const processedDocs = processHistory(docs);
+      setHistory(processedDocs);
     } catch (error) {
       console.error("Failed to fetch history:", error);
       try {
@@ -1355,25 +1525,51 @@ export default function App() {
       // 2. Save to Firestore
       const analysesPath = `users/${user.uid}/analyses`;
       try {
-        await addDoc(collection(db, analysesPath), {
-          userId: user.uid,
-          video: {
-            videoId: data.video.videoId,
-            url: data.video.url,
-            title: data.video.title,
-            channel: data.video.channel,
-            thumbnail: data.video.thumbnail
-          },
-          mode: data.mode,
-          summary: data.summary,
-          key_points: data.key_points,
-          quiz: data.quiz,
-          mind_map: data.mind_map,
-          tutor_questions: data.tutor_questions || [],
-          limitations: data.limitations || [],
-          transcript: data.transcript,
-          createdAt: serverTimestamp()
-        });
+        const videoId = data.video?.videoId || extractYouTubeVideoId(data.video?.url || videoUrl);
+        if (videoId) {
+          const docRef = doc(db, 'users', user.uid, 'analyses', videoId);
+          await setDoc(docRef, {
+            userId: user.uid,
+            video: {
+              videoId: videoId,
+              url: data.video?.url || videoUrl,
+              title: data.video?.title || '',
+              channel: data.video?.channel || '',
+              thumbnail: data.video?.thumbnail || ''
+            },
+            mode: data.mode,
+            summary: data.summary,
+            key_points: data.key_points,
+            quiz: data.quiz,
+            mind_map: data.mind_map,
+            tutor_questions: data.tutor_questions || [],
+            limitations: data.limitations || [],
+            transcript: data.transcript,
+            createdAt: serverTimestamp(),
+            lastAnalyzedAt: serverTimestamp()
+          });
+        } else {
+          await addDoc(collection(db, analysesPath), {
+            userId: user.uid,
+            video: {
+              videoId: null,
+              url: data.video?.url || videoUrl,
+              title: data.video?.title || '',
+              channel: data.video?.channel || '',
+              thumbnail: data.video?.thumbnail || ''
+            },
+            mode: data.mode,
+            summary: data.summary,
+            key_points: data.key_points,
+            quiz: data.quiz,
+            mind_map: data.mind_map,
+            tutor_questions: data.tutor_questions || [],
+            limitations: data.limitations || [],
+            transcript: data.transcript,
+            createdAt: serverTimestamp(),
+            lastAnalyzedAt: serverTimestamp()
+          });
+        }
       } catch (error) {
         console.error("Failed to save analysis to history:", error);
         try {
@@ -2631,6 +2827,7 @@ export default function App() {
                       activeTab={activeTab}
                       setActiveTab={setActiveTab}
                       showInternalTabs={false}
+                      preferences={preferences}
                     />
                   </motion.div>
                 ) : (
@@ -2660,9 +2857,28 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 space-y-4">
                       <div id="history-section" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2 scroll-mt-6">
-                        <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
-                          <History size={14} /> {t.history}
-                        </h3>
+                        <div className="space-y-1">
+                          <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                            <History size={14} /> {t.history}
+                          </h3>
+                          {history.length > 0 && (
+                            <div className="flex items-center gap-2">
+                              <p className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                                {t.historyLimitDesc}
+                              </p>
+                              <span className={isDarkMode ? 'text-zinc-800' : 'text-slate-200'}>•</span>
+                              <button
+                                onClick={() => {
+                                  setConfirmModalType('clear_all');
+                                  setIsConfirmModalOpen(true);
+                                }}
+                                className="text-[10px] sm:text-xs font-medium text-red-500 hover:text-red-600 transition-colors cursor-pointer bg-transparent border-none p-0 outline-none"
+                              >
+                                {t.clearHistory}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                         
                         <div className="relative group">
                           <input 
@@ -2718,10 +2934,68 @@ export default function App() {
                                 <p className={`text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
                                   <span className="text-orange-600/60 font-mono italic">{t.astraV3}</span>
                                   <span>•</span>
-                                  <span>{new Date(item.createdAt?.toDate?.() || item.createdAt).toLocaleDateString()}</span>
+                                  <span>{(() => {
+                                    const ts = item.lastAnalyzedAt || item.createdAt;
+                                    if (!ts) return '';
+                                    return new Date(ts.toDate?.() || ts).toLocaleDateString();
+                                  })()}</span>
                                 </p>
                               </div>
-                              <ChevronRight size={18} className="text-gray-400 group-hover:text-orange-600 transition-colors" />
+
+                              {/* Option Menu Dropdown */}
+                              <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuId(activeMenuId === item.id ? null : item.id);
+                                  }}
+                                  className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                                    isDarkMode 
+                                      ? 'hover:bg-white/10 text-gray-400 hover:text-white' 
+                                      : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+                                  }`}
+                                >
+                                  <MoreVertical size={16} />
+                                </button>
+                                
+                                <AnimatePresence>
+                                  {activeMenuId === item.id && (
+                                    <>
+                                      {/* Transparent click handler backdrop to close the menu */}
+                                      <div 
+                                        className="fixed inset-0 z-10" 
+                                        onClick={() => setActiveMenuId(null)}
+                                      />
+                                      <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                        className={`absolute right-0 mt-1 w-48 rounded-xl shadow-lg border p-1 z-20 transition-colors ${
+                                          isDarkMode 
+                                            ? 'bg-zinc-950 border-zinc-800 text-white shadow-black' 
+                                            : 'bg-white border-slate-200 text-slate-800 shadow-slate-100'
+                                        }`}
+                                      >
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setItemToDelete(item);
+                                            setConfirmModalType('delete_item');
+                                            setIsConfirmModalOpen(true);
+                                            setActiveMenuId(null);
+                                          }}
+                                          className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg text-red-500 hover:bg-red-500/10 hover:text-red-600 transition-all font-medium text-left cursor-pointer"
+                                        >
+                                          <Trash2 size={14} />
+                                          {t.remove}
+                                        </button>
+                                      </motion.div>
+                                    </>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+
+                              <ChevronRight size={18} className="text-gray-400 group-hover:text-orange-600 transition-colors shrink-0" />
                             </motion.div>
                           ))
                         ) : searchQuery ? (
@@ -2989,6 +3263,85 @@ export default function App() {
                 </button>
               </div>
 
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal for History Deletion */}
+      <AnimatePresence>
+        {isConfirmModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!isDeleting) {
+                  setIsConfirmModalOpen(false);
+                  setItemToDelete(null);
+                }
+              }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className={`relative w-full max-w-md rounded-3xl border p-6 shadow-2xl z-10 transition-colors ${
+                isDarkMode 
+                  ? 'bg-[#0c0d12] border-zinc-800 text-white shadow-black' 
+                  : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+              }`}
+            >
+              <div className="flex items-start gap-4 mb-6">
+                <div className="p-3 bg-red-600/10 rounded-2xl text-red-500 shrink-0">
+                  <Trash2 size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold tracking-tight">
+                    {confirmModalType === 'delete_item' ? t.remove : t.clearHistory}
+                  </h3>
+                  <p className={`text-xs mt-2 leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                    {confirmModalType === 'delete_item' 
+                      ? t.confirmRemoveVideo 
+                      : t.confirmClearHistory}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 mt-4">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    setIsConfirmModalOpen(false);
+                    setItemToDelete(null);
+                  }}
+                  className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                    isDarkMode 
+                      ? 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900'
+                  } disabled:opacity-50`}
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={confirmDeleteAction}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/20 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {isDeleting ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : null}
+                  {confirmModalType === 'delete_item' ? t.remove : t.clearAll}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

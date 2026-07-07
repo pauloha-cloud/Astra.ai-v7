@@ -36,6 +36,7 @@ interface Props {
   activeTab?: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript';
   setActiveTab?: (tab: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript') => void;
   showInternalTabs?: boolean;
+  preferences?: any;
 }
 
 export const AnalysisResultView = ({ 
@@ -46,7 +47,8 @@ export const AnalysisResultView = ({
   lang = 'en',
   activeTab: externalActiveTab,
   setActiveTab: externalSetActiveTab,
-  showInternalTabs = true
+  showInternalTabs = true,
+  preferences
 }: Props) => {
   const [internalActiveTab, setInternalActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript'>('summary');
   const activeTab = externalActiveTab || internalActiveTab;
@@ -595,6 +597,10 @@ export const AnalysisResultView = ({
                         mode={data.mode}
                         lang={lang}
                         onRegenerate={handleGenerateMindMap}
+                        videoTitle={data.video?.title}
+                        summary={data.summary}
+                        transcript={data.transcript}
+                        explanationLevel={preferences?.explanationLevel || 'intermediate'}
                       />
                     </div>
                   );

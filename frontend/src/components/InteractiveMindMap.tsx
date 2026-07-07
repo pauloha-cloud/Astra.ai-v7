@@ -47,6 +47,8 @@ import {
   Target
 } from 'lucide-react';
 
+import { api } from '../lib/api';
+
 const THEME_COLORS = [
   { accent: '#3b82f6', barBg: 'bg-blue-500' },
   { accent: '#10b981', barBg: 'bg-emerald-500' },
@@ -242,6 +244,10 @@ interface Props {
   mode?: 'transcript' | 'metadata_fallback';
   lang?: string;
   onRegenerate?: () => void;
+  videoTitle?: string;
+  summary?: string;
+  transcript?: string;
+  explanationLevel?: 'basic' | 'intermediate' | 'advanced';
 }
 
 const headerTexts = {
@@ -349,7 +355,18 @@ const askTexts = {
   }
 };
 
-const InteractiveMindMapInner = ({ data, centralTopic, isDarkMode = true, mode = 'transcript', lang = 'pt', onRegenerate }: Props) => {
+const InteractiveMindMapInner = ({ 
+  data, 
+  centralTopic, 
+  isDarkMode = true, 
+  mode = 'transcript', 
+  lang = 'pt', 
+  onRegenerate,
+  videoTitle,
+  summary,
+  transcript,
+  explanationLevel = 'intermediate'
+}: Props) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
@@ -666,14 +683,41 @@ The central theme **${topicName}** is a focused and dense learning structure. By
     setAiResponse(null);
     setSelectedAnswerIdx({});
 
-    setTimeout(() => {
-      const response = generateResponse(q);
-      setAiResponse(response);
-      setIsAiLoading(false);
-    }, 1200);
+    const payload = {
+      question: q,
+      centralTopic,
+      mindMap: data,
+      videoTitle,
+      summary,
+      transcript,
+      mode,
+      lang,
+      explanationLevel
+    };
+
+    api.post('/mindmap-chat', payload)
+      .then((res) => {
+        setAiResponse(res.data);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch mindmap chat response:", err);
+        const errorMsg = lang === 'pt'
+          ? "Desculpe, não consegui obter uma resposta da IA neste momento. Por favor, tente novamente!"
+          : lang === 'es'
+            ? "Lo siento, no pude obtener una respuesta de la IA en este momento. ¡Por favor, inténtalo de nuevo!"
+            : "Sorry, I couldn't get an AI response right now. Please try again!";
+        setAiResponse({
+          type: 'markdown',
+          title: lang === 'pt' ? "Erro na IA" : lang === 'es' ? "Error en la IA" : "AI Error",
+          content: errorMsg
+        });
+      })
+      .finally(() => {
+        setIsAiLoading(false);
+      });
 
     setQuestion('');
-  }, [question, generateResponse]);
+  }, [question, centralTopic, data, videoTitle, summary, transcript, mode, lang, explanationLevel]);
 
   useEffect(() => {
     const { masterNodes, masterEdges } = masterGraph;
