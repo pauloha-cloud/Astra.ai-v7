@@ -18,7 +18,9 @@ import {
   X,
   ArrowRight,
   ChevronRight,
-  HeartHandshake
+  HeartHandshake,
+  FileText,
+  Cookie
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -34,6 +36,9 @@ interface SettingsViewProps {
     defaultQuizQuestionCount: 5 | 10 | 15;
   };
   onUpdatePreference: (key: any, value: any) => void;
+  onOpenPrivacyPolicy?: () => void;
+  onOpenTermsOfUse?: () => void;
+  onOpenCookiePrefs?: () => void;
 }
 
 export function SettingsView({
@@ -44,7 +49,10 @@ export function SettingsView({
   setIsDarkMode,
   signOut,
   preferences,
-  onUpdatePreference
+  onUpdatePreference,
+  onOpenPrivacyPolicy,
+  onOpenTermsOfUse,
+  onOpenCookiePrefs
 }: SettingsViewProps) {
   const studyFormat = preferences.defaultStudyFormat;
   const explanationLevel = preferences.explanationLevel;
@@ -114,6 +122,9 @@ export function SettingsView({
         feedbackBtn: "Enviar feedback",
         featureBtn: "Solicitar nova feature",
         faqBtn: "Visualizar FAQ",
+        privacyBtn: "Política de Privacidade",
+        termsBtn: "Termos de Uso",
+        cookiesBtn: "Preferências de Cookies",
         modalTitleFeedback: "Enviar Feedback",
         modalTitleFeature: "Solicitar Nova Feature",
         placeholderFeedback: "Como podemos melhorar sua experiência com o Astra Learning?",
@@ -178,6 +189,9 @@ export function SettingsView({
         feedbackBtn: "Send feedback",
         featureBtn: "Request new feature",
         faqBtn: "View FAQ",
+        privacyBtn: "Privacy Policy",
+        termsBtn: "Terms of Use",
+        cookiesBtn: "Cookie Preferences",
         modalTitleFeedback: "Send Feedback",
         modalTitleFeature: "Request New Feature",
         placeholderFeedback: "How can we improve your experience with Astra Learning?",
@@ -242,6 +256,9 @@ export function SettingsView({
         feedbackBtn: "Enviar feedback",
         featureBtn: "Solicitar nueva función",
         faqBtn: "Ver FAQ",
+        privacyBtn: "Política de Privacidad",
+        termsBtn: "Términos de Uso",
+        cookiesBtn: "Preferencias de Cookies",
         modalTitleFeedback: "Enviar Feedback",
         modalTitleFeature: "Solicitar Nueva Función",
         placeholderFeedback: "¿Cómo podemos mejorar tu experiencia con Astra Learning?",
@@ -647,6 +664,57 @@ export function SettingsView({
                 </div>
                 <ChevronRight size={16} className="text-zinc-500 group-hover:translate-x-0.5 transition-transform" />
               </a>
+
+              {/* Privacy Policy */}
+              <button
+                type="button"
+                onClick={onOpenPrivacyPolicy}
+                className={`w-full p-3.5 rounded-xl border text-xs font-black uppercase tracking-widest text-left flex items-center justify-between transition-colors group cursor-pointer ${
+                  isDarkMode 
+                    ? 'bg-zinc-900/30 border-zinc-800/80 text-zinc-300 hover:border-orange-500/35 hover:text-white hover:bg-zinc-900/50' 
+                    : 'bg-slate-50 border-slate-200/60 text-slate-700 hover:border-orange-500/20 hover:text-slate-900 hover:bg-slate-100/30 shadow-sm'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Shield size={16} className="text-orange-500" />
+                  <span>{t.support.privacyBtn}</span>
+                </div>
+                <ChevronRight size={16} className="text-zinc-500 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              {/* Terms of Use */}
+              <button
+                type="button"
+                onClick={onOpenTermsOfUse}
+                className={`w-full p-3.5 rounded-xl border text-xs font-black uppercase tracking-widest text-left flex items-center justify-between transition-colors group cursor-pointer ${
+                  isDarkMode 
+                    ? 'bg-zinc-900/30 border-zinc-800/80 text-zinc-300 hover:border-orange-500/35 hover:text-white hover:bg-zinc-900/50' 
+                    : 'bg-slate-50 border-slate-200/60 text-slate-700 hover:border-orange-500/20 hover:text-slate-900 hover:bg-slate-100/30 shadow-sm'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <FileText size={16} className="text-orange-500" />
+                  <span>{t.support.termsBtn}</span>
+                </div>
+                <ChevronRight size={16} className="text-zinc-500 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              {/* Cookie Preferences */}
+              <button
+                type="button"
+                onClick={onOpenCookiePrefs}
+                className={`w-full p-3.5 rounded-xl border text-xs font-black uppercase tracking-widest text-left flex items-center justify-between transition-colors group cursor-pointer ${
+                  isDarkMode 
+                    ? 'bg-zinc-900/30 border-zinc-800/80 text-zinc-300 hover:border-orange-500/35 hover:text-white hover:bg-zinc-900/50' 
+                    : 'bg-slate-50 border-slate-200/60 text-slate-700 hover:border-orange-500/20 hover:text-slate-900 hover:bg-slate-100/30 shadow-sm'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Cookie size={16} className="text-orange-500" />
+                  <span>{t.support.cookiesBtn}</span>
+                </div>
+                <ChevronRight size={16} className="text-zinc-500 group-hover:translate-x-0.5 transition-transform" />
+              </button>
             </div>
           </div>
         </motion.div>

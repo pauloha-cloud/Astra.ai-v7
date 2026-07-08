@@ -20,9 +20,12 @@ import {
   Save,
   FileJson,
   Loader2,
-  HelpCircle
+  HelpCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { jsPDF } from 'jspdf';
 import { AnalysisResult, generateExtraQuestions } from '../services/geminiService';
 import { StudyTutor } from './StudyTutor';
 import { InteractiveMindMap } from './InteractiveMindMap';
@@ -62,6 +65,201 @@ export const AnalysisResultView = ({
   const [quizError, setQuizError] = useState<string | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
+
+  // New Summary & Transcript enhanced experience states & functions
+  const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+
+  const parsePoint = (point: string) => {
+    let title = '';
+    let description = point;
+
+    const boldMatch = point.match(/^\*\*(.*?)\*\*:\s*(.*)/);
+    if (boldMatch) {
+      title = boldMatch[1];
+      description = boldMatch[2];
+    } else {
+      const colonIndex = point.indexOf(':');
+      if (colonIndex > 0 && colonIndex < 40) {
+        title = point.substring(0, colonIndex).trim();
+        description = point.substring(colonIndex + 1).trim();
+      }
+    }
+    return { title, description };
+  };
+
+  const getImportantConcepts = (resData: AnalysisResult): string[] => {
+    const conceptsSet = new Set<string>();
+
+    if (resData.key_points && Array.isArray(resData.key_points)) {
+      resData.key_points.forEach(point => {
+        const { title } = parsePoint(point);
+        if (title && title.length < 30) {
+          conceptsSet.add(title);
+        }
+      });
+    }
+
+    const mindMap = resData.mind_map || (resData as any).mindMap;
+    if (mindMap) {
+      if (Array.isArray(mindMap)) {
+        mindMap.forEach((item: any) => {
+          if (typeof item === 'string' && item.length < 25) {
+            conceptsSet.add(item);
+          } else if (item && typeof item === 'object') {
+            const name = item.topic || item.name || item.title;
+            if (name && typeof name === 'string' && name.length < 25) {
+              conceptsSet.add(name);
+            }
+          }
+        });
+      } else if (typeof mindMap === 'object') {
+        const children = mindMap.children || mindMap.subtopics || (mindMap as any).nodes;
+        if (children && Array.isArray(children)) {
+          children.forEach((child: any) => {
+            if (typeof child === 'string' && child.length < 25) {
+              conceptsSet.add(child);
+            } else if (child && typeof child === 'object') {
+              const name = child.topic || child.name || child.title;
+              if (name && typeof name === 'string' && name.length < 25) {
+                conceptsSet.add(name);
+              }
+            }
+          });
+        }
+      }
+    }
+
+    if (conceptsSet.size < 3 && resData.summary) {
+      const boldRegex = /\*\*(.*?)\*\*/g;
+      let match;
+      let count = 0;
+      while ((match = boldRegex.exec(resData.summary)) !== null && count < 8) {
+        const concept = match[1].trim();
+        if (concept && concept.length > 2 && concept.length < 25 && !concept.includes('\n')) {
+          conceptsSet.add(concept);
+          count++;
+        }
+      }
+    }
+
+    return Array.from(conceptsSet).filter(Boolean);
+  };
+
+  const handleCopyTranscript = () => {
+    if (data.transcript) {
+      navigator.clipboard.writeText(data.transcript);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
+
+  const handleExportPDF = () => {
+    try {
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - (margin * 2);
+      
+      let y = 15;
+      
+      pdf.setFillColor(234, 88, 12);
+      pdf.rect(0, 0, pageWidth, 6, 'F');
+      y += 5;
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(22);
+      pdf.setTextColor(15, 23, 42);
+      const sectionTitle = lang === 'pt' ? 'Seu Resumo - Astra Learning' : lang === 'es' ? 'Tu Resumen - Astra Learning' : 'Your Summary - Astra Learning';
+      pdf.text(sectionTitle, margin, y);
+      y += 10;
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(11);
+      pdf.setTextColor(71, 85, 105);
+      const videoTitleText = `${lang === 'pt' ? 'Vídeo' : lang === 'es' ? 'Video' : 'Video'}: ${data.video?.title || ''}`;
+      const wrappedVideoTitle = pdf.splitTextToSize(videoTitleText, contentWidth);
+      pdf.text(wrappedVideoTitle, margin, y);
+      y += wrappedVideoTitle.length * 6 + 4;
+      
+      pdf.setDrawColor(226, 232, 240);
+      pdf.setLineWidth(0.5);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 10;
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.setTextColor(234, 88, 12);
+      pdf.text(lang === 'pt' ? 'Resumo geral' : lang === 'es' ? 'Resumen general' : 'General summary', margin, y);
+      y += 8;
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor(51, 65, 85);
+      
+      const cleanSummary = (data.summary || (data as any).summaries?.detailed || '')
+        .replace(/\*\*|__/g, '')
+        .replace(/#+\s+/g, '')
+        .replace(/-\s+/g, '• ');
+        
+      const wrappedSummary = pdf.splitTextToSize(cleanSummary, contentWidth);
+      
+      for (const line of wrappedSummary) {
+        if (y > pageHeight - margin) {
+          pdf.addPage();
+          pdf.setFillColor(234, 88, 12);
+          pdf.rect(0, 0, pageWidth, 6, 'F');
+          y = 20;
+        }
+        pdf.text(line, margin, y);
+        y += 5.5;
+      }
+      y += 10;
+      
+      if (data.key_points && data.key_points.length > 0) {
+        if (y > pageHeight - margin - 30) {
+          pdf.addPage();
+          pdf.setFillColor(234, 88, 12);
+          pdf.rect(0, 0, pageWidth, 6, 'F');
+          y = 20;
+        }
+        
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(14);
+        pdf.setTextColor(234, 88, 12);
+        pdf.text(lang === 'pt' ? 'Principais aprendizados' : lang === 'es' ? 'Aprendizajes clave' : 'Key takeaways', margin, y);
+        y += 8;
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        pdf.setTextColor(51, 65, 85);
+        
+        for (const point of data.key_points) {
+          const cleanPoint = '• ' + point.replace(/\*\*|__/g, '');
+          const wrappedPoint = pdf.splitTextToSize(cleanPoint, contentWidth);
+          
+          if (y + (wrappedPoint.length * 5.5) > pageHeight - margin) {
+            pdf.addPage();
+            pdf.setFillColor(234, 88, 12);
+            pdf.rect(0, 0, pageWidth, 6, 'F');
+            y = 20;
+          }
+          
+          for (const line of wrappedPoint) {
+            pdf.text(line, margin, y);
+            y += 5.5;
+          }
+          y += 2;
+        }
+      }
+      
+      const fileName = `${data.video?.title ? data.video.title.substring(0, 30).trim().replace(/[^a-zA-Z0-9]/g, '-') : 'resumo'}-resumo.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    }
+  };
 
   const [localMindMap, setLocalMindMap] = useState<any>(null);
   const [isGeneratingMindMap, setIsGeneratingMindMap] = useState(false);
@@ -257,48 +455,97 @@ export const AnalysisResultView = ({
               exit={{ opacity: 0, x: -20 }}
               className={`prose max-w-none ${isDarkMode ? 'prose-invert' : ''} prose-orange`}
             >
-              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                <div className="space-y-1">
+              {/* Cabeçalho do Resumo */}
+              <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b transition-colors ${isDarkMode ? 'border-zinc-800/80' : 'border-slate-200'}`}>
+                <div className="space-y-2 max-w-2xl">
                   <h2 className={`text-2xl sm:text-3xl font-extrabold tracking-tight m-0 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    {lang === 'pt' ? 'Seu Resumo' : lang === 'es' ? 'Tu Resumen' : 'Your Summary'}
+                    {t.summarySectionTitle}
                   </h2>
                   <p className={`text-sm m-0 ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                    {lang === 'pt' ? 'Explore os principais tópicos extraídos do vídeo.' : lang === 'es' ? 'Explora los temas principales extraídos del video.' : 'Explore the main topics extracted from the video.'}
+                    {t.summarySectionDesc}
+                  </p>
+                  <p className={`text-xs m-0 italic ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                    {data.mode === 'metadata_fallback' 
+                      ? t.sourceMetadataDesc 
+                      : t.sourceTranscriptDesc}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 self-start sm:self-center">
-                  <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${
-                    isDarkMode ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-orange-50 text-orange-700 border border-orange-100'
+                <div className="shrink-0 flex items-center">
+                  <span className={`text-[11px] font-bold px-3.5 py-2 rounded-xl uppercase tracking-wider border flex items-center gap-1.5 ${
+                    isDarkMode 
+                      ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' 
+                      : 'bg-orange-50 text-orange-700 border-orange-100 shadow-sm'
                   }`}>
-                    {lang === 'pt' ? 'Fonte: ' : lang === 'es' ? 'Fuente: ' : 'Source: '}
-                    {data.mode === 'metadata_fallback' 
-                      ? (lang === 'pt' ? 'metadados' : lang === 'es' ? 'metadatos' : 'metadata')
-                      : (lang === 'pt' ? 'transcrição' : lang === 'es' ? 'transcripción' : 'transcript')}
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                    {data.mode === 'metadata_fallback' ? t.sourceMetadata : t.sourceTranscript}
                   </span>
                 </div>
               </div>
+
               <div className="space-y-8">
-                <div className="markdown-body">
-                  <ReactMarkdown>
-                    {data.summary || (data as any).summaries?.detailed || (data as any).summaries?.concise || t.noSummary}
-                  </ReactMarkdown>
+                {/* Resumo Geral */}
+                <div className={`p-6 rounded-3xl border transition-all duration-300 ${
+                  isDarkMode 
+                    ? 'bg-zinc-900/30 border-zinc-800/80 hover:border-zinc-800' 
+                    : 'bg-slate-50/50 border-slate-200/80 hover:bg-slate-50/80 shadow-sm'
+                }`}>
+                  <h3 className={`text-lg font-extrabold tracking-tight mb-4 transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    {t.generalSummaryTitle}
+                  </h3>
+                  <div className={`text-sm sm:text-base leading-relaxed max-w-none ${isDarkMode ? 'text-zinc-300 prose-invert' : 'text-slate-700'} prose prose-orange markdown-body`}>
+                    <ReactMarkdown>
+                      {data.summary || (data as any).summaries?.detailed || (data as any).summaries?.concise || t.noSummary}
+                    </ReactMarkdown>
+                  </div>
                 </div>
-                
+
+                {/* Principais Aprendizados */}
                 {data.key_points && data.key_points.length > 0 ? (
                   <div className="space-y-4">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-orange-600">{t.keyTakeaways}</h4>
+                    <h3 className={`text-lg font-extrabold tracking-tight transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      {t.summaryKeyTakeaways}
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {data.key_points.map((point, idx) => (
-                        <div key={idx} className={`p-4 rounded-2xl border flex gap-3 transition-colors ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-200 shadow-sm'}`}>
-                          <CheckCircle size={16} className="text-orange-600 shrink-0 mt-0.5" />
-                          <p className="text-sm leading-relaxed">{point}</p>
-                        </div>
-                      ))}
+                      {data.key_points.map((point, idx) => {
+                        const { title, description } = parsePoint(point);
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`p-5 rounded-2xl border flex gap-4 transition-all duration-300 hover:scale-[1.01] ${
+                              isDarkMode 
+                                ? 'bg-zinc-900/40 border-zinc-800/60 hover:border-orange-500/30 hover:bg-zinc-900/60' 
+                                : 'bg-slate-50/80 border-slate-200/80 hover:border-orange-200 hover:bg-white shadow-sm'
+                            }`}
+                          >
+                            <div className="p-2 bg-orange-500/10 text-orange-500 rounded-xl h-fit shrink-0">
+                              <CheckCircle size={18} />
+                            </div>
+                            <div className="space-y-1">
+                              {title ? (
+                                <>
+                                  <h5 className={`font-extrabold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                    {title}
+                                  </h5>
+                                  <p className={`text-xs sm:text-sm leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
+                                    {description}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className={`text-xs sm:text-sm leading-relaxed ${isDarkMode ? 'text-zinc-300' : 'text-slate-700'}`}>
+                                  {point}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (data as any).summaries?.actionable && (
                   <div className="space-y-4">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-orange-600">{t.actionableLessons}</h4>
+                    <h3 className={`text-lg font-extrabold tracking-tight transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      {t.actionableLessons}
+                    </h3>
                     <div className={`p-6 rounded-2xl border transition-colors ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
                       <div className="markdown-body">
                         <ReactMarkdown>{(data as any).summaries.actionable}</ReactMarkdown>
@@ -307,25 +554,222 @@ export const AnalysisResultView = ({
                   </div>
                 )}
 
-                {/* Collapsible Transcript Section */}
-                {!showInternalTabs && data.transcript && (
-                  <div className={`mt-8 pt-6 border-t transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                    <details className="group">
-                      <summary className={`flex items-center justify-between cursor-pointer list-none font-bold text-sm sm:text-base ${isDarkMode ? 'text-gray-200 hover:text-white' : 'text-slate-800 hover:text-slate-950'}`}>
-                        <div className="flex items-center gap-2">
-                          <FileText size={16} className="text-orange-600" />
-                          <span>{t.transcript}</span>
-                        </div>
-                        <ChevronRight size={16} className="transition-transform group-open:rotate-90 text-orange-600" />
-                      </summary>
-                      <div className="mt-4">
-                        <div className={`p-6 rounded-2xl border text-xs sm:text-sm leading-relaxed max-h-60 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                          {data.transcript}
-                        </div>
+                {/* Conceitos Importantes */}
+                {(() => {
+                  const concepts = getImportantConcepts(data);
+                  if (concepts.length === 0) return null;
+                  return (
+                    <div className="space-y-3">
+                      <h3 className={`text-lg font-extrabold tracking-tight transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        {t.importantConceptsTitle}
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {concepts.map((concept, idx) => (
+                          <div 
+                            key={idx} 
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 hover:scale-105 ${
+                              isDarkMode 
+                                ? 'bg-zinc-950 border border-zinc-800 text-zinc-300 hover:border-orange-500/40 hover:text-white' 
+                                : 'bg-slate-50 border border-slate-200 text-slate-700 hover:border-orange-300 hover:text-slate-900 shadow-sm'
+                            }`}
+                          >
+                            {concept}
+                          </div>
+                        ))}
                       </div>
-                    </details>
+                    </div>
+                  );
+                })()}
+
+                {/* Continuar Estudando */}
+                <div className="space-y-4">
+                  <h3 className={`text-lg font-extrabold tracking-tight transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    {t.continueStudying}
+                  </h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Gerar Quiz */}
+                    <button
+                      onClick={() => setActiveTab('quiz')}
+                      className={`p-5 rounded-2xl border text-left flex flex-col justify-between gap-4 transition-all duration-300 hover:scale-[1.03] active:scale-95 group cursor-pointer ${
+                        isDarkMode 
+                          ? 'bg-zinc-900/40 border-zinc-800/60 hover:border-orange-500/30 hover:bg-zinc-900/60 shadow-md shadow-black/10' 
+                          : 'bg-slate-50/80 border-slate-200/80 hover:border-orange-200 hover:bg-white shadow-sm hover:shadow-md shadow-slate-100'
+                      }`}
+                    >
+                      <div className={`p-3 rounded-xl w-fit ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                        <CheckCircle size={20} className="transition-transform group-hover:rotate-12 duration-300" />
+                      </div>
+                      <div>
+                        <h4 className={`font-bold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {t.generateQuiz || 'Gerar Quiz'}
+                        </h4>
+                        <p className={`text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                          {lang === 'pt' ? 'Teste seus conhecimentos.' : lang === 'es' ? 'Pon a prueba tus conocimientos.' : 'Test your knowledge.'}
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* Criar Mapa Mental */}
+                    <button
+                      onClick={() => setActiveTab('mindmap')}
+                      className={`p-5 rounded-2xl border text-left flex flex-col justify-between gap-4 transition-all duration-300 hover:scale-[1.03] active:scale-95 group cursor-pointer ${
+                        isDarkMode 
+                          ? 'bg-zinc-900/40 border-zinc-800/60 hover:border-orange-500/30 hover:bg-zinc-900/60 shadow-md shadow-black/10' 
+                          : 'bg-slate-50/80 border-slate-200/80 hover:border-orange-200 hover:bg-white shadow-sm hover:shadow-md shadow-slate-100'
+                      }`}
+                    >
+                      <div className={`p-3 rounded-xl w-fit ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                        <BrainCircuit size={20} className="transition-transform group-hover:scale-110 duration-300" />
+                      </div>
+                      <div>
+                        <h4 className={`font-bold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {t.generateMindMap || 'Criar Mapa Mental'}
+                        </h4>
+                        <p className={`text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                          {lang === 'pt' ? 'Visualize conexões.' : lang === 'es' ? 'Visualizar conexiones.' : 'Visualize connections.'}
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* Abrir Tutor */}
+                    <button
+                      onClick={() => setActiveTab('tutor')}
+                      className={`p-5 rounded-2xl border text-left flex flex-col justify-between gap-4 transition-all duration-300 hover:scale-[1.03] active:scale-95 group cursor-pointer ${
+                        isDarkMode 
+                          ? 'bg-zinc-900/40 border-zinc-800/60 hover:border-orange-500/30 hover:bg-zinc-900/60 shadow-md shadow-black/10' 
+                          : 'bg-slate-50/80 border-slate-200/80 hover:border-orange-200 hover:bg-white shadow-sm hover:shadow-md shadow-slate-100'
+                      }`}
+                    >
+                      <div className={`p-3 rounded-xl w-fit ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                        <MessageSquare size={20} className="transition-transform group-hover:scale-110 duration-300" />
+                      </div>
+                      <div>
+                        <h4 className={`font-bold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {t.openTutor || 'Abrir Tutor'}
+                        </h4>
+                        <p className={`text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                          {lang === 'pt' ? 'Tire dúvidas por voz.' : lang === 'es' ? 'Resuelve dudas por voz.' : 'Ask questions with voice.'}
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* Exportar PDF */}
+                    <button
+                      onClick={handleExportPDF}
+                      className={`p-5 rounded-2xl border text-left flex flex-col justify-between gap-4 transition-all duration-300 hover:scale-[1.03] active:scale-95 group cursor-pointer ${
+                        isDarkMode 
+                          ? 'bg-zinc-900/40 border-zinc-800/60 hover:border-orange-500/30 hover:bg-zinc-900/60 shadow-md shadow-black/10' 
+                          : 'bg-slate-50/80 border-slate-200/80 hover:border-orange-200 hover:bg-white shadow-sm hover:shadow-md shadow-slate-100'
+                      }`}
+                    >
+                      <div className={`p-3 rounded-xl w-fit ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                        <Download size={20} className="transition-transform group-hover:translate-y-0.5 duration-300" />
+                      </div>
+                      <div>
+                        <h4 className={`font-bold text-sm tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {t.exportPdf || 'Exportar PDF'}
+                        </h4>
+                        <p className={`text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                          {lang === 'pt' ? 'Baixar material offline.' : lang === 'es' ? 'Descargar material offline.' : 'Download offline material.'}
+                        </p>
+                      </div>
+                    </button>
                   </div>
-                )}
+                </div>
+
+                {/* Accordion Transcrição */}
+                <div className={`pt-6 border-t transition-colors ${isDarkMode ? 'border-zinc-800' : 'border-slate-200'}`}>
+                  <div 
+                    onClick={() => setIsTranscriptExpanded(!isTranscriptExpanded)}
+                    className={`p-5 rounded-2xl border transition-all duration-300 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                      isTranscriptExpanded 
+                        ? isDarkMode ? 'bg-zinc-900/20 border-orange-500/20' : 'bg-slate-50 border-orange-200 shadow-inner'
+                        : isDarkMode ? 'bg-zinc-900/10 border-zinc-800/60 hover:border-zinc-800 hover:bg-zinc-900/20' : 'bg-slate-50/50 border-slate-200/80 hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={`p-2.5 rounded-xl ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                        <FileText size={20} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className={`font-bold text-sm sm:text-base tracking-tight m-0 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {t.videoTranscriptTitle}
+                        </h4>
+                        <p className={`text-xs m-0 ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                          {t.videoTranscriptDesc}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsTranscriptExpanded(!isTranscriptExpanded);
+                      }}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wider uppercase transition-all flex items-center gap-2 border cursor-pointer ${
+                        isDarkMode 
+                          ? 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border-zinc-800' 
+                          : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border-slate-200 shadow-sm'
+                      }`}
+                    >
+                      {isTranscriptExpanded ? t.collapseTranscript : t.expandTranscript}
+                      <ChevronRight size={14} className={`transition-transform duration-300 ${isTranscriptExpanded ? 'rotate-90 text-orange-500' : 'text-gray-400'}`} />
+                    </button>
+                  </div>
+
+                  <AnimatePresence initial={false}>
+                    {isTranscriptExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-3 p-4 border rounded-2xl relative space-y-4 transition-colors bg-zinc-950/20 border-zinc-800">
+                          {data.transcript ? (
+                            <>
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCopyTranscript}
+                                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                    isDarkMode 
+                                      ? 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border-zinc-800' 
+                                      : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border-slate-200'
+                                  }`}
+                                >
+                                  {isCopied ? (
+                                    <>
+                                      <Check size={14} className="text-green-500" />
+                                      {t.transcriptCopied}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy size={14} />
+                                      {t.copyTranscript}
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              <div className={`p-4 rounded-xl border text-xs sm:text-sm leading-relaxed max-h-60 overflow-y-auto custom-scrollbar ${
+                                isDarkMode ? 'bg-zinc-950/50 border-zinc-900/60 text-zinc-300' : 'bg-slate-100/50 border-slate-200 text-slate-700'
+                              }`}>
+                                {data.transcript}
+                              </div>
+                            </>
+                          ) : (
+                            <div className={`p-4 rounded-xl border text-xs sm:text-sm leading-relaxed text-center ${
+                              isDarkMode ? 'bg-zinc-950/50 border-zinc-900/60 text-zinc-500' : 'bg-slate-100/50 border-slate-200 text-slate-500'
+                            }`}>
+                              {t.transcriptUnavailableDesc}
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </motion.div>
           )}

@@ -54,6 +54,9 @@ import { AIActivityFeed } from './components/AIActivityFeed';
 import axios from 'axios';
 import { BrandLogo } from './components/BrandLogo';
 import { SettingsView } from './components/SettingsView';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { TermsOfUse } from './components/TermsOfUse';
+import { CookieConsent } from './components/CookieConsent';
 
 // User Preferences
 export interface UserPreferences {
@@ -235,7 +238,7 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
 };
 
 // Types
-type ComponentState = 'landing' | 'dashboard';
+type ComponentState = 'landing' | 'dashboard' | 'privacy-policy' | 'terms';
 type Language = 'pt' | 'en' | 'es';
 
 const TRANSLATIONS = {
@@ -320,6 +323,26 @@ const TRANSLATIONS = {
     noResults: "Nenhum resultado para",
     adjustSearch: "Tente ajustar sua pesquisa ou palavras-chave.",
     summary: "Resumo",
+    summarySectionTitle: "Seu Resumo",
+    summarySectionDesc: "Explore os principais tópicos extraídos do vídeo.",
+    summaryKeyTakeaways: "Principais aprendizados",
+    sourceMetadata: "Fonte: metadados",
+    sourceTranscript: "Fonte: transcrição",
+    summaryTranscriptTitle: "Transcrição",
+    continueStudying: "Continuar estudando",
+    sourceMetadataDesc: "Resumo gerado com base nas informações disponíveis do vídeo.",
+    sourceTranscriptDesc: "Resumo gerado com base no conteúdo falado do vídeo.",
+    generalSummaryTitle: "Resumo geral",
+    importantConceptsTitle: "Conceitos importantes",
+    expandTranscript: "Expandir",
+    collapseTranscript: "Recolher",
+    copyTranscript: "Copiar transcrição",
+    transcriptCopied: "Copiado!",
+    videoTranscriptDesc: "Veja o texto usado como base para a análise.",
+    videoTranscriptTitle: "Transcrição do vídeo",
+    transcriptUnavailableDesc: "Transcrição indisponível. Este resumo foi gerado com base nos metadados do vídeo.",
+    openTutor: "Abrir Tutor",
+    exportPdf: "Exportar PDF",
     quiz: "Quiz",
     mindmap: "Mapa Mental",
     tutor: "Tutor",
@@ -600,6 +623,26 @@ const TRANSLATIONS = {
     noResults: "No results for",
     adjustSearch: "Try adjusting your search or keywords.",
     summary: "Summary",
+    summarySectionTitle: "Your Summary",
+    summarySectionDesc: "Explore the main topics extracted from the video.",
+    summaryKeyTakeaways: "Key takeaways",
+    sourceMetadata: "Source: metadata",
+    sourceTranscript: "Source: transcript",
+    summaryTranscriptTitle: "Transcript",
+    continueStudying: "Continue studying",
+    sourceMetadataDesc: "Summary generated based on the video information available.",
+    sourceTranscriptDesc: "Summary generated based on the spoken content of the video.",
+    generalSummaryTitle: "General summary",
+    importantConceptsTitle: "Important concepts",
+    expandTranscript: "Expand",
+    collapseTranscript: "Collapse",
+    copyTranscript: "Copy transcript",
+    transcriptCopied: "Copied!",
+    videoTranscriptDesc: "See the text used as the basis for the analysis.",
+    videoTranscriptTitle: "Video transcript",
+    transcriptUnavailableDesc: "Transcript unavailable. This summary was generated based on the video metadata.",
+    openTutor: "Open Tutor",
+    exportPdf: "Export PDF",
     quiz: "Quiz",
     mindmap: "Mind Map",
     tutor: "Tutor",
@@ -880,6 +923,26 @@ const TRANSLATIONS = {
     noResults: "No hay resultados para",
     adjustSearch: "Prueba ajustando tu búsqueda o palabras clave.",
     summary: "Resumen",
+    summarySectionTitle: "Tu resumen",
+    summarySectionDesc: "Explora los principales temas extraídos del video.",
+    summaryKeyTakeaways: "Aprendizajes clave",
+    sourceMetadata: "Fuente: metadatos",
+    sourceTranscript: "Fuente: transcripción",
+    summaryTranscriptTitle: "Transcripción",
+    continueStudying: "Continuar estudiando",
+    sourceMetadataDesc: "Resumen generado con base en la información disponible del video.",
+    sourceTranscriptDesc: "Resumen generado con base en el contenido hablado del video.",
+    generalSummaryTitle: "Resumen general",
+    importantConceptsTitle: "Conceptos importantes",
+    expandTranscript: "Expandir",
+    collapseTranscript: "Contraer",
+    copyTranscript: "Copiar transcripción",
+    transcriptCopied: "¡Copiado!",
+    videoTranscriptDesc: "Vea el texto utilizado como base para el análisis.",
+    videoTranscriptTitle: "Transcripción del video",
+    transcriptUnavailableDesc: "Transcripción no disponible. Este resumen fue generado a partir de los metadatos del video.",
+    openTutor: "Abrir Tutor",
+    exportPdf: "Exportar PDF",
     quiz: "Cuestionario",
     mindmap: "Mapa Mental",
     tutor: "Tutor",
@@ -1333,6 +1396,7 @@ export default function App() {
   const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [view, setView] = useState<ComponentState>('landing');
   const [dashboardSubView, setDashboardSubView] = useState<'panel' | 'settings'>('panel');
+  const [forceCookiePrefs, setForceCookiePrefs] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [apiStatus, setApiStatus] = useState<string>(''); 
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -2060,8 +2124,86 @@ export default function App() {
                         </Button>
                       </div>
 
-                      <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
-                        {t.terms}
+                      <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
+                        {currentLang === 'pt' ? (
+                          <>
+                            Ao continuar, você concorda com os{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setView('terms');
+                                setShowLoginModal(false);
+                              }}
+                              className="text-orange-500 hover:underline font-semibold cursor-pointer"
+                            >
+                              Termos de Uso
+                            </button>{' '}
+                            e declara ter lido a{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setView('privacy-policy');
+                                setShowLoginModal(false);
+                              }}
+                              className="text-orange-500 hover:underline font-semibold cursor-pointer"
+                            >
+                              Política de Privacidade
+                            </button>
+                            .
+                          </>
+                        ) : currentLang === 'es' ? (
+                          <>
+                            Al continuar, aceptas los{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setView('terms');
+                                setShowLoginModal(false);
+                              }}
+                              className="text-orange-500 hover:underline font-semibold cursor-pointer"
+                            >
+                              Términos de Uso
+                            </button>{' '}
+                            y confirmas que has leído la{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setView('privacy-policy');
+                                setShowLoginModal(false);
+                              }}
+                              className="text-orange-500 hover:underline font-semibold cursor-pointer"
+                            >
+                              Política de Privacidad
+                            </button>
+                            .
+                          </>
+                        ) : (
+                          <>
+                            By continuing, you agree to the{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setView('terms');
+                                setShowLoginModal(false);
+                              }}
+                              className="text-orange-500 hover:underline font-semibold cursor-pointer"
+                            >
+                              Terms of Use
+                            </button>{' '}
+                            and acknowledge that you have read the{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setView('privacy-policy');
+                                setShowLoginModal(false);
+                              }}
+                              className="text-orange-500 hover:underline font-semibold cursor-pointer"
+                            >
+                              Privacy Policy
+                            </button>
+                            .
+                          </>
+                        )}
                       </p>
                     </div>
                   ) : authMethod === 'login' ? (
@@ -2494,7 +2636,23 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {view === 'landing' || (user && !user.emailVerified) ? (
+      {view === 'privacy-policy' ? (
+        <main className="pt-20 min-h-screen relative overflow-hidden">
+          <PrivacyPolicy
+            isDarkMode={isDarkMode}
+            currentLang={currentLang}
+            onBack={() => setView(user ? 'dashboard' : 'landing')}
+          />
+        </main>
+      ) : view === 'terms' ? (
+        <main className="pt-20 min-h-screen relative overflow-hidden">
+          <TermsOfUse
+            isDarkMode={isDarkMode}
+            currentLang={currentLang}
+            onBack={() => setView(user ? 'dashboard' : 'landing')}
+          />
+        </main>
+      ) : view === 'landing' || (user && !user.emailVerified) ? (
         <main className="pt-20">
           {/* Hero Section */}
           <section className="relative min-h-[calc(100vh-80px)] flex items-center overflow-hidden py-12 lg:py-0">
@@ -2712,6 +2870,9 @@ export default function App() {
                   signOut={signOut}
                   preferences={preferences}
                   onUpdatePreference={handleUpdatePreference}
+                  onOpenPrivacyPolicy={() => setView('privacy-policy')}
+                  onOpenTermsOfUse={() => setView('terms')}
+                  onOpenCookiePrefs={() => setForceCookiePrefs(true)}
                 />
               ) : (
                 <>
@@ -3351,6 +3512,13 @@ export default function App() {
       <footer className={`py-12 border-t text-center text-sm transition-colors ${isDarkMode ? 'border-white/5 text-gray-600' : 'border-slate-200 text-slate-500'}`}>
         <p>© 2026 Astra Learning AI — {t.builtWithPrecision}</p>
       </footer>
+
+      <CookieConsent
+        isDarkMode={isDarkMode}
+        currentLang={currentLang}
+        forceOpenPreferences={forceCookiePrefs}
+        onClosePreferences={() => setForceCookiePrefs(false)}
+      />
     </div>
   );
 }
