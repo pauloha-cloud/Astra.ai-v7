@@ -33,7 +33,7 @@ interface SettingsViewProps {
   preferences: {
     defaultStudyFormat: 'summary' | 'quiz' | 'tutor' | 'mindmap';
     explanationLevel: 'basic' | 'intermediate' | 'advanced';
-    defaultQuizQuestionCount: 5 | 10 | 15;
+    defaultQuizQuestionCount: 5 | 10 | 15 | 20 | 25;
   };
   onUpdatePreference: (key: any, value: any) => void;
   onOpenPrivacyPolicy?: () => void;
@@ -66,7 +66,7 @@ export function SettingsView({
     onUpdatePreference('explanationLevel', val);
   };
 
-  const setQuizQuestionCount = (val: 5 | 10 | 15) => {
+  const setQuizQuestionCount = (val: 5 | 10 | 15 | 20 | 25) => {
     onUpdatePreference('defaultQuizQuestionCount', val);
   };
 
@@ -478,7 +478,7 @@ export function SettingsView({
                 {t.preferences.quizCountLabel}
               </label>
               <div className="flex gap-2">
-                {([5, 10, 15] as const).map((num) => (
+                {([5, 10, 15, 20, 25] as const).map((num) => (
                   <button
                     key={num}
                     onClick={() => setQuizQuestionCount(num)}

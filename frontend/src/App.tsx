@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Youtube, 
@@ -38,7 +38,11 @@ import {
   Download,
   Save,
   MoreVertical,
-  Trash2
+  Trash2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ChevronDown,
+  CreditCard
 } from 'lucide-react';
 import { checkHealth, api } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
@@ -62,7 +66,7 @@ import { CookieConsent } from './components/CookieConsent';
 export interface UserPreferences {
   defaultStudyFormat: 'summary' | 'quiz' | 'tutor' | 'mindmap';
   explanationLevel: 'basic' | 'intermediate' | 'advanced';
-  defaultQuizQuestionCount: 5 | 10 | 15;
+  defaultQuizQuestionCount: 5 | 10 | 15 | 20 | 25;
 }
 
 export function extractYouTubeVideoId(url: string | any): string | null {
@@ -171,7 +175,7 @@ export const loadLocalPreferences = (): UserPreferences => {
   return {
     defaultStudyFormat: (format === 'summary' || format === 'quiz' || format === 'tutor' || format === 'mindmap') ? format : DEFAULT_PREFERENCES.defaultStudyFormat,
     explanationLevel: (level === 'basic' || level === 'intermediate' || level === 'advanced') ? level : DEFAULT_PREFERENCES.explanationLevel,
-    defaultQuizQuestionCount: (quizCount === 5 || quizCount === 10 || quizCount === 15) ? (quizCount as 5 | 10 | 15) : DEFAULT_PREFERENCES.defaultQuizQuestionCount
+    defaultQuizQuestionCount: (quizCount === 5 || quizCount === 10 || quizCount === 15 || quizCount === 20 || quizCount === 25) ? (quizCount as 5 | 10 | 15 | 20 | 25) : DEFAULT_PREFERENCES.defaultQuizQuestionCount
   };
 };
 
@@ -194,7 +198,7 @@ export const loadUserPreferences = async (userId?: string): Promise<UserPreferen
       const loaded: UserPreferences = {
         defaultStudyFormat: (data.defaultStudyFormat === 'summary' || data.defaultStudyFormat === 'quiz' || data.defaultStudyFormat === 'tutor' || data.defaultStudyFormat === 'mindmap') ? data.defaultStudyFormat : local.defaultStudyFormat,
         explanationLevel: (data.explanationLevel === 'basic' || data.explanationLevel === 'intermediate' || data.explanationLevel === 'advanced') ? data.explanationLevel : local.explanationLevel,
-        defaultQuizQuestionCount: (data.defaultQuizQuestionCount === 5 || data.defaultQuizQuestionCount === 10 || data.defaultQuizQuestionCount === 15) ? (data.defaultQuizQuestionCount as 5 | 10 | 15) : local.defaultQuizQuestionCount
+        defaultQuizQuestionCount: (data.defaultQuizQuestionCount === 5 || data.defaultQuizQuestionCount === 10 || data.defaultQuizQuestionCount === 15 || data.defaultQuizQuestionCount === 20 || data.defaultQuizQuestionCount === 25) ? (data.defaultQuizQuestionCount as 5 | 10 | 15 | 20 | 25) : local.defaultQuizQuestionCount
       };
       saveLocalPreferences(loaded);
       return loaded;
@@ -1402,7 +1406,14 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentLang, setCurrentLang] = useState<Language>('pt');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    const saved = localStorage.getItem('astra_sidebar_collapsed');
+    return saved === 'true';
+  });
   const [isFeaturesModalOpen, setIsFeaturesModalOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isBillingModalOpen, setIsBillingModalOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Analysis State
   const [videoUrl, setVideoUrl] = useState('');
@@ -1516,6 +1527,30 @@ export default function App() {
     setApiStatus(t.hero.badgeChecking);
     checkHealth().then(() => setApiStatus(t.hero.badgeOnline)).catch(() => setApiStatus(t.hero.badgeOffline));
   }, [t.hero.badgeOnline, t.hero.badgeOffline, t.hero.badgeChecking]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsUserMenuOpen(false);
+        setIsBillingModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchHistory = async () => {
     if (!user) return;
@@ -1875,26 +1910,154 @@ export default function App() {
             
             {user ? (
               <div className="flex items-center gap-2 sm:gap-4">
-                <div className={`flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full border max-w-[120px] sm:max-w-none overflow-hidden ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm text-slate-800'}`}>
-                  <img src={user.photoURL || ''} alt="" className="w-5 h-5 sm:w-6 sm:h-6 rounded-full shrink-0" />
-                  <span className="text-xs sm:text-sm font-medium truncate hidden sm:inline-block">{user.displayName}</span>
-                </div>
-                <Button 
-                  variant="secondary" 
-                  onClick={signOut} 
-                  isDarkMode={isDarkMode}
-                  className={`px-2 sm:px-4 py-1.5 sm:py-2 group transition-all flex items-center gap-2 ${
+                {/* Dashboard button in header - desktop only */}
+                <button
+                  onClick={() => {
+                    setView('dashboard');
+                    setDashboardSubView('panel');
+                  }}
+                  className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                     isDarkMode 
-                      ? 'hover:border-red-500/50 hover:text-red-500' 
-                      : '!bg-white border-slate-200 !text-slate-600 hover:!bg-red-50 hover:!border-red-200 hover:!text-red-600 shadow-sm'
+                      ? 'text-gray-300 hover:text-white hover:bg-white/5' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 shadow-sm'
                   }`}
                 >
-                  <LogOut size={16} className="group-hover:translate-x-0.5 transition-transform shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest hidden md:inline-block">{t.signOut}</span>
-                </Button>
+                  <LayoutDashboard size={16} className="text-orange-500" />
+                  <span>Dashboard</span>
+                </button>
+
+                {/* User menu container */}
+                <div className="relative" ref={userMenuRef}>
+                  <button 
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    aria-label="User Menu"
+                    aria-expanded={isUserMenuOpen}
+                    aria-haspopup="menu"
+                    className={`flex items-center gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-full border transition-all hover:bg-orange-600/5 hover:border-orange-500/40 cursor-pointer ${
+                      isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+                    }`}
+                  >
+                    <img src={user.photoURL || ''} alt="" className="w-5 h-5 sm:w-6 sm:h-6 rounded-full shrink-0 object-cover" />
+                    <span className="text-xs sm:text-sm font-semibold truncate max-w-[100px] sm:max-w-[150px] hidden sm:inline-block">
+                      {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
+                    </span>
+                    <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 shrink-0 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {isUserMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        transition={{ duration: 0.15 }}
+                        className={`absolute right-0 mt-2 w-72 rounded-2xl border p-4 shadow-xl z-50 text-left ${
+                          isDarkMode 
+                            ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                            : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                        }`}
+                      >
+                        {/* User Info Header */}
+                        <div className="flex items-center gap-3 pb-3 mb-3 border-b border-white/5 dark:border-white/5 border-slate-100">
+                          <img src={user.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-bold truncate">
+                              {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
+                            </h4>
+                            <p className="text-xs text-gray-400 truncate">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Dropdown Options */}
+                        <div className="space-y-1">
+                          {/* Dashboard */}
+                          <button
+                            onClick={() => {
+                              setView('dashboard');
+                              setDashboardSubView('panel');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
+                              isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                            }`}
+                          >
+                            <LayoutDashboard size={16} className="text-orange-500" />
+                            <span>Dashboard</span>
+                          </button>
+
+                          {/* Configurações */}
+                          <button
+                            onClick={() => {
+                              setView('dashboard');
+                              setDashboardSubView('settings');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
+                              isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                            }`}
+                          >
+                            <Settings size={16} className="text-orange-500" />
+                            <span>
+                              {currentLang === 'pt' ? 'Configurações' : currentLang === 'es' ? 'Configuración' : 'Settings'}
+                            </span>
+                          </button>
+
+                          {/* Plano e assinatura */}
+                          <button
+                            onClick={() => {
+                              setIsUserMenuOpen(false);
+                              setIsBillingModalOpen(true);
+                            }}
+                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
+                              isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                            }`}
+                          >
+                            <CreditCard size={16} className="text-orange-500" />
+                            <span>
+                              {currentLang === 'pt' ? 'Plano e assinatura' : currentLang === 'es' ? 'Plan y facturación' : 'Plan and Billing'}
+                            </span>
+                          </button>
+
+                          {/* Sair */}
+                          <button
+                            onClick={() => {
+                              setIsUserMenuOpen(false);
+                              signOut();
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-left text-red-500 hover:bg-red-500/10 mt-2 border-t border-white/5 dark:border-white/5 border-slate-100 pt-3 cursor-pointer"
+                          >
+                            <LogOut size={16} />
+                            <span>
+                              {currentLang === 'pt' ? 'Sair' : currentLang === 'es' ? 'Cerrar sesión' : 'Sign Out'}
+                            </span>
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             ) : (
-              <Button onClick={() => setShowLoginModal(true)} className="px-4 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm">{t.signIn}</Button>
+              <div className="flex items-center gap-2 sm:gap-4">
+                {/* Login */}
+                <button 
+                  onClick={() => setShowLoginModal(true)} 
+                  className={`text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors cursor-pointer px-3 py-2 rounded-xl ${
+                    isDarkMode ? 'text-gray-300 hover:text-white' : 'text-slate-600 hover:text-slate-950'
+                  }`}
+                >
+                  {currentLang === 'pt' ? 'Login' : currentLang === 'es' ? 'Iniciar sesión' : 'Login'}
+                </button>
+                {/* Começar agora */}
+                <Button 
+                  onClick={() => setShowLoginModal(true)} 
+                  className="px-3 sm:px-5 py-2 text-xs sm:text-sm font-bold shadow-md"
+                >
+                  {currentLang === 'pt' ? 'Começar agora' : currentLang === 'es' ? 'Empezar' : 'Get Started'}
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -2794,24 +2957,84 @@ export default function App() {
 
           {/* Sidebar */}
           <aside className={`
-            fixed md:relative z-50 md:z-auto h-[calc(100vh-80px)] w-64 border-r p-6 space-y-2 transition-transform duration-300 ease-in-out
+            fixed md:relative z-50 md:z-auto h-[calc(100vh-80px)] border-r space-y-2 transition-all duration-300 ease-in-out
+            ${isSidebarCollapsed ? 'w-64 md:w-20 p-5 md:p-4' : 'w-64 p-5 md:p-6'}
             ${isDarkMode ? 'translate-x-0 bg-[#0a0a0a] border-white/5' : 'translate-x-0 bg-white/90 border-slate-200 shadow-sm'}
             ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           `}>
-            <div className={`text-xs font-bold uppercase tracking-widest mb-4 mt-4 ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.menu}</div>
+            {/* Sidebar Title & Collapse Toggle Button */}
+            <div className="flex items-center justify-between gap-2 mb-4 mt-2">
+              <span className={`text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
+                isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden' : 'opacity-100'
+              } ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
+                {t.menu}
+              </span>
+              <button 
+                onClick={() => {
+                  const nextVal = !isSidebarCollapsed;
+                  setIsSidebarCollapsed(nextVal);
+                  localStorage.setItem('astra_sidebar_collapsed', String(nextVal));
+                }}
+                aria-label={isSidebarCollapsed 
+                  ? (currentLang === 'pt' ? 'Expandir menu lateral' : currentLang === 'es' ? 'Expandir menú lateral' : 'Expand sidebar') 
+                  : (currentLang === 'pt' ? 'Recolher menu lateral' : currentLang === 'es' ? 'Contraer menú lateral' : 'Collapse sidebar')
+                }
+                title={isSidebarCollapsed 
+                  ? (currentLang === 'pt' ? 'Expandir' : currentLang === 'es' ? 'Expandir' : 'Expand') 
+                  : (currentLang === 'pt' ? 'Recolher' : currentLang === 'es' ? 'Contraer' : 'Collapse')
+                }
+                className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                  isSidebarCollapsed ? 'w-full md:w-10' : 'w-10'
+                } ${
+                  isDarkMode 
+                    ? 'hover:bg-zinc-800 text-zinc-400 hover:text-white border-transparent hover:border-zinc-750' 
+                    : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900 border-transparent hover:border-slate-200'
+                }`}
+              >
+                {isSidebarCollapsed ? (
+                  <>
+                    <PanelLeftOpen size={18} className="hidden md:block" />
+                    <PanelLeftClose size={18} className="block md:hidden" />
+                  </>
+                ) : (
+                  <PanelLeftClose size={18} />
+                )}
+              </button>
+            </div>
+
+            {/* Dashboard Button */}
             <button 
               onClick={() => {
                 setDashboardSubView('panel');
                 setIsSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all cursor-pointer ${
+              className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                  : 'gap-3 px-4 py-3'
+              } ${
                 dashboardSubView === 'panel' 
                   ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
                   : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
               }`}
             >
-              <LayoutDashboard size={20} /> {t.dashboard}
+              <LayoutDashboard size={20} className="shrink-0" />
+              <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden whitespace-nowrap' : 'opacity-100'}`}>
+                {t.dashboard}
+              </span>
+
+              {isSidebarCollapsed && (
+                <div className={`hidden md:block absolute left-full ml-3 px-3 py-1.5 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-[60] shadow-lg border ${
+                  isDarkMode 
+                    ? 'bg-[#121215] text-white border-zinc-800' 
+                    : 'bg-white text-slate-950 border-slate-200 shadow-slate-900/10'
+                }`}>
+                  {t.dashboard}
+                </div>
+              )}
             </button>
+
+            {/* History Button */}
             <button 
               onClick={() => {
                 setDashboardSubView('panel');
@@ -2823,38 +3046,94 @@ export default function App() {
                   }
                 }, 100);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors cursor-pointer ${
+              className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                  : 'gap-3 px-4 py-3'
+              } ${
                 isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
               }`}
             >
-              <History size={20} /> {t.history}
+              <History size={20} className="shrink-0" />
+              <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden whitespace-nowrap' : 'opacity-100'}`}>
+                {t.history}
+              </span>
+
+              {isSidebarCollapsed && (
+                <div className={`hidden md:block absolute left-full ml-3 px-3 py-1.5 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-[60] shadow-lg border ${
+                  isDarkMode 
+                    ? 'bg-[#121215] text-white border-zinc-800' 
+                    : 'bg-white text-slate-950 border-slate-200 shadow-slate-900/10'
+                }`}>
+                  {t.history}
+                </div>
+              )}
             </button>
+
+            {/* Settings Button */}
             <button 
               onClick={() => {
                 setDashboardSubView('settings');
                 setIsSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all cursor-pointer ${
+              className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                  : 'gap-3 px-4 py-3'
+              } ${
                 dashboardSubView === 'settings'
                   ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
                   : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
               }`}
             >
-              <Settings size={20} /> {t.settings}
+              <Settings size={20} className="shrink-0" />
+              <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden whitespace-nowrap' : 'opacity-100'}`}>
+                {t.settings}
+              </span>
+
+              {isSidebarCollapsed && (
+                <div className={`hidden md:block absolute left-full ml-3 px-3 py-1.5 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-[60] shadow-lg border ${
+                  isDarkMode 
+                    ? 'bg-[#121215] text-white border-zinc-800' 
+                    : 'bg-white text-slate-950 border-slate-200 shadow-slate-900/10'
+                }`}>
+                  {t.settings}
+                </div>
+              )}
             </button>
+
+            {/* New Features Button */}
             <button 
               onClick={() => setIsFeaturesModalOpen(true)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium transition-colors cursor-pointer ${
+              className={`relative group w-full flex items-center justify-between rounded-xl font-medium transition-all cursor-pointer ${
+                isSidebarCollapsed 
+                  ? 'px-4 py-3 md:justify-center md:px-0' 
+                  : 'px-4 py-3'
+              } ${
                 isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <Sparkles size={20} className="text-orange-500" />
-                <span className="text-left">{t.newFeatures}</span>
+              <div className={`flex items-center ${isSidebarCollapsed ? 'gap-3 md:gap-0' : 'gap-3'}`}>
+                <Sparkles size={20} className="text-orange-500 shrink-0" />
+                <span className={`text-left transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden whitespace-nowrap' : 'opacity-100'}`}>
+                  {t.newFeatures}
+                </span>
               </div>
-              <span className="px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest bg-orange-600/10 text-orange-500 border border-orange-500/20 rounded-full shrink-0">
+              <span className={`px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest bg-orange-600/10 text-orange-500 border border-orange-500/20 rounded-full shrink-0 transition-all duration-300 ${
+                isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:p-0 md:border-0 md:overflow-hidden' : 'opacity-100'
+              }`}>
                 {t.soon}
               </span>
+
+              {isSidebarCollapsed && (
+                <div className={`hidden md:block absolute left-full ml-3 px-3 py-1.5 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-[60] shadow-lg border ${
+                  isDarkMode 
+                    ? 'bg-[#121215] text-white border-zinc-800' 
+                    : 'bg-white text-slate-950 border-slate-200 shadow-slate-900/10'
+                }`}>
+                  {t.newFeatures}
+                </div>
+              )}
             </button>
           </aside>
 
@@ -3508,6 +3787,81 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Plan & Billing Modal */}
+      <AnimatePresence>
+        {isBillingModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsBillingModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className={`relative w-full max-w-md rounded-3xl border p-6 sm:p-8 shadow-2xl z-10 transition-colors ${
+                isDarkMode 
+                  ? 'bg-[#0c0d12] border-zinc-800 text-white shadow-black' 
+                  : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+              }`}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setIsBillingModalOpen(false)}
+                className={`absolute top-6 right-6 p-2 rounded-xl transition-colors cursor-pointer ${
+                  isDarkMode ? 'hover:bg-zinc-900 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <X size={20} />
+              </button>
+
+              {/* Title & Description */}
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-3.5 bg-orange-600/10 rounded-2xl text-orange-500 shrink-0">
+                  <CreditCard size={28} className="animate-pulse" />
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black">
+                  {currentLang === 'pt' ? 'Plano e Assinatura' : currentLang === 'es' ? 'Plan y Facturación' : 'Plan and Billing'}
+                </h2>
+                <div className={`text-xs sm:text-sm mt-1 leading-relaxed space-y-3 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                  <p>
+                    {currentLang === 'pt' 
+                      ? 'O gerenciamento completo de planos e faturamento estará disponível em breve!' 
+                      : currentLang === 'es' 
+                        ? '¡La gestión completa de suscripciones y facturación estará disponible pronto!' 
+                        : 'Full subscription and billing management is coming soon!'}
+                  </p>
+                  <p>
+                    {currentLang === 'pt' 
+                      ? 'Você poderá gerenciar seu plano de estudos, atualizar para Premium e visualizar faturas diretamente por aqui.' 
+                      : currentLang === 'es' 
+                        ? 'Podrás administrar tu plan de estudios, actualizar a Premium y ver facturas directamente desde aquí.' 
+                        : 'You will be able to manage your study plan, upgrade to Premium, and view invoices directly from here.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-center gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setIsBillingModalOpen(false)}
+                  className="w-full px-6 py-3 text-xs font-semibold rounded-xl bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-600/20 active:scale-95 transition-all text-center cursor-pointer"
+                >
+                  {currentLang === 'pt' ? 'Entendi' : currentLang === 'es' ? 'Entendido' : 'Got it'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Footer */}
       <footer className={`py-12 border-t text-center text-sm transition-colors ${isDarkMode ? 'border-white/5 text-gray-600' : 'border-slate-200 text-slate-500'}`}>
         <p>© 2026 Astra Learning AI — {t.builtWithPrecision}</p>
@@ -3518,6 +3872,7 @@ export default function App() {
         currentLang={currentLang}
         forceOpenPreferences={forceCookiePrefs}
         onClosePreferences={() => setForceCookiePrefs(false)}
+        onOpenPrivacyPolicy={() => setView('privacy-policy')}
       />
     </div>
   );

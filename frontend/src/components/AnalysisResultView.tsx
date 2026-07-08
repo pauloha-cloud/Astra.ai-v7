@@ -61,6 +61,9 @@ export const AnalysisResultView = ({
   const [questionCount, setQuestionCount] = useState<number>(() => {
     return Number(localStorage.getItem('astra_pref_quiz_count')) || 5;
   });
+  const [selectedDifficulty, setSelectedDifficulty] = useState<'basic' | 'intermediate' | 'advanced'>(() => {
+    return (localStorage.getItem('astra_pref_level') as any) || preferences?.explanationLevel || 'intermediate';
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [quizError, setQuizError] = useState<string | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
@@ -352,8 +355,7 @@ export const AnalysisResultView = ({
     setQuizError(null);
     try {
       const content = data.transcript || data.summary || (data as any).summaries?.detailed || (data as any).summaries?.concise || data.key_points?.join("\n") || "";
-      const savedLevel = localStorage.getItem('astra_pref_level') || 'intermediate';
-      const questions = await generateExtraQuestions(data.video?.title || 'Unknown', content, lang || 'en', questionCount, savedLevel);
+      const questions = await generateExtraQuestions(data.video?.title || 'Unknown', content, lang || 'en', questionCount, selectedDifficulty);
       if (questions && questions.length > 0) {
         setQuizQuestions(questions);
         setHasGenerated(true);
@@ -805,8 +807,8 @@ export const AnalysisResultView = ({
                     <label className={`block text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
                       {t.questionCount || "Number of questions"}
                     </label>
-                    <div className="flex justify-center gap-2">
-                      {[5, 10, 15].map((num) => (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {[5, 10, 15, 20, 25].map((num) => (
                         <button
                           key={num}
                           type="button"
@@ -821,6 +823,36 @@ export const AnalysisResultView = ({
                           }`}
                         >
                           {num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Nível de dificuldade */}
+                  <div className="space-y-3">
+                    <label className={`block text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                      {lang === 'pt' ? 'NÍVEL DE DIFICULDADE' : lang === 'es' ? 'NIVEL DE DIFICULTAD' : 'DIFFICULTY LEVEL'}
+                    </label>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {([
+                        { value: 'basic', label: lang === 'pt' ? 'Básico' : lang === 'es' ? 'Básico' : 'Basic' },
+                        { value: 'intermediate', label: lang === 'pt' ? 'Intermediário' : lang === 'es' ? 'Intermedio' : 'Intermediate' },
+                        { value: 'advanced', label: lang === 'pt' ? 'Avançado' : lang === 'es' ? 'Avanzado' : 'Advanced' }
+                      ] as const).map((diff) => (
+                        <button
+                          key={diff.value}
+                          type="button"
+                          onClick={() => setSelectedDifficulty(diff.value)}
+                          disabled={isGenerating}
+                          className={`px-4 h-10 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                            selectedDifficulty === diff.value
+                              ? 'bg-orange-600 text-white border-orange-500 shadow-md shadow-orange-600/25'
+                              : isDarkMode
+                                ? 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
+                          }`}
+                        >
+                          {diff.label}
                         </button>
                       ))}
                     </div>

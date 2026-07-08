@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShieldAlert, Cookie, Check, X } from 'lucide-react';
+import { Cookie, Check, X } from 'lucide-react';
 
 export interface CookiePreferences {
   essentials: boolean;
@@ -13,13 +13,15 @@ interface CookieConsentProps {
   currentLang: 'pt' | 'en' | 'es';
   forceOpenPreferences?: boolean;
   onClosePreferences?: () => void;
+  onOpenPrivacyPolicy?: () => void;
 }
 
 export function CookieConsent({
   isDarkMode,
   currentLang,
   forceOpenPreferences = false,
-  onClosePreferences
+  onClosePreferences,
+  onOpenPrivacyPolicy
 }: CookieConsentProps) {
   const [showBanner, setShowBanner] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -29,12 +31,26 @@ export function CookieConsent({
     marketing: false
   });
 
-  const translations = {
+  const bannerTranslations = {
     pt: {
-      bannerText: "Usamos cookies e tecnologias semelhantes para manter sua sessão, melhorar sua experiência e analisar o uso da plataforma.",
-      btnAcceptAll: "Aceitar todos",
-      btnRejectAll: "Recusar não essenciais",
-      btnPreferences: "Gerenciar preferências",
+      text: "Usamos cookies e armazenamento do navegador para manter sua sessão, lembrar preferências e melhorar sua experiência com o Astra Learning. Consulte nossa ",
+      link: "Política de Privacidade",
+      btn: "Entendi"
+    },
+    en: {
+      text: "We use cookies and browser storage to keep your session active, remember preferences, and improve your Astra Learning experience. See our ",
+      link: "Privacy Policy",
+      btn: "Got it"
+    },
+    es: {
+      text: "Usamos cookies y almacenamiento del navegador para mantener tu sesión, recordar preferencias y mejorar tu experiencia en Astra Learning. Consulta nuestra ",
+      link: "Política de Privacidad",
+      btn: "Entendido"
+    }
+  };
+
+  const modalTranslations = {
+    pt: {
       modalTitle: "Preferências de Cookies",
       modalDesc: "Gerencie suas preferências de privacidade e escolha quais categorias de cookies deseja ativar.",
       btnSave: "Salvar escolhas",
@@ -57,10 +73,6 @@ export function CookieConsent({
       }
     },
     en: {
-      bannerText: "We use cookies and similar technologies to keep your session active, improve your experience, and analyze platform usage.",
-      btnAcceptAll: "Accept all",
-      btnRejectAll: "Reject non-essential",
-      btnPreferences: "Manage preferences",
       modalTitle: "Cookie Preferences",
       modalDesc: "Manage your privacy preferences and choose which categories of cookies you want to enable.",
       btnSave: "Save choices",
@@ -83,10 +95,6 @@ export function CookieConsent({
       }
     },
     es: {
-      bannerText: "Usamos cookies y tecnologías similares para mantener tu sesión, mejorar tu experiencia y analizar el uso de la plataforma.",
-      btnAcceptAll: "Aceptar todos",
-      btnRejectAll: "Rechazar no esenciales",
-      btnPreferences: "Gestionar preferencias",
       modalTitle: "Preferencias de Cookies",
       modalDesc: "Gestione sus preferencias de privacidad y elija qué categorías de cookies desea activar.",
       btnSave: "Guardar elecciones",
@@ -110,22 +118,28 @@ export function CookieConsent({
     }
   };
 
-  const t = translations[currentLang] || translations.pt;
+  const bannerText = bannerTranslations[currentLang] || bannerTranslations.pt;
+  const modalText = modalTranslations[currentLang] || modalTranslations.pt;
 
   useEffect(() => {
-    const saved = localStorage.getItem('astra_cookie_consent');
-    if (!saved) {
+    // Check if user already accepted the new cookie/privacy notice
+    const savedNotice = localStorage.getItem('astra_cookie_notice_accepted');
+    if (!savedNotice) {
       setShowBanner(true);
-    } else {
+    }
+
+    // Populate cookie choices if saved previously
+    const savedPrefs = localStorage.getItem('astra_cookie_consent');
+    if (savedPrefs) {
       try {
-        const parsed = JSON.parse(saved);
+        const parsed = JSON.parse(savedPrefs);
         setPreferences({
           essentials: true,
           analytics: !!parsed.analytics,
           marketing: !!parsed.marketing
         });
       } catch (e) {
-        setShowBanner(true);
+        // Safe fallback
       }
     }
   }, []);
@@ -136,25 +150,17 @@ export function CookieConsent({
     }
   }, [forceOpenPreferences]);
 
-  const handleAcceptAll = () => {
-    const allPrefs = { essentials: true, analytics: true, marketing: true };
-    localStorage.setItem('astra_cookie_consent', JSON.stringify(allPrefs));
-    setPreferences(allPrefs);
+  const handleAccept = () => {
+    localStorage.setItem('astra_cookie_notice_accepted', 'true');
+    // Also save preferences of essentials + optional as per banner acceptance
+    const defaultConsent = { essentials: true, analytics: true, marketing: true };
+    localStorage.setItem('astra_cookie_consent', JSON.stringify(defaultConsent));
+    setPreferences(defaultConsent);
     setShowBanner(false);
-  };
-
-  const handleRejectAll = () => {
-    const essentialPrefs = { essentials: true, analytics: false, marketing: false };
-    localStorage.setItem('astra_cookie_consent', JSON.stringify(essentialPrefs));
-    setPreferences(essentialPrefs);
-    setShowBanner(false);
-  };
-
-  const handleOpenPreferences = () => {
-    setShowModal(true);
   };
 
   const handleSavePreferences = () => {
+    localStorage.setItem('astra_cookie_notice_accepted', 'true');
     localStorage.setItem('astra_cookie_consent', JSON.stringify(preferences));
     setShowModal(false);
     setShowBanner(false);
@@ -172,56 +178,66 @@ export function CookieConsent({
 
   return (
     <>
-      {/* Banner: fixed at bottom of page with beautiful design */}
+      {/* Discrete Floating Privacy & Cookies Banner (Bottom Right) */}
       <AnimatePresence>
         {showBanner && !showModal && (
           <motion.div
-            initial={{ opacity: 0, y: 100 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 100 }}
-            className="fixed bottom-0 left-0 right-0 z-[90] p-4 sm:p-6"
-          >
-            <div className={`max-w-7xl mx-auto rounded-3xl border p-6 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 backdrop-blur-xl ${
+            initial={{ opacity: 0, scale: 0.9, y: 50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 50 }}
+            className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[90] w-[calc(100%-2rem)] mx-4 sm:mx-0 sm:w-96 rounded-2xl border p-5 shadow-2xl backdrop-blur-md transition-all ${
               isDarkMode
-                ? 'bg-black/90 border-zinc-800 text-white shadow-black/40'
+                ? 'bg-[#0d0d0f]/95 border-zinc-800/90 text-white shadow-black/40'
                 : 'bg-white/95 border-slate-200/90 text-slate-900 shadow-slate-900/10'
-            }`}>
-              <div className="flex items-start sm:items-center gap-4 flex-1">
-                <div className="w-12 h-12 rounded-full bg-orange-600/10 flex items-center justify-center text-orange-500 shrink-0">
-                  <Cookie size={24} className="animate-bounce" />
-                </div>
-                <p className="text-xs sm:text-sm font-medium leading-relaxed">
-                  {t.bannerText}
-                </p>
-              </div>
+            }`}
+          >
+            {/* Close Button "X" */}
+            <button
+              onClick={handleAccept}
+              className={`absolute top-3 right-3 p-1.5 rounded-lg transition-colors cursor-pointer ${
+                isDarkMode
+                  ? 'hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  : 'hover:bg-slate-100 text-slate-400 hover:text-slate-650'
+              }`}
+            >
+              <X size={14} />
+            </button>
 
-              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
-                <button
-                  onClick={handleOpenPreferences}
-                  className={`py-2.5 px-4 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider border transition-colors cursor-pointer text-center ${
-                    isDarkMode
-                      ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-850'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  {t.btnPreferences}
-                </button>
-                <button
-                  onClick={handleRejectAll}
-                  className={`py-2.5 px-4 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider border transition-colors cursor-pointer text-center ${
-                    isDarkMode
-                      ? 'bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
-                      : 'bg-white border-slate-200 text-slate-500 hover:text-slate-950 hover:bg-slate-50'
-                  }`}
-                >
-                  {t.btnRejectAll}
-                </button>
-                <button
-                  onClick={handleAcceptAll}
-                  className="py-2.5 px-5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-md shadow-orange-600/10 active:scale-95 cursor-pointer text-center"
-                >
-                  {t.btnAcceptAll}
-                </button>
+            {/* Layout Content */}
+            <div className="flex items-start gap-3.5 pr-4">
+              <div className="w-9 h-9 rounded-full bg-orange-600/10 flex items-center justify-center text-orange-500 shrink-0">
+                <Cookie size={18} />
+              </div>
+              <div className="flex-1">
+                <p className={`text-xs sm:text-sm leading-relaxed mb-3.5 ${isDarkMode ? 'text-zinc-300' : 'text-slate-700'}`}>
+                  {bannerText.text}
+                  <button
+                    type="button"
+                    onClick={onOpenPrivacyPolicy}
+                    className="text-orange-500 hover:underline font-bold inline cursor-pointer text-left"
+                  >
+                    {bannerText.link}
+                  </button>
+                  .
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className={`py-1.5 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors border cursor-pointer text-center ${
+                      isDarkMode
+                        ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    {currentLang === 'pt' ? 'Gerenciar' : currentLang === 'es' ? 'Gestionar' : 'Manage'}
+                  </button>
+                  <button
+                    onClick={handleAccept}
+                    className="py-1.5 px-4 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all duration-300 shadow-md shadow-orange-600/10 active:scale-95 cursor-pointer text-center"
+                  >
+                    {bannerText.btn}
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -267,10 +283,10 @@ export function CookieConsent({
               <div className="space-y-3 mb-6 pr-6">
                 <h3 className="text-xl font-black italic tracking-tight uppercase flex items-center gap-2">
                   <Cookie className="text-orange-500" size={20} />
-                  {t.modalTitle}
+                  {modalText.modalTitle}
                 </h3>
                 <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
-                  {t.modalDesc}
+                  {modalText.modalDesc}
                 </p>
               </div>
 
@@ -282,14 +298,14 @@ export function CookieConsent({
                 }`}>
                   <div className="flex items-center justify-between gap-4 mb-2">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-black uppercase tracking-wide">{t.categories.essentials.title}</h4>
+                      <h4 className="text-sm font-black uppercase tracking-wide">{modalText.categories.essentials.title}</h4>
                       <span className="text-[9px] font-bold uppercase tracking-wider bg-orange-600/10 text-orange-500 border border-orange-500/15 px-2 py-0.5 rounded-full shrink-0">
-                        {t.categories.essentials.status}
+                        {modalText.categories.essentials.status}
                       </span>
                     </div>
                   </div>
                   <p className={`text-xs ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                    {t.categories.essentials.desc}
+                    {modalText.categories.essentials.desc}
                   </p>
                 </div>
 
@@ -298,7 +314,7 @@ export function CookieConsent({
                   isDarkMode ? 'bg-[#121215] border-zinc-800/80' : 'bg-slate-50/60 border-slate-200/80'
                 }`}>
                   <div className="flex items-center justify-between gap-4 mb-2">
-                    <h4 className="text-sm font-black uppercase tracking-wide">{t.categories.analytics.title}</h4>
+                    <h4 className="text-sm font-black uppercase tracking-wide">{modalText.categories.analytics.title}</h4>
                     <button
                       type="button"
                       onClick={() => setPreferences({ ...preferences, analytics: !preferences.analytics })}
@@ -314,7 +330,7 @@ export function CookieConsent({
                     </button>
                   </div>
                   <p className={`text-xs ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                    {t.categories.analytics.desc}
+                    {modalText.categories.analytics.desc}
                   </p>
                 </div>
 
@@ -323,7 +339,7 @@ export function CookieConsent({
                   isDarkMode ? 'bg-[#121215] border-zinc-800/80' : 'bg-slate-50/60 border-slate-200/80'
                 }`}>
                   <div className="flex items-center justify-between gap-4 mb-2">
-                    <h4 className="text-sm font-black uppercase tracking-wide">{t.categories.marketing.title}</h4>
+                    <h4 className="text-sm font-black uppercase tracking-wide">{modalText.categories.marketing.title}</h4>
                     <button
                       type="button"
                       onClick={() => setPreferences({ ...preferences, marketing: !preferences.marketing })}
@@ -339,7 +355,7 @@ export function CookieConsent({
                     </button>
                   </div>
                   <p className={`text-xs ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                    {t.categories.marketing.desc}
+                    {modalText.categories.marketing.desc}
                   </p>
                 </div>
               </div>
@@ -355,7 +371,7 @@ export function CookieConsent({
                       : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-900'
                   }`}
                 >
-                  X
+                  {currentLang === 'pt' ? 'Cancelar' : currentLang === 'es' ? 'Cancelar' : 'Cancel'}
                 </button>
                 <button
                   type="button"
@@ -363,7 +379,7 @@ export function CookieConsent({
                   className="py-2.5 px-5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 shadow-md shadow-orange-600/10 active:scale-95 cursor-pointer flex items-center gap-1.5"
                 >
                   <Check size={14} />
-                  {t.btnSave}
+                  {modalText.btnSave}
                 </button>
               </div>
             </motion.div>
