@@ -54,7 +54,7 @@ function getAI(): GoogleGenAI {
   return cachedAIClient;
 }
 
-async function generateContentWithRetry(ai: any, params: any, maxRetries = 3, baseDelayMs = 2000): Promise<any> {
+async function generateContentWithRetry(ai: any, params: any, maxRetries = 4, baseDelayMs = 1500): Promise<any> {
   let attempt = 0;
   while (true) {
     try {
@@ -62,20 +62,41 @@ async function generateContentWithRetry(ai: any, params: any, maxRetries = 3, ba
     } catch (err: any) {
       attempt++;
       const errMsg = err.message || "";
+      const errName = err.name || "";
+      const isNetworkError = errName.includes("TypeError") || 
+                             errMsg.toLowerCase().includes("fetch failed") ||
+                             errMsg.toLowerCase().includes("timeout") ||
+                             errMsg.toLowerCase().includes("etimedout") ||
+                             errMsg.toLowerCase().includes("econnreset") ||
+                             errMsg.toLowerCase().includes("socket hang up") ||
+                             errMsg.toLowerCase().includes("network connection") ||
+                             errMsg.toLowerCase().includes("failed to fetch");
       const isTransient = err.status === 503 || err.status === 429 || 
                           errMsg.includes("503") || errMsg.includes("429") ||
                           errMsg.toLowerCase().includes("high demand") || 
                           errMsg.toLowerCase().includes("temporary") ||
                           errMsg.toLowerCase().includes("unavailable") ||
-                          errMsg.toLowerCase().includes("overloaded");
+                          errMsg.toLowerCase().includes("overloaded") ||
+                          isNetworkError;
+
       if (isTransient) {
         if (params.model === "gemini-3.5-flash") {
-          console.warn(`[Gemini] Model gemini-3.5-flash is unavailable or overloaded. Falling back to gemini-3.1-flash-lite...`);
+          console.warn(`[Gemini] Model gemini-3.5-flash encountered a transient error/timeout. Falling back to gemini-2.5-flash...`);
+          params.model = "gemini-2.5-flash";
+          attempt = 0;
+          continue;
+        } else if (params.model === "gemini-2.5-flash") {
+          console.warn(`[Gemini] Model gemini-2.5-flash encountered a transient error/timeout. Falling back to gemini-1.5-flash...`);
+          params.model = "gemini-1.5-flash";
+          attempt = 0;
+          continue;
+        } else if (params.model === "gemini-1.5-flash") {
+          console.warn(`[Gemini] Model gemini-1.5-flash encountered a transient error/timeout. Falling back to gemini-3.1-flash-lite...`);
           params.model = "gemini-3.1-flash-lite";
           attempt = 0;
           continue;
         } else if (params.model === "gemini-3.1-flash-lite") {
-          console.warn(`[Gemini] Model gemini-3.1-flash-lite is unavailable or overloaded. Falling back to gemini-flash-latest...`);
+          console.warn(`[Gemini] Model gemini-3.1-flash-lite encountered a transient error/timeout. Falling back to gemini-flash-latest...`);
           params.model = "gemini-flash-latest";
           attempt = 0;
           continue;
@@ -83,7 +104,7 @@ async function generateContentWithRetry(ai: any, params: any, maxRetries = 3, ba
         
         if (attempt < maxRetries) {
           const delay = baseDelayMs * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
-          console.warn(`[Gemini] Model high demand/rate limit for ${params.model} (status: ${err.status}, msg: ${errMsg}). Retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})...`);
+          console.warn(`[Gemini] Transient error for ${params.model} (msg: ${errMsg}). Retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -303,6 +324,8 @@ async function initializeTutorSession(
       `3. If the user seems lost, simplify the concept using a real-world analogy.\n` +
       `4. Acknowledge the user's progress. Use phrases like "Exactly!", "Great catch", "You've got it".\n` +
       `5. Keep your spoken responses concise and energetic. Aim for natural conversation patterns.\n\n` +
+      `LANGUAGE DIRECTIVE (CRITICAL):\n` +
+      `You MUST conduct the entire voice/chat tutoring session in the user's chosen language: ${lang === "pt" ? "Portuguese (Brazilian)" : lang === "es" ? "Spanish" : "English"}. Do not use English if the user language is Portuguese or Spanish. Even if the video transcript is in another language, speak to the student entirely in ${lang === "pt" ? "Portuguese" : lang === "es" ? "Spanish" : "English"}.\n\n` +
       `EXPLANATION LEVEL DIRECTIVE (CRITICAL):\n` +
       `${getExplanationInstruction(explanationLevel, lang)}`
     }
@@ -346,21 +369,22 @@ async function startServer() {
 
   // YouTube Info Endpoint
   app.post("/api/youtube-info", async (req, res) => {
-    const { url, youtube_url, lang = 'en', explanationLevel = 'intermediate' } = req.body;
+    const { url, youtube_url, lang: reqLang = 'en', targetLanguage, explanationLevel = 'intermediate' } = req.body;
+    const lang = targetLanguage || reqLang || 'en';
     const targetUrl = url || youtube_url;
 
     const langNames: Record<string, string> = {
-      'pt': 'Portuguese (Brazilian)',
+      'pt': 'Portuguese',
       'en': 'English',
       'es': 'Spanish'
     };
     const targetLang = langNames[lang] || 'English';
 
-    console.log(`[Backend] /api/youtube-info: New request for URL: "${targetUrl}"`);
+    console.log(`[Backend] /api/youtube-info: New request for URL: "${targetUrl}" (lang: ${lang})`);
 
     if (!targetUrl) {
       return res.status(400).json({ 
-        error: lang === 'pt' ? 'URL do YouTube é obrigatória' : 'YouTube URL is required' 
+        error: lang === 'pt' ? 'URL do YouTube é obrigatória' : lang === 'es' ? 'La URL de YouTube es obligatoria' : 'YouTube URL is required' 
       });
     }
 
@@ -370,8 +394,8 @@ async function startServer() {
     
     if (!videoId) {
       return res.status(400).json({ 
-        error: lang === 'pt' ? 'URL do YouTube inválida' : 'Invalid YouTube URL',
-        details: lang === 'pt' ? 'Verifique se o link está correto.' : 'Please ensure the link is correct.'
+        error: lang === 'pt' ? 'URL do YouTube inválida' : lang === 'es' ? 'URL de YouTube no válida' : 'Invalid YouTube URL',
+        details: lang === 'pt' ? 'Verifique se o link está correto.' : lang === 'es' ? 'Por favor, asegúrese de que el enlace sea correcto.' : 'Please ensure the link is correct.'
       });
     }
 
@@ -448,6 +472,10 @@ async function startServer() {
              2. Response must be valid JSON only.
              3. Summary should be 3-4 paragraphs of high-quality Markdown.
              
+             LANGUAGE DIRECTIVE (CRITICAL):
+             IMPORTANT: The final answer must be written entirely in ${targetLang}. The source video, transcript, title, description, or metadata may be in another language, but you must understand it and translate/adapt the generated content to ${targetLang}. Do not mix languages. Target language: ${targetLang}. You may receive source content in Portuguese, Spanish, English, or another language. Use the source content only as input. Generate the final response entirely in ${targetLang}. Do not output any language other than ${targetLang}. Do not mix interface language and source video language.
+             Understand the source content, but always produce the final answer entirely in ${targetLang}. All fields in the response (including summary, key_points, question/options/explanation in quiz, topic in mind_map, tutor_questions, and limitations) must be fully translated/written in ${targetLang}. Do not mix languages.
+             
              Transcript:
              ${transcript.substring(0, 80000)}`
           : `Act as a subject matter expert. I don't have the transcript for the video titled "${metadata.title}" by "${metadata.author_name || "Unknown"}". 
@@ -470,7 +498,11 @@ async function startServer() {
                 - quiz: 3-5 relevant multiple-choice questions.
                 - mind_map: A structured hierarchy of concepts.
                 - tutor_questions: Relevant questions for deep learning.
-                - limitations: Mention that this analysis is based on metadata/title as the specific video transcript was unavailable.`;
+                - limitations: Mention that this analysis is based on metadata/title as the specific video transcript was unavailable.
+                
+             LANGUAGE DIRECTIVE (CRITICAL):
+             IMPORTANT: The final answer must be written entirely in ${targetLang}. The source video, transcript, title, description, or metadata may be in another language, but you must understand it and translate/adapt the generated content to ${targetLang}. Do not mix languages. Target language: ${targetLang}. You may receive source content in Portuguese, Spanish, English, or another language. Use the source content only as input. Generate the final response entirely in ${targetLang}. Do not output any language other than ${targetLang}. Do not mix interface language and source video language.
+             Understand the source content, but always produce the final answer entirely in ${targetLang}. All fields in the response (including summary, key_points, question/options/explanation in quiz, topic in mind_map, tutor_questions, and limitations) must be fully translated/written in ${targetLang}. Do not mix languages.`;
 
         const geminiResult = await generateContentWithRetry(getAI(), {
           model: "gemini-3.5-flash",
@@ -539,12 +571,13 @@ async function startServer() {
           if (!mm.topic) mm.topic = metadata.title;
           
           const isPt = lang === 'pt';
+          const isEs = lang === 'es';
           if (!mm.children || mm.children.length < 3) {
             console.log("[Backend] Mind map too shallow, adding enrichment branches...");
             const fallbackBranches = [
-              { topic: isPt ? "Conceitos Chave" : "Key Concepts", category: "Concept", icon: "Layers", importance: 5, children: [] },
-              { topic: isPt ? "Aplicações Práticas" : "Practical Applications", category: "Method", icon: "Target", importance: 4, children: [] },
-              { topic: isPt ? "Detalhes Adicionais" : "Additional Details", category: "Detail", icon: "BookOpen", importance: 3, children: [] }
+              { topic: isPt ? "Conceitos Chave" : isEs ? "Conceptos Clave" : "Key Concepts", category: "Concept", icon: "Layers", importance: 5, children: [] },
+              { topic: isPt ? "Aplicações Práticas" : isEs ? "Aplicaciones Prácticas" : "Practical Applications", category: "Method", icon: "Target", importance: 4, children: [] },
+              { topic: isPt ? "Detalhes Adicionais" : isEs ? "Detalles Adicionales" : "Additional Details", category: "Detail", icon: "BookOpen", importance: 3, children: [] }
             ];
             mm.children = [...(mm.children || []), ...fallbackBranches];
           }
@@ -576,29 +609,66 @@ async function startServer() {
         
         // Final fallback analysis object if AI fails completely (constructive and helpful)
         const isPt = lang === 'pt';
+        const isEs = lang === 'es';
         analysisData = {
           summary: isPt 
             ? `Esta sessão foca no conteúdo de **${metadata.title}**. Embora a análise automatizada detalhada tenha encontrado uma limitação técnica no momento, você ainda pode explorar os conceitos fundamentais através da transcrição e do Tutor Astra Learning AI.`
-            : `This session focuses on **${metadata.title}**. While our automated deep analysis encountered a brief technical limitation, you can still explore the core concepts using the transcript and the Astra Learning AI Tutor.`,
-          key_points: [
-            isPt ? `Tópico: ${metadata.title}` : `Topic: ${metadata.title}`,
-            isPt ? `Criador: ${metadata.author_name || 'Desconhecido'}` : `Creator: ${metadata.author_name || 'Unknown'}`,
-            isPt ? "Use o Tutor de Estudos para aprofundar seu conhecimento." : "Use the Study Tutor to deepen your knowledge.",
-            isPt ? "Revise a transcrição para detalhes específicos." : "Review the transcript for specific details."
-          ],
+            : isEs
+              ? `Esta sesión se centra en el contenido de **${metadata.title}**. Aunque el análisis detallado automatizado ha encontrado una limitación técnica en este momento, todavía puede explorar los conceptos fundamentales a través de la transcripción y el Tutor de Astra Learning AI.`
+              : `This session focuses on **${metadata.title}**. While our automated deep analysis encountered a brief technical limitation, you can still explore the core concepts using the transcript and the Astra Learning AI Tutor.`,
+          key_points: isPt
+            ? [
+                `Tópico: ${metadata.title}`,
+                `Criador: ${metadata.author_name || 'Desconhecido'}`,
+                "Use o Tutor de Estudos para aprofundar seu conhecimento.",
+                "Revise a transcrição para detalhes específicos."
+              ]
+            : isEs
+              ? [
+                  `Tema: ${metadata.title}`,
+                  `Creador: ${metadata.author_name || 'Desconocido'}`,
+                  "Usa el Tutor de Estudios para profundizar tu conocimiento.",
+                  "Revisa la transcripción para obtener detalles específicos."
+                ]
+              : [
+                  `Topic: ${metadata.title}`,
+                  `Creator: ${metadata.author_name || 'Unknown'}`,
+                  "Use the Study Tutor to deepen your knowledge.",
+                  "Review the transcript for specific details."
+                ],
           quiz: [],
           mind_map: { 
             topic: metadata.title, 
             children: [{ topic: metadata.author_name || 'YouTube', children: [] }] 
           },
-          tutor_questions: [
-            isPt ? "Pode resumir o ponto principal deste vídeo?" : "Can you summarize the main point of this video?",
-            isPt ? "Quais são as lições práticas que posso tirar daqui?" : "What practical lessons can I take from here?"
-          ],
-          limitations: [
-            isPt ? "A análise da IA está temporariamente limitada." : "AI Analysis is temporarily limited.",
-            isPt ? "A transcrição pode estar incompleta ou indisponível." : "Transcript may be incomplete or unavailable."
-          ]
+          tutor_questions: isPt
+            ? [
+                "Pode resumir o ponto principal deste vídeo?",
+                "Quais são as lições práticas que posso tirar daqui?"
+              ]
+            : isEs
+              ? [
+                  "¿Puedes resumir el punto principal de este video?",
+                  "¿Cuáles son las lecciones prácticas que puedo aprender de aquí?"
+                ]
+              : [
+                  "Can you summarize the main point of this video?",
+                  "What practical lessons can I take from here?"
+                ],
+          limitations: isPt
+            ? [
+                "A análise da IA está temporariamente limitada.",
+                "A transcrição pode estar incompleta ou indisponível."
+              ]
+            : isEs
+              ? [
+                  "El análisis de la IA está temporalmente limitado.",
+                  "La transcripción puede estar incompleta o no disponible."
+                ]
+              : [
+                  "AI Analysis is temporarily limited.",
+                  "Transcript may be incomplete or unavailable."
+                ]
         };
       }
 
@@ -614,8 +684,8 @@ async function startServer() {
         },
         mode,
         message: mode === "transcript" 
-          ? (lang === 'pt' ? "Análise gerada a partir da transcrição." : "Analysis generated from transcript.")
-          : (lang === 'pt' ? "Análise gerada a partir dos metadados." : "Analysis generated from video metadata."),
+          ? (lang === 'pt' ? "Análise gerada a partir da transcrição." : lang === 'es' ? "Análisis generado a partir de la transcripción." : "Analysis generated from transcript.")
+          : (lang === 'pt' ? "Análise gerada a partir dos metadados." : lang === 'es' ? "Análisis generado a partir de los metadatos." : "Analysis generated from video metadata."),
         ...analysisData,
         transcript: transcript || "[N/A]"
       });
@@ -631,7 +701,8 @@ async function startServer() {
 
   // Extra Quiz Questions Generation Endpoint (Secure server-side proxy)
   app.post("/api/generate-extra-questions", async (req, res) => {
-    const { title, content, lang, count = 5, explanationLevel = 'intermediate' } = req.body;
+    const { title, content, lang: reqLang = 'en', targetLanguage, count = 5, explanationLevel = 'intermediate' } = req.body;
+    const lang = targetLanguage || reqLang || 'en';
     try {
       const questionCount = count;
       const videoTitle = title;
@@ -639,6 +710,19 @@ async function startServer() {
       let prompt = "";
       if (lang === 'pt') {
         prompt = `Gere exatamente ${questionCount} questões de múltipla escolha com base somente no conteúdo do vídeo analisado. As perguntas devem estar diretamente relacionadas ao assunto do vídeo: ${videoTitle}. Use o resumo, principais pontos, transcrição ou contexto disponível. Não crie perguntas genéricas ou fora do conteúdo. Cada questão deve ter 4 alternativas, apenas uma resposta correta e uma explicação curta da resposta correta.
+
+LANGUAGE DIRECTIVE (CRITICAL):
+IMPORTANT: The final answer must be written entirely in Portuguese. 
+The source video, transcript, title, description, or metadata may be in another language, but you must understand it and translate/adapt the generated content to Portuguese. 
+Do not mix languages.
+
+Target language: Portuguese
+
+You may receive source content in Portuguese, Spanish, English, or another language.
+Use the source content only as input.
+Generate the final response entirely in Portuguese.
+Do not output any language other than Portuguese.
+Do not mix interface language and source video language.
 
 EXPLANATION LEVEL DIRECTIVE (CRITICAL):
 ${explanationInstr}
@@ -648,6 +732,19 @@ ${(content || "").substring(0, 30000)}`;
       } else if (lang === 'es') {
         prompt = `Genera exactamente ${questionCount} preguntas de opción múltiple basadas únicamente en el contenido del video analizado. Las preguntas deben estar directamente relacionadas con el tema del video: ${videoTitle}. Usa el resumen, los puntos clave, la transcripción o el contexto disponible. No crees preguntas genéricas ni fuera del contenido. Cada pregunta debe tener 4 alternativas, solo una respuesta correcta y una breve explicación de la respuesta correcta.
 
+LANGUAGE DIRECTIVE (CRITICAL):
+IMPORTANT: The final answer must be written entirely in Spanish. 
+The source video, transcript, title, description, or metadata may be in another language, but you must understand it and translate/adapt the generated content to Spanish. 
+Do not mix languages.
+
+Target language: Spanish
+
+You may receive source content in Portuguese, Spanish, English, or another language.
+Use the source content only as input.
+Generate the final response entirely in Spanish.
+Do not output any language other than Spanish.
+Do not mix interface language and source video language.
+
 EXPLANATION LEVEL DIRECTIVE (CRITICAL):
 ${explanationInstr}
 
@@ -655,6 +752,19 @@ Contenido:
 ${(content || "").substring(0, 30000)}`;
       } else {
         prompt = `Generate exactly ${questionCount} multiple-choice questions based only on the analyzed video content. The questions must be directly related to the video's topic: ${videoTitle}. Use the summary, key points, transcript, or available context. Do not create generic questions or questions outside the content. Each question must have 4 options, only one correct answer, and a short explanation of the correct answer.
+
+LANGUAGE DIRECTIVE (CRITICAL):
+IMPORTANT: The final answer must be written entirely in English. 
+The source video, transcript, title, description, or metadata may be in another language, but you must understand it and translate/adapt the generated content to English. 
+Do not mix languages.
+
+Target language: English
+
+You may receive source content in Portuguese, Spanish, English, or another language.
+Use the source content only as input.
+Generate the final response entirely in English.
+Do not output any language other than English.
+Do not mix interface language and source video language.
 
 EXPLANATION LEVEL DIRECTIVE (CRITICAL):
 ${explanationInstr}
@@ -704,7 +814,8 @@ ${(content || "").substring(0, 30000)}`;
 
   // Dedicated Mind Map Generation Endpoint
   app.post("/api/generate-mindmap", async (req, res) => {
-    const { title, content, summary, keyTakeaways, actionableLessons, transcript, fallbackReason, lang, explanationLevel = 'intermediate' } = req.body;
+    const { title, content, summary, keyTakeaways, actionableLessons, transcript, fallbackReason, lang: reqLang = 'en', targetLanguage, explanationLevel = 'intermediate' } = req.body;
+    const lang = targetLanguage || reqLang || 'en';
     try {
       const videoTitle = title || "Unknown Video";
       const languageMap: Record<string, string> = {
@@ -713,7 +824,7 @@ ${(content || "").substring(0, 30000)}`;
         en: "English"
       };
       const languageName = languageMap[lang as string] || "English";
-
+ 
       // Assemble the richest context possible
       let videoContext = "";
       if (summary) videoContext += `Summary:\n${summary}\n\n`;
@@ -731,29 +842,29 @@ ${(content || "").substring(0, 30000)}`;
       } else if (content) {
         videoContext += `Content:\n${content.substring(0, 25000)}\n`;
       }
-
+ 
       if (!videoContext.trim()) {
         videoContext = `Video Title: ${videoTitle}`;
       }
-
+ 
       const basePrompt = `Você é um especialista em design instrucional e mapas mentais educacionais.
-
+ 
 Sua tarefa é criar um mapa mental profundo, hierárquico e didático com base exclusivamente no conteúdo do vídeo analisado.
-
+ 
 Tema/título do vídeo:
 ${videoTitle}
-
+ 
 Conteúdo disponível:
 ${videoContext}
-
-Idioma da interface:
+ 
+Idioma da resposta (OBRIGATÓRIO):
 ${languageName}
-
+ 
 Crie um mapa mental que ajude o estudante a entender, revisar e memorizar o assunto.
-
+ 
 EXPLANATION LEVEL DIRECTIVE (CRITICAL):
 ${getExplanationInstruction(explanationLevel, lang)}
-
+ 
 Regras obrigatórias:
 1. Use somente informações presentes no conteúdo do vídeo, resumo, transcrição ou fallback disponível.
 2. Não invente informações.
@@ -767,9 +878,9 @@ Regras obrigatórias:
 10. Use labels curtos, claros e conceituais.
 11. Organize o conteúdo do geral para o específico.
 12. Inclua definições, fórmulas, etapas, exemplos, aplicações, relações e cuidados quando o vídeo mencionar.
-13. Gere o mapa no idioma atual da interface.
+13. IMPORTANT: The final answer must be written entirely in ${languageName}. The source video, transcript, title, description, or metadata may be in another language, but you must understand it and translate/adapt the generated content to ${languageName}. Do not mix languages. Target language: ${languageName}. You may receive source content in Portuguese, Spanish, English, or another language. Use the source content only as input. Generate the final response entirely in ${languageName}. Do not output any language other than ${languageName}. Do not mix interface language and source video language. All terms, concepts, labels and descriptions must be written in ${languageName}.
 14. Retorne somente JSON válido, sem markdown, sem comentários e sem texto fora do JSON.
-
+ 
 Formato obrigatório:
 {
   "centralTopic": "Tema principal educacional",
@@ -959,7 +1070,8 @@ Formato obrigatório:
 
   // Real-time Interaction Endpoint with Gemini for Mind Map Chat
   app.post("/api/mindmap-chat", async (req, res) => {
-    const { question, centralTopic, mindMap, videoTitle, summary, transcript, mode, lang = 'pt', explanationLevel = 'intermediate' } = req.body;
+    const { question, centralTopic, mindMap, videoTitle, summary, transcript, mode, lang: reqLang = 'pt', targetLanguage, explanationLevel = 'intermediate' } = req.body;
+    const lang = targetLanguage || reqLang || 'pt';
 
     if (!question || !question.trim()) {
       return res.status(400).json({ error: "Question is required" });
@@ -1014,8 +1126,17 @@ ${truncatedTranscript}
 Origem dos dados / Modo:
 ${mode || "N/A"}
 
-Idioma da resposta:
-${languageName} (A resposta deve ser obrigatoriamente neste idioma)
+Idioma da resposta (CRÍTICO - OBRIGATÓRIO):
+${languageName}
+IMPORTANT: The final answer must be written entirely in ${languageName}. The source video, transcript, title, description, or metadata may be in another language, but you must understand it and translate/adapt the generated content to ${languageName}. Do not mix languages.
+
+Target language: ${languageName}
+
+You may receive source content in Portuguese, Spanish, English, or another language.
+Use the source content only as input.
+Generate the final response entirely in ${languageName}.
+Do not output any language other than ${languageName}.
+Do not mix interface language and source video language. All markdown content, questions, options, explanation, title, and texts in the JSON response must be written entirely in ${languageName}.
 
 Nível de explicação desejado:
 ${explanationLevel}

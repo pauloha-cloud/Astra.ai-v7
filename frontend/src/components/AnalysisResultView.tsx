@@ -303,6 +303,7 @@ export const AnalysisResultView = ({
           transcript: data.transcript || "",
           fallbackReason: data.mode === 'metadata_fallback' ? (data.message || "Transcript unavailable") : "",
           lang: lang,
+          targetLanguage: lang,
           explanationLevel: localStorage.getItem('astra_pref_level') || 'intermediate'
         })
       });
@@ -445,6 +446,8 @@ export const AnalysisResultView = ({
                 transcript={data.transcript || ''} 
                 onClose={() => setActiveTab('summary')}
                 t={t}
+                lang={lang}
+                explanationLevel={preferences?.explanationLevel || 'intermediate'}
               />
             </motion.div>
           )}

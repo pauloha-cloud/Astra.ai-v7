@@ -692,6 +692,7 @@ The central theme **${topicName}** is a focused and dense learning structure. By
       transcript,
       mode,
       lang,
+      targetLanguage: lang,
       explanationLevel
     };
 

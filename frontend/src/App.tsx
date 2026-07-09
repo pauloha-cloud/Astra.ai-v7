@@ -1609,8 +1609,9 @@ export default function App() {
       const response = await api.post('youtube-info', { 
         url: videoUrl, 
         lang: currentLang,
+        targetLanguage: currentLang,
         explanationLevel: preferences.explanationLevel
-      }, { timeout: 60000 });
+      }, { timeout: 180000 });
       const data = response.data as AnalysisResult;
       
       console.log(`[Frontend] Received analysis for: ${data.video.videoId} (Mode: ${data.mode})`);
@@ -1878,11 +1879,13 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3 sm:gap-6">
-            <div className="hidden md:flex items-center gap-6 mr-6 transition-all">
-              <a href="#features" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.features}</a>
-              <a href="#pricing" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.pricing}</a>
-              <a href="#faq" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.faq}</a>
-            </div>
+            {!user && (
+              <div className="hidden md:flex items-center gap-6 mr-6 transition-all">
+                <a href="#features" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.features}</a>
+                <a href="#pricing" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.pricing}</a>
+                <a href="#faq" className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}>{t.faq}</a>
+              </div>
+            )}
             
             {/* Language Selector */}
             <div className={`flex items-center gap-1 p-1 rounded-full border shrink-0 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200/80'}`}>

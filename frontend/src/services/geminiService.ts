@@ -36,7 +36,7 @@ export const analyzeVideoContent = async (title: string, transcript: string): Pr
 
 export const generateExtraQuestions = async (title: string, content: string, lang: string, count: number = 5, explanationLevel: string = 'intermediate'): Promise<AnalysisResult['quiz']> => {
   try {
-    const response = await api.post('/generate-extra-questions', { title, content, lang, count, explanationLevel });
+    const response = await api.post('/generate-extra-questions', { title, content, lang, targetLanguage: lang, count, explanationLevel });
     return response.data.quiz || [];
   } catch (error) {
     console.error("Error generating extra questions from backend proxy:", error);

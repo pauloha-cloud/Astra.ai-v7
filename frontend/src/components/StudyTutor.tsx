@@ -25,9 +25,11 @@ interface Props {
   transcript: string;
   onClose: () => void;
   t: any;
+  lang?: string;
+  explanationLevel?: string;
 }
 
-export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript, onClose, t }: Props) => {
+export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript, onClose, t, lang = 'en', explanationLevel = 'intermediate' }: Props) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -142,7 +144,9 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
         ws.send(JSON.stringify({
           type: "setup",
           videoTitle,
-          transcript
+          transcript,
+          lang,
+          explanationLevel
         }));
 
         // Start mic streamer
