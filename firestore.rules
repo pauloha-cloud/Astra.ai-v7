@@ -46,25 +46,25 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.uid == request.auth.uid
         && data.email is string && data.email.size() <= 256
-        && (data.get('displayName', '') is string && data.get('displayName', '').size() <= 256)
-        && (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 1024)
+        && (data.get('displayName', null) == null || (data.get('displayName', '') is string && data.get('displayName', '').size() <= 256))
+        && (data.get('photoURL', null) == null || (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 1024))
         && (data.get('plan', 'free') in ['free', 'basic', 'premium']);
     }
 
     function isValidAnalysis(data) {
       return data.userId == request.auth.uid
         && data.video is map
-        && data.video.videoId is string && data.video.videoId.size() <= 64
-        && data.video.title is string && data.video.title.size() <= 512
-        && (data.video.get('thumbnail', '') is string && data.video.get('thumbnail', '').size() <= 2048)
-        && (data.get('summary', '') is string && data.get('summary', '').size() <= 100000)
-        && (data.get('transcript', '') is string && data.get('transcript', '').size() <= 2000000)
-        && (data.get('key_points', []) is list && data.get('key_points', []).size() <= 100)
-        && (data.get('quiz', []) is list && data.get('quiz', []).size() <= 50)
-        && (data.get('mind_map', {}) is map || data.get('mind_map', '') is string)
+        && (data.video.get('videoId', null) == null || (data.video.get('videoId', '') is string && data.video.get('videoId', '').size() <= 64))
+        && (data.video.get('title', '') is string && data.video.get('title', '').size() <= 512)
+        && (data.video.get('thumbnail', null) == null || (data.video.get('thumbnail', '') is string && data.video.get('thumbnail', '').size() <= 2048))
+        && (data.get('summary', null) == null || (data.get('summary', '') is string && data.get('summary', '').size() <= 100000))
+        && (data.get('transcript', null) == null || (data.get('transcript', '') is string && data.get('transcript', '').size() <= 2000000))
+        && (data.get('key_points', null) == null || (data.get('key_points', []) is list && data.get('key_points', []).size() <= 100))
+        && (data.get('quiz', null) == null || (data.get('quiz', []) is list && data.get('quiz', []).size() <= 50))
+        && (data.get('mind_map', null) == null || data.get('mind_map', {}) is map || data.get('mind_map', '') is string)
         && (data.get('mode', 'transcript') in ['transcript', 'metadata_fallback'])
-        && (data.get('limitations', []) is list && data.get('limitations', []).size() <= 20)
-        && (data.get('tutor_questions', []) is list && data.get('tutor_questions', []).size() <= 20);
+        && (data.get('limitations', null) == null || (data.get('limitations', []) is list && data.get('limitations', []).size() <= 20))
+        && (data.get('tutor_questions', null) == null || (data.get('tutor_questions', []) is list && data.get('tutor_questions', []).size() <= 20));
     }
 
     function isValidPreference(data) {

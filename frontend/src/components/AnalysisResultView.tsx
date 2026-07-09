@@ -377,31 +377,71 @@ export const AnalysisResultView = ({
     <div className={`border rounded-3xl overflow-hidden flex flex-col min-h-[600px] shadow-2xl transition-colors duration-300 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 shadow-black/50' : 'bg-white border-slate-200 shadow-2xl shadow-slate-900/10'}`}>
       {/* Tabs */}
       {showInternalTabs && (
-        <div className={`flex border-b p-1.5 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-slate-200 bg-slate-50'}`}>
-          {(['summary', 'quiz', 'mindmap', 'tutor', 'transcript'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all duration-300 relative group overflow-hidden ${
-                activeTab === tab 
-                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' 
-                  : isDarkMode ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-white font-medium'
-              }`}
-            >
-              {activeTab === tab && (
-                <motion.div 
-                  layoutId="activeTab"
-                  className="absolute inset-0 bg-orange-600 -z-10"
-                />
-              )}
-              {tab === 'summary' && <BookOpen size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
-              {tab === 'quiz' && <CheckCircle size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
-              {tab === 'mindmap' && <BrainCircuit size={16} className={activeTab === tab ? 'rotate-12' : ''} />}
-              {tab === 'tutor' && <MessageSquare size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
-              {tab === 'transcript' && <FileText size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
-              <span className="capitalize font-bold text-[10px] sm:text-xs tracking-widest">{t[tab]}</span>
-            </button>
-          ))}
+        <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b p-1.5 gap-2 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-slate-200 bg-slate-50'}`}>
+          <div className="flex flex-1 items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {(['summary', 'quiz', 'mindmap', 'tutor', 'transcript'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all duration-300 relative group overflow-hidden ${
+                  activeTab === tab 
+                    ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' 
+                    : isDarkMode ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-white font-medium'
+                }`}
+              >
+                {activeTab === tab && (
+                  <motion.div 
+                    layoutId="activeTab"
+                    className="absolute inset-0 bg-orange-600 -z-10"
+                  />
+                )}
+                {tab === 'summary' && <BookOpen size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
+                {tab === 'quiz' && <CheckCircle size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
+                {tab === 'mindmap' && <BrainCircuit size={16} className={activeTab === tab ? 'rotate-12' : ''} />}
+                {tab === 'tutor' && <MessageSquare size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
+                {tab === 'transcript' && <FileText size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
+                <span className="capitalize font-bold text-[10px] sm:text-xs tracking-widest">{t[tab]}</span>
+              </button>
+            ))}
+          </div>
+          <button 
+            onClick={onClose}
+            aria-label={t.closeAnalysis}
+            title={t.closeAnalysis}
+            className={`transition-all duration-200 flex items-center gap-2 font-semibold text-xs sm:text-sm px-4 py-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-xl ${
+              isDarkMode 
+                ? 'text-gray-400 hover:text-orange-500 dark:hover:text-white' 
+                : 'text-slate-500 hover:text-orange-600'
+            }`}
+          >
+            <span className="hidden md:inline">{t.closeAnalysis}</span>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Header bar when showInternalTabs is false */}
+      {!showInternalTabs && (
+        <div className={`flex items-center justify-between border-b p-4 px-6 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-slate-200 bg-slate-50/50'}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.8)]" />
+            <span className={`text-xs font-mono tracking-[0.2em] font-bold uppercase ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+              {t[activeTab] || activeTab}
+            </span>
+          </div>
+          <button 
+            onClick={onClose}
+            aria-label={t.closeAnalysis}
+            title={t.closeAnalysis}
+            className={`transition-all duration-200 flex items-center gap-2 font-semibold text-xs sm:text-sm px-4 py-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-xl ${
+              isDarkMode 
+                ? 'text-gray-400 hover:text-orange-500 dark:hover:text-white' 
+                : 'text-slate-500 hover:text-orange-600'
+            }`}
+          >
+            <span className="hidden md:inline">{t.closeAnalysis}</span>
+            <X size={16} />
+          </button>
         </div>
       )}
 
@@ -1140,12 +1180,6 @@ export const AnalysisResultView = ({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-
-      <div className={`p-4 border-t flex justify-end transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-        <button onClick={onClose} className={`transition-colors flex items-center gap-2 font-medium text-sm ${isDarkMode ? 'text-gray-500 hover:text-white' : 'text-slate-500 hover:text-slate-950 font-semibold'}`}>
-          {t.closeAnalysis} <X size={16} />
-        </button>
       </div>
     </div>
   );

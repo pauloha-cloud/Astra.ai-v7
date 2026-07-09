@@ -42,7 +42,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
-  CreditCard
+  CreditCard,
+  Globe,
+  FolderOpen,
+  FileUp
 } from 'lucide-react';
 import { checkHealth, api } from './lib/api';
 import { useAuth } from './contexts/AuthContext';
@@ -58,6 +61,7 @@ import { AIActivityFeed } from './components/AIActivityFeed';
 import axios from 'axios';
 import { BrandLogo } from './components/BrandLogo';
 import { SettingsView } from './components/SettingsView';
+import { HistoryView } from './components/HistoryView';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
 import { CookieConsent } from './components/CookieConsent';
@@ -1399,7 +1403,7 @@ export default function App() {
   const [verificationChecking, setVerificationChecking] = useState(false);
   const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [view, setView] = useState<ComponentState>('landing');
-  const [dashboardSubView, setDashboardSubView] = useState<'panel' | 'settings'>('panel');
+  const [dashboardSubView, setDashboardSubView] = useState<'panel' | 'history' | 'settings'>('panel');
   const [forceCookiePrefs, setForceCookiePrefs] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [apiStatus, setApiStatus] = useState<string>(''); 
@@ -1417,9 +1421,305 @@ export default function App() {
 
   // Analysis State
   const [videoUrl, setVideoUrl] = useState('');
+  const [selectedSourceType, setSelectedSourceType] = useState<'youtube' | 'document' | 'website' | 'drive'>('youtube');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const [currentResult, setCurrentResult] = useState<AnalysisResult | null>(null);
+
+  const handleDocumentSelect = (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const size = file.size;
+    
+    const allowedExtensions = ['pdf', 'txt', 'docx', 'png', 'jpg', 'jpeg', 'webp'];
+    if (!ext || !allowedExtensions.includes(ext)) {
+      showToast(
+        currentLang === 'pt' ? "Formato não suportado. Envie PDF, TXT, DOCX ou imagem." :
+        currentLang === 'es' ? "Formato no soportado. Sube PDF, TXT, DOCX o imagen." :
+        "Unsupported format. Please upload PDF, TXT, DOCX, or an image."
+      );
+      return;
+    }
+    
+    let maxSize = 0;
+    if (ext === 'pdf' || ext === 'docx') maxSize = 20 * 1024 * 1024;
+    else if (ext === 'txt') maxSize = 5 * 1024 * 1024;
+    else maxSize = 10 * 1024 * 1024; // images
+    
+    if (size > maxSize) {
+      const mbLimit = maxSize / (1024 * 1024);
+      showToast(
+        currentLang === 'pt' ? `O arquivo excede o limite de ${mbLimit} MB para este formato.` :
+        currentLang === 'es' ? `El archivo supera el límite de ${mbLimit} MB para este formato.` :
+        `File exceeds the ${mbLimit} MB limit for this format.`
+      );
+      return;
+    }
+    
+    setSelectedFile(file);
+  };
+
+  const handleAnalyzeDocument = () => {
+    if (!selectedFile) return;
+    setIsAnalyzing(true);
+    
+    const statuses = currentLang === 'pt' ? [
+      "Enviando documento...",
+      "Processando conteúdo...",
+      "Identificando tópicos...",
+      "Construindo mapa mental...",
+      "Sucesso!"
+    ] : currentLang === 'es' ? [
+      "Enviando documento...",
+      "Procesando contenido...",
+      "Identificando temas...",
+      "Construyendo mapa mental...",
+      "¡Éxito!"
+    ] : [
+      "Uploading document...",
+      "Processing content...",
+      "Identifying topics...",
+      "Building mind map...",
+      "Success!"
+    ];
+    
+    setAnalysisStatus(statuses[0]);
+    
+    setTimeout(() => {
+      setAnalysisStatus(statuses[1]);
+      setTimeout(() => {
+        setAnalysisStatus(statuses[2]);
+        setTimeout(() => {
+          setAnalysisStatus(statuses[3]);
+          setTimeout(() => {
+            setAnalysisStatus(statuses[4]);
+            
+            const fileName = selectedFile.name;
+            const mockResult: AnalysisResult = {
+              video: {
+                videoId: `doc-${Date.now()}`,
+                url: `document://${fileName}`,
+                title: fileName,
+                channel: currentLang === 'pt' ? "Documento Local" : currentLang === 'es' ? "Documento Local" : "Local Document",
+                thumbnail: ""
+              },
+              mode: 'transcript',
+              message: "Análise realizada com sucesso a partir de documento local.",
+              summary: currentLang === 'pt' ? `# Resumo do Documento: ${fileName}\n\nEste documento foi carregado e analisado pelo **Astra Learning**. A análise identificou os tópicos centrais estruturados para otimização do seu aprendizado.\n\n## Principais Pilares Estudados\n1. **Consolidação de Conceitos**: Organização das ideias fundamentais contidas no material.\n2. **Conexões Semânticas**: Identificação das relações entre os temas principais e secundários.\n3. **Avaliação Prática**: Geração de perguntas direcionadas para fixação de conteúdo a longo prazo.\n\n---\n\n### Visão Geral Detalhada\nO material de estudo fornece uma base sólida para a compreensão do tópico. Recomenda-se explorar cada ramificação no **Mapa Mental** e testar seus conhecimentos na seção de **Quiz**. Se houver qualquer dúvida ou necessidade de aprofundamento, o **Tutor de Estudos** está pronto para explicar detalhadamente cada conceito.` :
+                       currentLang === 'es' ? `# Resumen del Documento: ${fileName}\n\nEste documento ha sido cargado y analizado por **Astra Learning**. El análisis identificó los temas centrales estructurados para optimizar su aprendizaje.\n\n## Pilares Clave Estudiados\n1. **Consolidación de Conceptos**: Organización de las ideas fundamentales contenidas en el material.\n2. **Conexiones Semánticas**: Identificación de relaciones entre temas principales y secundarios.\n3. **Evaluación Práctica**: Generación de preguntas dirigidas para la retención a largo plazo.\n\n---\n\n### Descripción General Detalhada\nEl material de estudio proporciona una base sólida para comprender el tema. Se recomienda explorar cada rama en el **Mapa Mental** y poner a prueba sus conocimientos en la sección de **Cuestionario**. Si tiene alguna duda o necesita profundizar, el **Tutor de Estudios** está listo para explicar cada concepto en detalle.` :
+                       `# Document Summary: ${fileName}\n\nThis document has been uploaded and analyzed by **Astra Learning**. The analysis identified the core topics structured to optimize your learning.\n\n## Key Studied Pillars\n1. **Concept Consolidation**: Organization of the fundamental ideas contained in the material.\n2. **Semantic Connections**: Identification of relationships between primary and secondary themes.\n3. **Practical Evaluation**: Generation of targeted questions for long-term retention.\n\n---\n\n### Detailed Overview\nThe study material provides a solid foundation for understanding the topic. It is highly recommended to explore each branch in the **Mind Map** and test your knowledge in the **Quiz** section. If you have any questions or need deep explanation, the **Study Tutor** is ready to explain each concept in detail.`,
+              key_points: currentLang === 'pt' ? [
+                "Leitura ativa e identificação de tópicos centrais",
+                "Estruturação hierárquica do material analisado",
+                "Retenção de conteúdo otimizada com repetição espaçada"
+              ] : currentLang === 'es' ? [
+                "Lectura activa e identificación de temas centrales",
+                "Estructuración jerárquica del material analizado",
+                "Retención de contenido optimizada con repetición espaciada"
+              ] : [
+                "Active reading and identification of central topics",
+                "Hierarchical structuring of analyzed material",
+                "Optimized content retention with spaced repetition"
+              ],
+              quiz: currentLang === 'pt' ? [
+                {
+                  question: "Qual é o principal objetivo do Astra Learning ao analisar este documento?",
+                  options: [
+                    "Apenas ler o texto sem organizar",
+                    "Transformar o conteúdo em recursos dinâmicos como Resumo, Tutor, Quiz e Mapa Mental",
+                    "Traduzir o documento para outros idiomas sem explicar",
+                    "Excluir o arquivo permanentemente da nuvem"
+                  ],
+                  answer: "Transformar o conteúdo em recursos dinâmicos como Resumo, Tutor, Quiz e Mapa Mental",
+                  explanation: "O Astra analisa o material para criar uma experiência de aprendizado ativa e multimodal."
+                },
+                {
+                  question: "Quais formatos de arquivo são suportados pelo Astra Learning na fonte 'Documento'?",
+                  options: [
+                    "Apenas arquivos MP3",
+                    "Apenas imagens PNG",
+                    "PDF, TXT, DOCX e imagens",
+                    "Planilhas de Excel complexas"
+                  ],
+                  answer: "PDF, TXT, DOCX e imagens",
+                  explanation: "O Astra suporta múltiplos formatos de texto e imagem para flexibilidade de estudo."
+                },
+                {
+                  question: "Como o Tutor de Estudos pode te ajudar após a análise do documento?",
+                  options: [
+                    "Fazendo o resumo por você",
+                    "Respondendo dúvidas complexas e explicando conceitos de forma personalizada",
+                    "Bloqueando o acesso aos arquivos",
+                    "Criando um novo arquivo do zero"
+                  ],
+                  answer: "Respondendo dúvidas complexas e explicando conceitos de forma personalizada",
+                  explanation: "O Tutor interativo interage diretamente com base no contexto do documento analisado."
+                }
+              ] : currentLang === 'es' ? [
+                {
+                  question: "¿Cuál es el objetivo principal de Astra Learning al analizar este documento?",
+                  options: [
+                    "Solo leer el texto sin organizar",
+                    "Transformar el contenido en recursos dinámicos como Resumen, Tutor, Cuestionario y Mapa Mental",
+                    "Traducir el documento a otros idiomas sin explicar",
+                    "Eliminar permanentemente el archivo de la nube"
+                  ],
+                  answer: "Transformar el contenido en recursos dinámicos como Resumen, Tutor, Cuestionario y Mapa Mental",
+                  explanation: "Astra analiza el material para crear una experiencia de aprendizaje activa y multimodal."
+                },
+                {
+                  question: "¿Qué formatos de archivo son compatibles con Astra Learning en la fuente 'Documento'?",
+                  options: [
+                    "Solo archivos MP3",
+                    "Solo imágenes PNG",
+                    "PDF, TXT, DOCX e imágenes",
+                    "Hojas de cálculo de Excel complejas"
+                  ],
+                  answer: "PDF, TXT, DOCX e imágenes",
+                  explanation: "Astra admite múltiples formatos de texto e imagen para mayor flexibilidad de estudio."
+                },
+                {
+                  question: "¿Como o Tutor de Estudos pode te ajudar após a análise do documento?",
+                  options: [
+                    "Haciendo el resumen por ti",
+                    "Respondiendo preguntas complejas y explicando conceptos de forma personalizada",
+                    "Bloqueando el acceso a los archivos",
+                    "Creando un nuevo archivo desde cero"
+                  ],
+                  answer: "Respondiendo preguntas complejas y explicando conceptos de forma personalizada",
+                  explanation: "El Tutor interactivo interactúa directamente según el contexto del documento analizado."
+                }
+              ] : [
+                {
+                  question: "What is the primary objective of Astra Learning when analyzing this document?",
+                  options: [
+                    "Just reading the text without organizing",
+                    "Transforming the content into dynamic resources like Summary, Tutor, Quiz, and Mind Map",
+                    "Translating the document into other languages without explaining",
+                    "Permanently deleting the file from the cloud"
+                  ],
+                  answer: "Transforming the content into dynamic resources like Summary, Tutor, Quiz, and Mind Map",
+                  explanation: "Astra analyzes the material to create an active and multimodal learning experience."
+                },
+                {
+                  question: "Which file formats are supported by Astra Learning in the 'Document' source?",
+                  options: [
+                    "Only MP3 files",
+                    "Only PNG images",
+                    "PDF, TXT, DOCX, and images",
+                    "Complex Excel spreadsheets"
+                  ],
+                  answer: "PDF, TXT, DOCX, and images",
+                  explanation: "Astra supports multiple text and image formats for study flexibility."
+                },
+                {
+                  question: "How can the Study Tutor help you after analyzing the document?",
+                  options: [
+                    "Writing the summary for you",
+                    "Answering complex questions and explaining concepts in a personalized way",
+                    "Blocking access to files",
+                    "Creating a new file from scratch"
+                  ],
+                  answer: "Answering complex questions and explaining concepts in a personalized way",
+                  explanation: "The interactive Tutor engages directly based on the context of the analyzed document."
+                }
+              ],
+              mind_map: {
+                topic: fileName,
+                children: currentLang === 'pt' ? [
+                  {
+                    topic: "Conceitos Fundamentais",
+                    children: [
+                      { topic: "Análise Estrutural" },
+                      { topic: "Extração Semântica" }
+                    ]
+                  },
+                  {
+                    topic: "Fixação Prática",
+                    children: [
+                      { topic: "Resolução de Quizzes" },
+                      { topic: "Diálogo com o Tutor" }
+                    ]
+                  },
+                  {
+                    topic: "Formatos Soportados",
+                    children: [
+                      { topic: "Documentos (PDF, TXT, DOCX)" },
+                      { topic: "Imagens e Gráficos" }
+                    ]
+                  }
+                ] : currentLang === 'es' ? [
+                  {
+                    topic: "Conceptos Fundamentales",
+                    children: [
+                      { topic: "Análisis Estructural" },
+                      { topic: "Extracción Semántica" }
+                    ]
+                  },
+                  {
+                    topic: "Retención Práctica",
+                    children: [
+                      { topic: "Resolución de Cuestionarios" },
+                      { topic: "Diálogo con el Tutor" }
+                    ]
+                  },
+                  {
+                    topic: "Formatos Soportados",
+                    children: [
+                      { topic: "Documentos (PDF, TXT, DOCX)" },
+                      { topic: "Imágenes y Gráficos" }
+                    ]
+                  }
+                ] : [
+                  {
+                    topic: "Fundamental Concepts",
+                    children: [
+                      { topic: "Structural Analysis" },
+                      { topic: "Semantic Extraction" }
+                    ]
+                  },
+                  {
+                    topic: "Practical Retention",
+                    children: [
+                      { topic: "Quiz Solving" },
+                      { topic: "Tutor Dialogue" }
+                    ]
+                  },
+                  {
+                    topic: "Supported Formats",
+                    children: [
+                      { topic: "Documents (PDF, TXT, DOCX)" },
+                      { topic: "Images & Graphics" }
+                    ]
+                  }
+                ]
+              },
+              tutor_questions: currentLang === 'pt' ? [
+                "Me explique os pontos fundamentais do documento",
+                "Como posso aplicar esses conceitos na prática?",
+                "Crie um roteiro de estudos baseado nesse arquivo"
+              ] : currentLang === 'es' ? [
+                "Explícame los puntos fundamentales de este documento",
+                "¿Cómo puedo aplicar estos conceptos en la práctica?",
+                "Crea un plan de estudio basado en este archivo"
+              ] : [
+                "Explain the core points of this document to me",
+                "How can I apply these concepts in practice?",
+                "Create a study plan based on this file"
+              ],
+              limitations: []
+            };
+            
+            setCurrentResult(mockResult);
+            setActiveTab(preferences.defaultStudyFormat);
+            setIsAnalyzing(false);
+            setSelectedFile(null);
+          }, 1000);
+        }, 1000);
+      }, 1000);
+    }, 1000);
+  };
 
   // History delete/clear state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -1427,6 +1727,35 @@ export default function App() {
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+  };
+
+  const focusUrlInput = () => {
+    if (urlInputRef.current) {
+      urlInputRef.current.focus();
+    }
+  };
+
+  const handleGoToPanelAndFocus = () => {
+    setDashboardSubView('panel');
+    setTimeout(() => {
+      focusUrlInput();
+    }, 150);
+  };
 
   const confirmDeleteAction = async () => {
     if (!user) return;
@@ -3040,21 +3369,17 @@ export default function App() {
             {/* History Button */}
             <button 
               onClick={() => {
-                setDashboardSubView('panel');
+                setDashboardSubView('history');
                 setIsSidebarOpen(false);
-                setTimeout(() => {
-                  const historySec = document.getElementById('history-section');
-                  if (historySec) {
-                    historySec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }, 100);
               }}
               className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
                 isSidebarCollapsed 
                   ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
                   : 'gap-3 px-4 py-3'
               } ${
-                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+                dashboardSubView === 'history' 
+                  ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
+                  : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
               }`}
             >
               <History size={20} className="shrink-0" />
@@ -3156,82 +3481,383 @@ export default function App() {
                   onOpenTermsOfUse={() => setView('terms')}
                   onOpenCookiePrefs={() => setForceCookiePrefs(true)}
                 />
+              ) : dashboardSubView === 'history' ? (
+                <HistoryView 
+                  history={history}
+                  isDarkMode={isDarkMode}
+                  t={t}
+                  currentLang={currentLang}
+                  onOpenItem={(item) => {
+                    setCurrentResult(item);
+                    setActiveTab(preferences.defaultStudyFormat);
+                    setDashboardSubView('panel');
+                  }}
+                  setConfirmModalType={setConfirmModalType}
+                  setIsConfirmModalOpen={setIsConfirmModalOpen}
+                  setItemToDelete={setItemToDelete}
+                  activeMenuId={activeMenuId}
+                  setActiveMenuId={setActiveMenuId}
+                  setDashboardSubView={setDashboardSubView}
+                  onGoToPanel={handleGoToPanelAndFocus}
+                />
               ) : (
                 <>
                   <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-2"
-              >
-                <h1 className="text-2xl sm:text-3xl font-bold">
-                  {t.welcomeBack.replace("{name}", displayName)}
-                </h1>
-                <p className={`text-sm sm:text-base italic ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.readyAnalyze}</p>
-              </motion.div>
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-2"
+                  >
+                    <h1 className="text-2xl sm:text-3xl font-bold">
+                      {t.welcomeBack.replace("{name}", displayName)}
+                    </h1>
+                    <p className={`text-sm sm:text-base italic ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.readyAnalyze}</p>
+                  </motion.div>
 
-              {/* Compact Command Bar */}
-              <div className={`border p-4 rounded-3xl space-y-4 shadow-lg transition-all ${
-                isDarkMode 
-                  ? 'bg-[#08080a] border-zinc-800/80 shadow-black/20' 
-                  : 'bg-white border-slate-200 shadow-slate-100/50'
-              }`}>
-                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                  {/* Left part: URL Input with YouTube inline icon & action */}
-                  <div className="flex-1 flex flex-col sm:flex-row items-stretch gap-3">
-                    <div className="relative flex-1 flex items-center">
-                      <div className="absolute left-4 text-orange-500 shrink-0">
-                        <Youtube size={20} className="fill-current" />
+                  {/* Compact Command Bar */}
+                  <div className={`border p-6 sm:p-8 rounded-3xl shadow-xl transition-all duration-300 ${
+                    isDarkMode 
+                      ? 'bg-[#0B0C10] border-zinc-800/80 shadow-black/40' 
+                      : 'bg-white border-slate-200 shadow-slate-100/50'
+                  }`}>
+                    <div className="flex flex-col gap-6 w-full">
+                      
+                      {/* Central Study Source Block */}
+                      <div className="text-center max-w-2xl mx-auto space-y-3 mb-2">
+                        <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
+                          {currentLang === 'pt' ? "Comece com uma fonte de estudo" :
+                           currentLang === 'es' ? "Comienza con una fuente de estudio" :
+                           "Start with a study source"}
+                        </h2>
+                        <p className={`text-xs sm:text-sm leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                          {currentLang === 'pt' ? "Cole uma URL do YouTube ou envie um documento para o Astra transformar o conteúdo em resumo, tutor, quiz e mapa mental." :
+                           currentLang === 'es' ? "Pega una URL de YouTube o sube un documento para que Astra transforme el contenido en resumen, tutor, cuestionario y mapa mental." :
+                           "Paste a YouTube URL or upload a document and let Astra turn the content into summary, tutor, quiz, and mind map."}
+                        </p>
                       </div>
-                      <input 
-                        type="text" 
-                        value={videoUrl}
-                        onChange={(e) => setVideoUrl(e.target.value)}
-                        placeholder="https://youtube.com/watch?v=..." 
-                        className={`w-full rounded-xl pl-12 pr-4 h-12 outline-none transition-all text-sm sm:text-base border ${
-                          isDarkMode 
-                            ? 'bg-[#030304]/80 border-zinc-800/80 text-white placeholder-zinc-600 focus:border-orange-500/85 focus:ring-4 focus:ring-orange-500/5' 
-                            : 'bg-[#f8fafc] border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-400 focus:ring-4 focus:ring-orange-500/5'
-                        }`}
-                      />
-                    </div>
-                    <Button 
-                      onClick={handleAnalyze} 
-                      disabled={isAnalyzing || !videoUrl} 
-                      className="justify-center h-12 px-6 text-sm font-extrabold rounded-xl shadow-md transition-all duration-300 shrink-0"
-                    >
-                      {isAnalyzing ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 size={16} className="animate-spin" /> {analysisStatus}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5 group">
-                          <span>{t.analyze}</span>
-                          <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
-                        </span>
-                      )}
-                    </Button>
-                  </div>
 
-                  {/* Right part: Features buttons as premium segment pill buttons */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+                      {/* Source Selector */}
+                      <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+                        {/* YouTube tab */}
+                        <button
+                          onClick={() => setSelectedSourceType('youtube')}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
+                            selectedSourceType === 'youtube'
+                              ? 'bg-orange-500/10 border-orange-500 text-orange-500 shadow-md shadow-orange-500/5'
+                              : isDarkMode
+                                ? 'bg-[#030304]/60 border-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-950 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Youtube size={16} />
+                          <span>YouTube</span>
+                        </button>
+
+                        {/* Documento tab */}
+                        <button
+                          onClick={() => setSelectedSourceType('document')}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
+                            selectedSourceType === 'document'
+                              ? 'bg-orange-500/10 border-orange-500 text-orange-500 shadow-md shadow-orange-500/5'
+                              : isDarkMode
+                                ? 'bg-[#030304]/60 border-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-950 hover:bg-slate-100'
+                          }`}
+                        >
+                          <FileText size={16} />
+                          <span>{currentLang === 'pt' ? 'Documento' : currentLang === 'es' ? 'Documento' : 'Document'}</span>
+                        </button>
+
+                        {/* Link de site (disabled with badge Em breve) */}
+                        <button
+                          onClick={() => setSelectedSourceType('website')}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
+                            selectedSourceType === 'website'
+                              ? 'bg-orange-500/10 border-orange-500 text-orange-500 shadow-md shadow-orange-500/5'
+                              : isDarkMode
+                                ? 'bg-[#030304]/20 border-zinc-800/40 text-zinc-600 hover:text-zinc-500'
+                                : 'bg-slate-50/50 border-slate-100 text-slate-400 hover:text-slate-500'
+                          }`}
+                        >
+                          <Globe size={16} />
+                          <span>{currentLang === 'pt' ? 'Link de site' : currentLang === 'es' ? 'Enlace de sitio' : 'Website link'}</span>
+                          <span className="px-1.5 py-0.5 text-[8px] font-extrabold bg-orange-500/15 text-orange-500 rounded-full border border-orange-500/20 tracking-wider">
+                            {currentLang === 'pt' ? 'Em breve' : currentLang === 'es' ? 'Em breve' : 'Soon'}
+                          </span>
+                        </button>
+
+                        {/* Google Drive (disabled with badge Em breve) */}
+                        <button
+                          onClick={() => setSelectedSourceType('drive')}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
+                            selectedSourceType === 'drive'
+                              ? 'bg-orange-500/10 border-orange-500 text-orange-500 shadow-md shadow-orange-500/5'
+                              : isDarkMode
+                                ? 'bg-[#030304]/20 border-zinc-800/40 text-zinc-600 hover:text-zinc-500'
+                                : 'bg-slate-50/50 border-slate-100 text-slate-400 hover:text-slate-500'
+                          }`}
+                        >
+                          <FolderOpen size={16} />
+                          <span>Google Drive</span>
+                          <span className="px-1.5 py-0.5 text-[8px] font-extrabold bg-orange-500/15 text-orange-500 rounded-full border border-orange-500/20 tracking-wider">
+                            {currentLang === 'pt' ? 'Em breve' : currentLang === 'es' ? 'Em breve' : 'Soon'}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Active Source UI Area */}
+                      <div className="w-full mt-2">
+                        {/* YouTube Source UI */}
+                        {selectedSourceType === 'youtube' && (
+                          <div className="flex flex-col sm:flex-row items-stretch gap-3 text-left">
+                            <div className="relative flex-1 flex flex-col gap-1.5 w-full">
+                              <div className="relative flex items-center">
+                                <div className="absolute left-4 shrink-0 flex items-center">
+                                  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.518 3.545 12 3.545 12 3.545s-7.518 0-9.388.508a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.87.508 9.388.508 9.388.508s7.518 0 9.388-.508a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837z" fill="#FF0000"/>
+                                    <polygon points="9.545 15.568 15.818 12 9.545 8.432 9.545 15.568" fill="#FFFFFF"/>
+                                  </svg>
+                                </div>
+                                <input 
+                                  ref={urlInputRef}
+                                  type="text" 
+                                  value={videoUrl}
+                                  onChange={(e) => setVideoUrl(e.target.value)}
+                                  placeholder={
+                                    currentLang === 'pt' ? "Cole aqui a URL do YouTube…" :
+                                    currentLang === 'es' ? "Pega aquí la URL de YouTube…" :
+                                    "Paste the YouTube URL here…"
+                                  } 
+                                  className={`w-full rounded-xl pl-12 pr-4 h-12 outline-none transition-all text-sm sm:text-base border ${
+                                    isDarkMode 
+                                      ? 'bg-[#030304]/80 border-zinc-800/80 text-white placeholder-zinc-600 focus:border-orange-500/85 focus:ring-4 focus:ring-orange-500/5' 
+                                      : 'bg-[#f8fafc] border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-400 focus:ring-4 focus:ring-orange-500/5'
+                                  }`}
+                                />
+                              </div>
+                              <span className={`text-[11px] font-medium pl-2 ${isDarkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
+                                {currentLang === 'pt' ? "Exemplo: https://youtube.com/watch?v=..." :
+                                 currentLang === 'es' ? "Ejemplo: https://youtube.com/watch?v=..." :
+                                 "Example: https://youtube.com/watch?v=..."}
+                              </span>
+                            </div>
+                            <Button 
+                              onClick={handleAnalyze} 
+                              disabled={isAnalyzing || !videoUrl} 
+                              className="justify-center h-12 px-6 text-sm font-extrabold rounded-xl shadow-md transition-all duration-300 shrink-0 cursor-pointer"
+                            >
+                              {isAnalyzing ? (
+                                <span className="flex items-center gap-2">
+                                  <Loader2 size={16} className="animate-spin" /> {analysisStatus}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1.5 group">
+                                  <span>{t.analyze}</span>
+                                  <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+                                </span>
+                              )}
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Document Source UI */}
+                        {selectedSourceType === 'document' && (
+                          <div className="space-y-4">
+                            {!selectedFile ? (
+                              <div
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  setIsDragging(true);
+                                }}
+                                onDragLeave={() => setIsDragging(false)}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  setIsDragging(false);
+                                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                    handleDocumentSelect(e.dataTransfer.files[0]);
+                                  }
+                                }}
+                                onClick={() => document.getElementById('document-upload-input')?.click()}
+                                className={`border-2 border-dashed p-8 rounded-2xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group ${
+                                  isDragging
+                                    ? 'border-orange-500 bg-orange-500/5'
+                                    : isDarkMode
+                                      ? 'border-zinc-800 hover:border-orange-500/50 bg-[#030304]/40 hover:bg-[#030304]/80'
+                                      : 'border-slate-200 hover:border-orange-400 bg-slate-50/50 hover:bg-slate-50'
+                                }`}
+                              >
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  id="document-upload-input"
+                                  accept=".pdf,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                                  onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                      handleDocumentSelect(e.target.files[0]);
+                                    }
+                                  }}
+                                />
+                                <div className={`p-3 rounded-full transition-colors ${
+                                  isDarkMode 
+                                    ? 'bg-zinc-800 text-zinc-400 group-hover:bg-orange-500/10 group-hover:text-orange-500' 
+                                    : 'bg-slate-100 text-slate-500 group-hover:bg-orange-50 group-hover:text-orange-600'
+                                }`}>
+                                  <FileUp size={24} className="animate-bounce" style={{ animationDuration: '3s' }} />
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-sm font-bold">
+                                    {currentLang === 'pt' ? "Envie ou solte seu arquivo aqui" :
+                                     currentLang === 'es' ? "Sube o suelta tu archivo aquí" :
+                                     "Upload or drop your file here"}
+                                  </p>
+                                  <p className={`text-xs ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                                    {currentLang === 'pt' ? "PDF, TXT, DOCX ou imagem" :
+                                     currentLang === 'es' ? "PDF, TXT, DOCX o imagen" :
+                                     "PDF, TXT, DOCX, or image"}
+                                  </p>
+                                </div>
+                                <p className={`text-[10px] max-w-lg mt-2 ${isDarkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
+                                  {currentLang === 'pt' ? "Arquivos enviados são processados temporariamente. O Astra salva apenas os resultados gerados." :
+                                   currentLang === 'es' ? "Los archivos enviados se procesan temporalmente. Astra guarda solo los resultados generados." :
+                                   "Uploaded files are processed temporarily. Astra saves only the generated results."}
+                                </p>
+                                <button className="mt-2 text-xs font-bold text-orange-500 hover:text-orange-600 flex items-center gap-1">
+                                  <span>{currentLang === 'pt' ? "Enviar arquivo" : currentLang === 'es' ? "Subir archivo" : "Upload file"}</span>
+                                  <ArrowRight size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left ${
+                                isDarkMode 
+                                  ? 'bg-[#030304]/80 border-zinc-800/80' 
+                                  : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                                    <FileText size={24} />
+                                  </div>
+                                  <div className="overflow-hidden">
+                                    <p className="text-sm font-bold truncate pr-4">{selectedFile.name}</p>
+                                    <p className={`text-xs ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                                      {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • {selectedFile.name.split('.').pop()?.toUpperCase()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 self-end sm:self-auto">
+                                  <button
+                                    onClick={() => setSelectedFile(null)}
+                                    className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                                      isDarkMode ? 'hover:bg-white/5 text-zinc-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
+                                    }`}
+                                  >
+                                    <X size={20} />
+                                  </button>
+                                  <Button
+                                    onClick={handleAnalyzeDocument}
+                                    disabled={isAnalyzing}
+                                    className="h-10 px-5 text-xs font-extrabold rounded-xl cursor-pointer"
+                                  >
+                                    {isAnalyzing ? (
+                                      <span className="flex items-center gap-2">
+                                        <Loader2 size={14} className="animate-spin" /> {analysisStatus}
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1">
+                                        <span>{currentLang === 'pt' ? "Analisar Documento" : currentLang === 'es' ? "Analizar Documento" : "Analyze Document"}</span>
+                                        <ArrowRight size={14} />
+                                      </span>
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Website Link Placeholder UI */}
+                        {selectedSourceType === 'website' && (
+                          <div className={`p-6 sm:p-8 rounded-2xl border text-center flex flex-col items-center justify-center gap-3 transition-all ${
+                            isDarkMode 
+                              ? 'bg-[#030304]/40 border-zinc-800/40' 
+                              : 'bg-slate-50 border-slate-100'
+                          }`}>
+                            <div className={`p-3.5 rounded-full ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                              <Globe size={28} />
+                            </div>
+                            <h3 className="text-sm sm:text-base font-bold">
+                              {currentLang === 'pt' ? "Fase 2: Link de Site" :
+                               currentLang === 'es' ? "Fase 2: Enlace de Sitio" :
+                               "Phase 2: Website Link"}
+                            </h3>
+                            <p className={`text-xs sm:text-sm max-w-md ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                              {currentLang === 'pt' ? "Link de site estará disponível em breve." :
+                               currentLang === 'es' ? "Los enlaces de sitios estarán disponibles pronto." :
+                               "Website links will be available soon."}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Google Drive Placeholder UI */}
+                        {selectedSourceType === 'drive' && (
+                          <div className={`p-6 sm:p-8 rounded-2xl border text-center flex flex-col items-center justify-center gap-3 transition-all ${
+                            isDarkMode 
+                              ? 'bg-[#030304]/40 border-zinc-800/40' 
+                              : 'bg-slate-50 border-slate-100'
+                          }`}>
+                            <div className={`p-3.5 rounded-full ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                              <FolderOpen size={28} />
+                            </div>
+                            <h3 className="text-sm sm:text-base font-bold">
+                              {currentLang === 'pt' ? "Fase 3: Google Drive" :
+                               currentLang === 'es' ? "Fase 3: Google Drive" :
+                               "Phase 3: Google Drive"}
+                            </h3>
+                            <p className={`text-xs sm:text-sm max-w-md ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                              {currentLang === 'pt' ? "Google Drive estará disponível em breve." :
+                               currentLang === 'es' ? "Google Drive estará disponible pronto." :
+                               "Google Drive will be available soon."}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                  {/* Row 2: Features cards with standard elegant Astra UI */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                     {([
-                      { id: 'tutor', label: t.tutor, icon: GraduationCap },
                       { id: 'summary', label: t.summary, icon: FileText },
+                      { id: 'tutor', label: t.tutor, icon: GraduationCap },
                       { id: 'quiz', label: t.quiz, icon: Puzzle },
                       { id: 'mindmap', label: t.mindmap, icon: BrainCircuit }
                     ] as const).map((btn) => {
+                      const hasResult = !!currentResult;
                       const isActive = activeTab === btn.id;
                       
-                      let btnClass = "";
+                      let cardClass = "";
                       let iconColor = "";
-                      if (isActive) {
-                        btnClass = "bg-gradient-to-r from-orange-600 to-amber-500 text-white border-orange-500 shadow-md shadow-orange-600/20 font-extrabold scale-[1.01] hover:brightness-110";
-                        iconColor = "text-white";
+                      
+                      if (!hasResult) {
+                        if (isDarkMode) {
+                          cardClass = "bg-[#0B0C10]/40 border-white/5 text-zinc-400 cursor-not-allowed opacity-60";
+                          iconColor = "text-zinc-500";
+                        } else {
+                          cardClass = "bg-slate-50/50 border-slate-200 text-slate-500 cursor-not-allowed opacity-60";
+                          iconColor = "text-slate-400";
+                        }
+                      } else if (isActive) {
+                        if (isDarkMode) {
+                          cardClass = "bg-gradient-to-r from-[#FF5F1F] to-[#ea580c] border-[#FF5F1F] text-white shadow-[0_0_25px_rgba(255,95,31,0.45)] scale-[1.02] font-bold";
+                          iconColor = "text-white animate-pulse";
+                        } else {
+                          cardClass = "bg-[#FF5F1F] border-[#FF5F1F] text-white shadow-[0_0_15px_rgba(255,95,31,0.25)] scale-[1.02] font-bold";
+                          iconColor = "text-white";
+                        }
                       } else {
-                        btnClass = isDarkMode
-                          ? "bg-[#0c0c0e] text-zinc-300 border-zinc-800/80 hover:border-orange-500/50 hover:bg-[#131317] hover:text-white"
-                          : "bg-[#f8fafc] text-slate-700 border-slate-200 hover:border-orange-400 hover:bg-white hover:text-slate-900 hover:shadow-sm";
-                        iconColor = isDarkMode ? "text-orange-500" : "text-orange-600";
+                        if (isDarkMode) {
+                          cardClass = "bg-[#0B0C10] border-white/10 text-white shadow-sm hover:border-[#00F5D4]/50 hover:shadow-[0_0_15px_rgba(0,245,212,0.15)] hover:text-white hover:-translate-y-0.5 active:translate-y-0 font-semibold";
+                          iconColor = "text-[#FF5F1F] transition-colors duration-300 group-hover:text-[#00F5D4]";
+                        } else {
+                          cardClass = "bg-white border-slate-200 text-slate-700 shadow-sm hover:border-[#FF5F1F]/50 hover:shadow-[0_0_15px_rgba(255,95,31,0.15)] hover:text-[#FF5F1F] hover:-translate-y-0.5 active:translate-y-0 font-semibold";
+                          iconColor = "text-[#FF5F1F]";
+                        }
                       }
 
                       const IconComponent = btn.icon;
@@ -3240,12 +3866,22 @@ export default function App() {
                         <button
                           key={btn.id}
                           onClick={() => {
-                            setActiveTab(btn.id);
+                            if (hasResult) {
+                              setActiveTab(btn.id);
+                            } else {
+                              showToast(
+                                currentLang === 'pt' ? "Cole uma URL e clique em Analisar primeiro." :
+                                currentLang === 'es' ? "Pega uma URL e haz clic en Analizar primero." :
+                                "Paste a URL and click Analyze first."
+                              );
+                            }
                           }}
-                          className={`flex items-center justify-center gap-2 px-4.5 rounded-xl border text-xs sm:text-sm font-extrabold tracking-wide transition-all duration-300 h-12 relative group overflow-hidden cursor-pointer ${btnClass}`}
+                          disabled={false}
+                          aria-label={btn.label}
+                          className={`flex flex-col items-center justify-center text-center gap-3.5 p-5 rounded-2xl border text-xs sm:text-sm tracking-widest uppercase transition-all duration-300 relative group overflow-hidden select-none min-h-[96px] md:min-h-[105px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5F1F] ${cardClass}`}
                         >
-                          <IconComponent size={18} className={`${iconColor} shrink-0 transition-transform duration-300 group-hover:scale-110`} />
-                          <span className="truncate">{btn.label}</span>
+                          <IconComponent size={24} className={`${iconColor} shrink-0 transition-all duration-300 ${hasResult ? 'group-hover:scale-110' : ''}`} />
+                          <span className="truncate w-full font-bold">{btn.label}</span>
                         </button>
                       );
                     })}
@@ -3279,215 +3915,58 @@ export default function App() {
                     <motion.div
                       initial={{ opacity: 0, y: 15 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`border-2 border-dashed p-10 rounded-[2.5rem] flex flex-col items-center justify-center text-center space-y-4 transition-all duration-300 ${
+                      className={`border-2 border-dashed p-10 sm:p-14 rounded-[2.5rem] flex flex-col items-center justify-center text-center space-y-6 transition-all duration-300 ${
                         isDarkMode 
                           ? 'bg-[#0c0c0e]/60 border-orange-500/20 text-zinc-300' 
-                          : 'bg-white border-orange-500/30 text-slate-700 shadow-sm'
+                          : 'bg-white border-orange-500/30 text-slate-700 shadow-sm shadow-slate-100/50'
                       }`}
                     >
-                      <div className="w-16 h-16 rounded-3xl bg-orange-600/10 flex items-center justify-center text-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.15)] animate-pulse">
-                        <BrainCircuit size={32} />
+                      <div className="w-20 h-20 rounded-3xl bg-orange-500/10 flex items-center justify-center text-orange-500 shadow-[0_0_25px_rgba(234,88,12,0.15)] relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                        <Sparkles size={36} className="relative z-10 group-hover:scale-110 transition-transform duration-300" />
                       </div>
-                      <div className="space-y-2 max-w-lg">
-                        <h3 className={`text-lg sm:text-xl font-bold tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-slate-900'}`}>
-                          {currentLang === 'pt' ? 'Cole uma URL do YouTube e escolha uma funcionalidade para começar.' : currentLang === 'es' ? 'Pegue una URL de YouTube y elija una función para comenzar.' : 'Paste a YouTube URL and choose a feature to get started.'}
+                      <div className="space-y-3 max-w-lg">
+                        <h3 className={`text-xl sm:text-2xl font-bold tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-slate-900'}`}>
+                          {currentLang === 'pt' ? 'Comece analisando um vídeo' : currentLang === 'es' ? 'Comienza analizando un video' : 'Start by analyzing a video'}
                         </h3>
-                        <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
-                          {currentLang === 'pt' ? 'O Astra analisará o vídeo usando Inteligência Artificial e gerará o conteúdo escolhido.' : currentLang === 'es' ? 'Astra analizará el video utilizando Inteligencia Artificial y generará el contenido elegido.' : 'Astra will analyze the video using Artificial Intelligence and generate the chosen content.'}
+                        <p className={`text-sm sm:text-base leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                          {currentLang === 'pt' ? 'Cole uma URL do YouTube, escolha uma funcionalidade e deixe o Astra transformar o conteúdo em uma experiência de estudo.' : 
+                           currentLang === 'es' ? 'Pega una URL de YouTube, elige una funcionalidad y deja que Astra transforme el contenido en una experiencia de estudio.' : 
+                           'Paste a YouTube URL, choose a feature, and let Astra turn the content into a study experience.'}
                         </p>
                       </div>
-                    </motion.div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-2 space-y-4">
-                      <div id="history-section" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2 scroll-mt-6">
-                        <div className="space-y-1">
-                          <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
-                            <History size={14} /> {t.history}
-                          </h3>
-                          {history.length > 0 && (
-                            <div className="flex items-center gap-2">
-                              <p className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
-                                {t.historyLimitDesc}
-                              </p>
-                              <span className={isDarkMode ? 'text-zinc-800' : 'text-slate-200'}>•</span>
-                              <button
-                                onClick={() => {
-                                  setConfirmModalType('clear_all');
-                                  setIsConfirmModalOpen(true);
-                                }}
-                                className="text-[10px] sm:text-xs font-medium text-red-500 hover:text-red-600 transition-colors cursor-pointer bg-transparent border-none p-0 outline-none"
-                              >
-                                {t.clearHistory}
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                      
+                      <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 w-full max-w-xs sm:max-w-md justify-center">
+                        <motion.button 
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={focusUrlInput}
+                          className="w-full sm:w-auto px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300"
+                        >
+                          <Youtube size={16} />
+                          <span>
+                            {currentLang === 'pt' ? 'Colar URL' : currentLang === 'es' ? 'Pegar URL' : 'Paste URL'}
+                          </span>
+                        </motion.button>
                         
-                        <div className="relative group">
-                          <input 
-                            type="text"
-                            placeholder={t.searchHistory}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className={`w-full sm:w-64 pl-9 pr-4 py-2 rounded-xl text-xs outline-none transition-all border ${
-                              isDarkMode 
-                                ? 'bg-white/5 border-white/10 text-white focus:border-orange-600/50 focus:bg-white/10' 
-                                : 'bg-white border-slate-200 text-slate-950 focus:border-orange-300 focus:shadow-sm'
-                            }`}
-                          />
-                          <div className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
-                            isDarkMode ? 'text-gray-500 group-focus-within:text-orange-500' : 'text-slate-500 group-focus-within:text-orange-600'
-                          }`}>
-                            <Search size={14} className={searchQuery.length > 0 ? "scale-110" : ""} />
-                          </div>
-                          {searchQuery && (
-                            <button 
-                              onClick={() => setSearchQuery('')}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-orange-600"
-                            >
-                              <X size={12} />
-                            </button>
-                          )}
-                        </div>
+                        <motion.button 
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setDashboardSubView('history')}
+                          className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 border ${
+                            isDarkMode 
+                              ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 text-zinc-300' 
+                              : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm'
+                          }`}
+                        >
+                          <History size={16} />
+                          <span>
+                            {currentLang === 'pt' ? 'Ver histórico' : currentLang === 'es' ? 'Ver historial' : 'View history'}
+                          </span>
+                        </motion.button>
                       </div>
-
-                      <div className="space-y-3">
-                        {filteredHistory.length > 0 ? (
-                          filteredHistory.map((item) => (
-                            <motion.div 
-                              key={item.id}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              onClick={() => {
-                                setCurrentResult(item);
-                                setActiveTab(preferences.defaultStudyFormat);
-                              }}
-                              className={`group flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 hover:border-orange-600/50' : 'bg-white border-slate-200 hover:border-orange-200 shadow-sm shadow-slate-900/5 hover:shadow-md'}`}
-                            >
-                              <div className={`w-20 h-12 rounded-lg overflow-hidden shrink-0 relative ${isDarkMode ? 'bg-gray-800' : 'bg-slate-100'}`}>
-                                <img src={item.video?.thumbnail || item.thumbnail} alt="" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <Youtube size={16} className={`group-hover:text-white transition-colors ${isDarkMode ? 'text-white/50' : 'text-slate-400'}`} />
-                                </div>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className={`font-bold text-sm sm:text-base truncate group-hover:text-orange-500 transition-colors ${isDarkMode ? '' : 'text-slate-900'}`}>
-                                  {item.video?.title || item.title}
-                                </h4>
-                                <p className={`text-[10px] sm:text-xs flex items-center gap-2 ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
-                                  <span className="text-orange-600/60 font-mono italic">{t.astraV3}</span>
-                                  <span>•</span>
-                                  <span>{(() => {
-                                    const ts = item.lastAnalyzedAt || item.createdAt;
-                                    if (!ts) return '';
-                                    return new Date(ts.toDate?.() || ts).toLocaleDateString();
-                                  })()}</span>
-                                </p>
-                              </div>
-
-                              {/* Option Menu Dropdown */}
-                              <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveMenuId(activeMenuId === item.id ? null : item.id);
-                                  }}
-                                  className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                                    isDarkMode 
-                                      ? 'hover:bg-white/10 text-gray-400 hover:text-white' 
-                                      : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
-                                  }`}
-                                >
-                                  <MoreVertical size={16} />
-                                </button>
-                                
-                                <AnimatePresence>
-                                  {activeMenuId === item.id && (
-                                    <>
-                                      {/* Transparent click handler backdrop to close the menu */}
-                                      <div 
-                                        className="fixed inset-0 z-10" 
-                                        onClick={() => setActiveMenuId(null)}
-                                      />
-                                      <motion.div
-                                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                        className={`absolute right-0 mt-1 w-48 rounded-xl shadow-lg border p-1 z-20 transition-colors ${
-                                          isDarkMode 
-                                            ? 'bg-zinc-950 border-zinc-800 text-white shadow-black' 
-                                            : 'bg-white border-slate-200 text-slate-800 shadow-slate-100'
-                                        }`}
-                                      >
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setItemToDelete(item);
-                                            setConfirmModalType('delete_item');
-                                            setIsConfirmModalOpen(true);
-                                            setActiveMenuId(null);
-                                          }}
-                                          className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg text-red-500 hover:bg-red-500/10 hover:text-red-600 transition-all font-medium text-left cursor-pointer"
-                                        >
-                                          <Trash2 size={14} />
-                                          {t.remove}
-                                        </button>
-                                      </motion.div>
-                                    </>
-                                  )}
-                                </AnimatePresence>
-                              </div>
-
-                              <ChevronRight size={18} className="text-gray-400 group-hover:text-orange-600 transition-colors shrink-0" />
-                            </motion.div>
-                          ))
-                        ) : searchQuery ? (
-                          <div className={`p-12 rounded-3xl border flex flex-col items-center justify-center text-center space-y-4 ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-slate-200 shadow-xl shadow-slate-900/5'}`}>
-                            <div className="w-16 h-16 rounded-full bg-red-600/5 flex items-center justify-center text-red-500">
-                              <Search size={32} />
-                            </div>
-                            <div className="space-y-1">
-                              <h3 className="font-bold">{t.noResults} "{searchQuery}"</h3>
-                              <p className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.adjustSearch}</p>
-                            </div>
-                            <Button variant="ghost" onClick={() => setSearchQuery('')} className="text-xs">
-                              {t.clearSearch}
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className={`p-12 rounded-3xl border flex flex-col items-center justify-center text-center space-y-4 ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-white border-slate-200 shadow-xl shadow-slate-900/5'}`}>
-                            <div className="w-16 h-16 rounded-full bg-orange-600/5 flex items-center justify-center text-orange-600">
-                              <History size={32} />
-                            </div>
-                            <div className="space-y-1">
-                              <h3 className="font-bold">{t.noHistory}</h3>
-                              <p className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.noHistoryDesc}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className={`font-bold uppercase tracking-widest text-[10px] sm:text-xs px-2 flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
-                        <Zap size={14} /> {t.premium}
-                      </h3>
-                      <div className="p-8 rounded-3xl bg-orange-600 flex flex-col items-center text-center space-y-4 shadow-orange-600/30 shadow-2xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:bg-white/20 transition-colors" />
-                        <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-white backdrop-blur-md relative z-10">
-                          <Zap size={32} fill="currentColor" />
-                        </div>
-                        <div className="space-y-1 relative z-10">
-                          <h3 className="font-bold text-lg text-white">{t.upgradePro}</h3>
-                          <p className="text-xs text-white/80 italic leading-relaxed">{t.upgradeProDesc}</p>
-                        </div>
-                        <button className="w-full py-3 bg-white text-orange-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition-all shadow-lg relative z-10">
-                          {t.viewPricing}
-                        </button>
-                      </div>
-                    </div>
+                    </motion.div>
                   </div>
-                </div>
               )}
               </AnimatePresence>
                 </>
@@ -3869,6 +4348,35 @@ export default function App() {
       <footer className={`py-12 border-t text-center text-sm transition-colors ${isDarkMode ? 'border-white/5 text-gray-600' : 'border-slate-200 text-slate-500'}`}>
         <p>© 2026 Astra Learning AI — {t.builtWithPrecision}</p>
       </footer>
+
+      {/* Premium Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-50 max-w-sm"
+          >
+            <div className={`p-4 rounded-2xl border shadow-xl flex items-center gap-3 backdrop-blur-md ${
+              isDarkMode 
+                ? 'bg-zinc-950/90 border-orange-500/30 text-white shadow-black/80' 
+                : 'bg-white/95 border-orange-200 text-slate-900 shadow-slate-200/50'
+            }`}>
+              <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-500 shrink-0">
+                <Sparkles size={16} />
+              </div>
+              <p className="text-xs sm:text-sm font-semibold pr-4 leading-tight">{toastMessage}</p>
+              <button 
+                onClick={() => setToastMessage(null)}
+                className={`text-zinc-500 hover:text-zinc-400 p-1 rounded-lg transition-colors cursor-pointer ml-auto`}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <CookieConsent
         isDarkMode={isDarkMode}

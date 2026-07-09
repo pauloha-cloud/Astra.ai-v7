@@ -81,22 +81,12 @@ async function generateContentWithRetry(ai: any, params: any, maxRetries = 4, ba
 
       if (isTransient) {
         if (params.model === "gemini-3.5-flash") {
-          console.warn(`[Gemini] Model gemini-3.5-flash encountered a transient error/timeout. Falling back to gemini-2.5-flash...`);
-          params.model = "gemini-2.5-flash";
-          attempt = 0;
-          continue;
-        } else if (params.model === "gemini-2.5-flash") {
-          console.warn(`[Gemini] Model gemini-2.5-flash encountered a transient error/timeout. Falling back to gemini-1.5-flash...`);
-          params.model = "gemini-1.5-flash";
-          attempt = 0;
-          continue;
-        } else if (params.model === "gemini-1.5-flash") {
-          console.warn(`[Gemini] Model gemini-1.5-flash encountered a transient error/timeout. Falling back to gemini-3.1-flash-lite...`);
+          console.log(`[Gemini] Model gemini-3.5-flash fallback triggered. Retrying using alternate model...`);
           params.model = "gemini-3.1-flash-lite";
           attempt = 0;
           continue;
         } else if (params.model === "gemini-3.1-flash-lite") {
-          console.warn(`[Gemini] Model gemini-3.1-flash-lite encountered a transient error/timeout. Falling back to gemini-flash-latest...`);
+          console.log(`[Gemini] Model gemini-3.1-flash-lite fallback triggered. Retrying using alternate model...`);
           params.model = "gemini-flash-latest";
           attempt = 0;
           continue;
@@ -104,7 +94,7 @@ async function generateContentWithRetry(ai: any, params: any, maxRetries = 4, ba
         
         if (attempt < maxRetries) {
           const delay = baseDelayMs * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
-          console.warn(`[Gemini] Transient error for ${params.model} (msg: ${errMsg}). Retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})...`);
+          console.log(`[Gemini] Retrying request for ${params.model} in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
