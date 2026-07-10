@@ -330,8 +330,9 @@ export function HistoryView({
             {filteredHistory.length > 0 ? (
               <div className="grid grid-cols-1 gap-3.5">
                 {filteredHistory.map((item) => {
+                  const isDocument = item.sourceType === 'document' || item.video?.url?.startsWith('document://');
                   const hasTranscript = !!item.transcript;
-                  const channelTitle = item.video?.channel || 'Astra Learning AI';
+                  const channelTitle = item.video?.channel || (isDocument ? (currentLang === 'pt' ? 'Documento Local' : currentLang === 'es' ? 'Documento Local' : 'Local Document') : 'Astra Learning AI');
                   const title = item.video?.title || item.title || '';
                   const thumbnail = item.video?.thumbnail || item.thumbnail;
                   const ts = item.lastAnalyzedAt || item.createdAt;
@@ -357,18 +358,26 @@ export function HistoryView({
                           : 'bg-white border-slate-200/80 hover:border-orange-300 shadow-sm shadow-slate-900/5 hover:shadow-md'
                       }`}
                     >
-                      {/* Video Thumbnail left */}
-                      <div className={`w-full sm:w-32 h-36 sm:h-20 rounded-xl overflow-hidden shrink-0 relative ${isDarkMode ? 'bg-zinc-900/60' : 'bg-slate-100'}`}>
-                        <img 
-                          src={thumbnail} 
-                          alt="" 
-                          className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300" 
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/0 transition-colors">
-                          <div className="p-1.5 rounded-lg bg-red-600/90 text-white scale-90 group-hover:scale-110 group-hover:bg-red-600 transition-all shadow-md">
-                            <Youtube size={16} />
+                      {/* Video Thumbnail / Document icon left */}
+                      <div className={`w-full sm:w-32 h-36 sm:h-20 rounded-xl overflow-hidden shrink-0 relative flex items-center justify-center ${isDarkMode ? 'bg-zinc-900/60' : 'bg-slate-100'}`}>
+                        {isDocument ? (
+                          <div className="flex items-center justify-center w-full h-full bg-orange-500/10 text-orange-500 group-hover:scale-105 transition-all duration-300">
+                            <FileText size={28} />
                           </div>
-                        </div>
+                        ) : (
+                          <>
+                            <img 
+                              src={thumbnail} 
+                              alt="" 
+                              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300" 
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/0 transition-colors">
+                              <div className="p-1.5 rounded-lg bg-red-600/90 text-white scale-90 group-hover:scale-110 group-hover:bg-red-600 transition-all shadow-md">
+                                <Youtube size={16} />
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {/* Video Information middle */}
@@ -393,7 +402,7 @@ export function HistoryView({
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           {/* Dynamic Source badge */}
                           <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold tracking-tight border ${
-                            hasTranscript 
+                            isDocument || hasTranscript 
                               ? isDarkMode 
                                 ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
                                 : 'bg-orange-50 border-orange-100 text-orange-700'
@@ -401,8 +410,20 @@ export function HistoryView({
                                 ? 'bg-zinc-800/60 border-zinc-700 text-zinc-400' 
                                 : 'bg-slate-100 border-slate-200 text-slate-600'
                           }`}>
-                            {hasTranscript ? lang.sourceTranscript : lang.sourceMetadata}
+                            {isDocument 
+                              ? (currentLang === 'pt' ? 'Fonte: Documento' : currentLang === 'es' ? 'Fuente: Documento' : 'Source: Document') 
+                              : (hasTranscript ? lang.sourceTranscript : lang.sourceMetadata)}
                           </span>
+
+                          {isDocument && (
+                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold tracking-tight border ${
+                              isDarkMode 
+                                ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
+                                : 'bg-orange-50 border-orange-100 text-orange-700'
+                            }`}>
+                              {(item.documentType || 'TXT').toUpperCase()}
+                            </span>
+                          )}
 
                           {/* Mini feature chips */}
                           {features.map((feat, idx) => (

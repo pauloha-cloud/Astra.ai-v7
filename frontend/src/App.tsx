@@ -1451,7 +1451,7 @@ export default function App() {
       const mbLimit = maxSize / (1024 * 1024);
       showToast(
         currentLang === 'pt' ? `O arquivo excede o limite de ${mbLimit} MB para este formato.` :
-        currentLang === 'es' ? `El archivo supera el límite de ${mbLimit} MB para este formato.` :
+        currentLang === 'es' ? `El arquivo supera el límite de ${mbLimit} MB para este formato.` :
         `File exceeds the ${mbLimit} MB limit for this format.`
       );
       return;
@@ -1460,265 +1460,176 @@ export default function App() {
     setSelectedFile(file);
   };
 
-  const handleAnalyzeDocument = () => {
+  const handleAnalyzeDocument = async () => {
     if (!selectedFile) return;
+
+    const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
+    
+    // Check if the document type is neither txt nor pdf
+    if (fileExt !== 'txt' && fileExt !== 'pdf') {
+      showToast(
+        currentLang === 'pt' ? "Processamento de DOCX e imagem será ativado nas próximas etapas." :
+        currentLang === 'es' ? "El procesamiento de DOCX e imagen se activará en las próximas etapas." :
+        "DOCX and image processing will be enabled in upcoming steps."
+      );
+      return;
+    }
+
+    // Validate size based on format
+    if (fileExt === 'txt') {
+      const maxSize = 5 * 1024 * 1024;
+      if (selectedFile.size > maxSize) {
+        showToast(
+          currentLang === 'pt' ? "O arquivo TXT excede o limite de 5 MB." :
+          currentLang === 'es' ? "El archivo TXT supera el límite de 5 MB." :
+          "The TXT file exceeds the 5 MB limit."
+        );
+        return;
+      }
+    } else if (fileExt === 'pdf') {
+      const maxSize = 20 * 1024 * 1024;
+      if (selectedFile.size > maxSize) {
+        showToast(
+          currentLang === 'pt' ? "O PDF excede o limite de 20 MB." :
+          currentLang === 'es' ? "El PDF supera el límite de 20 MB." :
+          "The PDF exceeds the 20 MB limit."
+        );
+        return;
+      }
+    }
+
     setIsAnalyzing(true);
     
     const statuses = currentLang === 'pt' ? [
       "Enviando documento...",
       "Processando conteúdo...",
-      "Identificando tópicos...",
+      "Analisando texto...",
       "Construindo mapa mental...",
       "Sucesso!"
     ] : currentLang === 'es' ? [
       "Enviando documento...",
       "Procesando contenido...",
-      "Identificando temas...",
+      "Analizando texto...",
       "Construyendo mapa mental...",
       "¡Éxito!"
     ] : [
       "Uploading document...",
       "Processing content...",
-      "Identifying topics...",
+      "Analyzing text...",
       "Building mind map...",
       "Success!"
     ];
     
     setAnalysisStatus(statuses[0]);
-    
-    setTimeout(() => {
-      setAnalysisStatus(statuses[1]);
+    let statusInterval: any = null;
+
+    try {
+      // Create FormData to send the file to the backend
+      const formData = new FormData();
+      formData.append("sourceType", "document");
+      formData.append("documentType", fileExt || "txt");
+      formData.append("file", selectedFile);
+      formData.append("lang", currentLang);
+      formData.append("targetLanguage", currentLang);
+      formData.append("fileName", selectedFile.name);
+      formData.append("fileSize", selectedFile.size.toString());
+
+      // Simulate step-by-step progress updating for responsive status display
+      let currentStep = 0;
+      statusInterval = setInterval(() => {
+        if (currentStep < statuses.length - 2) {
+          currentStep++;
+          setAnalysisStatus(statuses[currentStep]);
+        }
+      }, 3500);
+
+      const response = await api.post('/analyze-source', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 180000 // 3 minutes timeout
+      });
+
+      if (statusInterval) clearInterval(statusInterval);
+      setAnalysisStatus(statuses[statuses.length - 1]); // Set success status
+
+      const data = response.data;
+
+      // Save to Firebase Firestore if the user is authenticated
+      if (user) {
+        const analysesPath = `users/${user.uid}/analyses`;
+        try {
+          const docId = data.video?.videoId || `doc-${Date.now()}`;
+          const docRef = doc(db, 'users', user.uid, 'analyses', docId);
+          await setDoc(docRef, {
+            userId: user.uid,
+            video: {
+              videoId: docId,
+              url: data.video?.url || `document://${selectedFile.name}`,
+              title: data.video?.title || selectedFile.name,
+              channel: data.video?.channel || (currentLang === 'pt' ? 'Documento Local' : currentLang === 'es' ? 'Documento Local' : 'Local Document'),
+              thumbnail: data.video?.thumbnail || ''
+            },
+            mode: data.mode || 'transcript',
+            summary: data.summary || '',
+            key_points: data.key_points || [],
+            quiz: data.quiz || [],
+            mind_map: data.mind_map || null,
+            tutor_questions: data.tutor_questions || [],
+            limitations: data.limitations || [],
+            transcript: data.transcript || '',
+            sourceType: data.sourceType || "document",
+            documentType: data.documentType || fileExt || "txt",
+            fileName: data.fileName || selectedFile.name,
+            fileSize: data.fileSize || selectedFile.size,
+            createdAt: serverTimestamp(),
+            lastAnalyzedAt: serverTimestamp()
+          });
+        } catch (firestoreErr) {
+          console.error("Failed to save document analysis to history:", firestoreErr);
+          try {
+            handleFirestoreError(firestoreErr, OperationType.CREATE, analysesPath);
+          } catch (err) {
+            console.error("Handled Firestore save error:", err);
+          }
+        }
+      }
+
+      // Complete and set result
       setTimeout(() => {
-        setAnalysisStatus(statuses[2]);
-        setTimeout(() => {
-          setAnalysisStatus(statuses[3]);
-          setTimeout(() => {
-            setAnalysisStatus(statuses[4]);
-            
-            const fileName = selectedFile.name;
-            const mockResult: AnalysisResult = {
-              video: {
-                videoId: `doc-${Date.now()}`,
-                url: `document://${fileName}`,
-                title: fileName,
-                channel: currentLang === 'pt' ? "Documento Local" : currentLang === 'es' ? "Documento Local" : "Local Document",
-                thumbnail: ""
-              },
-              mode: 'transcript',
-              message: "Análise realizada com sucesso a partir de documento local.",
-              summary: currentLang === 'pt' ? `# Resumo do Documento: ${fileName}\n\nEste documento foi carregado e analisado pelo **Astra Learning**. A análise identificou os tópicos centrais estruturados para otimização do seu aprendizado.\n\n## Principais Pilares Estudados\n1. **Consolidação de Conceitos**: Organização das ideias fundamentais contidas no material.\n2. **Conexões Semânticas**: Identificação das relações entre os temas principais e secundários.\n3. **Avaliação Prática**: Geração de perguntas direcionadas para fixação de conteúdo a longo prazo.\n\n---\n\n### Visão Geral Detalhada\nO material de estudo fornece uma base sólida para a compreensão do tópico. Recomenda-se explorar cada ramificação no **Mapa Mental** e testar seus conhecimentos na seção de **Quiz**. Se houver qualquer dúvida ou necessidade de aprofundamento, o **Tutor de Estudos** está pronto para explicar detalhadamente cada conceito.` :
-                       currentLang === 'es' ? `# Resumen del Documento: ${fileName}\n\nEste documento ha sido cargado y analizado por **Astra Learning**. El análisis identificó los temas centrales estructurados para optimizar su aprendizaje.\n\n## Pilares Clave Estudiados\n1. **Consolidación de Conceptos**: Organización de las ideas fundamentales contenidas en el material.\n2. **Conexiones Semánticas**: Identificación de relaciones entre temas principales y secundarios.\n3. **Evaluación Práctica**: Generación de preguntas dirigidas para la retención a largo plazo.\n\n---\n\n### Descripción General Detalhada\nEl material de estudio proporciona una base sólida para comprender el tema. Se recomienda explorar cada rama en el **Mapa Mental** y poner a prueba sus conocimientos en la sección de **Cuestionario**. Si tiene alguna duda o necesita profundizar, el **Tutor de Estudios** está listo para explicar cada concepto en detalle.` :
-                       `# Document Summary: ${fileName}\n\nThis document has been uploaded and analyzed by **Astra Learning**. The analysis identified the core topics structured to optimize your learning.\n\n## Key Studied Pillars\n1. **Concept Consolidation**: Organization of the fundamental ideas contained in the material.\n2. **Semantic Connections**: Identification of relationships between primary and secondary themes.\n3. **Practical Evaluation**: Generation of targeted questions for long-term retention.\n\n---\n\n### Detailed Overview\nThe study material provides a solid foundation for understanding the topic. It is highly recommended to explore each branch in the **Mind Map** and test your knowledge in the **Quiz** section. If you have any questions or need deep explanation, the **Study Tutor** is ready to explain each concept in detail.`,
-              key_points: currentLang === 'pt' ? [
-                "Leitura ativa e identificação de tópicos centrais",
-                "Estruturação hierárquica do material analisado",
-                "Retenção de conteúdo otimizada com repetição espaçada"
-              ] : currentLang === 'es' ? [
-                "Lectura activa e identificación de temas centrales",
-                "Estructuración jerárquica del material analizado",
-                "Retención de contenido optimizada con repetición espaciada"
-              ] : [
-                "Active reading and identification of central topics",
-                "Hierarchical structuring of analyzed material",
-                "Optimized content retention with spaced repetition"
-              ],
-              quiz: currentLang === 'pt' ? [
-                {
-                  question: "Qual é o principal objetivo do Astra Learning ao analisar este documento?",
-                  options: [
-                    "Apenas ler o texto sem organizar",
-                    "Transformar o conteúdo em recursos dinâmicos como Resumo, Tutor, Quiz e Mapa Mental",
-                    "Traduzir o documento para outros idiomas sem explicar",
-                    "Excluir o arquivo permanentemente da nuvem"
-                  ],
-                  answer: "Transformar o conteúdo em recursos dinâmicos como Resumo, Tutor, Quiz e Mapa Mental",
-                  explanation: "O Astra analisa o material para criar uma experiência de aprendizado ativa e multimodal."
-                },
-                {
-                  question: "Quais formatos de arquivo são suportados pelo Astra Learning na fonte 'Documento'?",
-                  options: [
-                    "Apenas arquivos MP3",
-                    "Apenas imagens PNG",
-                    "PDF, TXT, DOCX e imagens",
-                    "Planilhas de Excel complexas"
-                  ],
-                  answer: "PDF, TXT, DOCX e imagens",
-                  explanation: "O Astra suporta múltiplos formatos de texto e imagem para flexibilidade de estudo."
-                },
-                {
-                  question: "Como o Tutor de Estudos pode te ajudar após a análise do documento?",
-                  options: [
-                    "Fazendo o resumo por você",
-                    "Respondendo dúvidas complexas e explicando conceitos de forma personalizada",
-                    "Bloqueando o acesso aos arquivos",
-                    "Criando um novo arquivo do zero"
-                  ],
-                  answer: "Respondendo dúvidas complexas e explicando conceitos de forma personalizada",
-                  explanation: "O Tutor interativo interage diretamente com base no contexto do documento analisado."
-                }
-              ] : currentLang === 'es' ? [
-                {
-                  question: "¿Cuál es el objetivo principal de Astra Learning al analizar este documento?",
-                  options: [
-                    "Solo leer el texto sin organizar",
-                    "Transformar el contenido en recursos dinámicos como Resumen, Tutor, Cuestionario y Mapa Mental",
-                    "Traducir el documento a otros idiomas sin explicar",
-                    "Eliminar permanentemente el archivo de la nube"
-                  ],
-                  answer: "Transformar el contenido en recursos dinámicos como Resumen, Tutor, Cuestionario y Mapa Mental",
-                  explanation: "Astra analiza el material para crear una experiencia de aprendizaje activa y multimodal."
-                },
-                {
-                  question: "¿Qué formatos de archivo son compatibles con Astra Learning en la fuente 'Documento'?",
-                  options: [
-                    "Solo archivos MP3",
-                    "Solo imágenes PNG",
-                    "PDF, TXT, DOCX e imágenes",
-                    "Hojas de cálculo de Excel complejas"
-                  ],
-                  answer: "PDF, TXT, DOCX e imágenes",
-                  explanation: "Astra admite múltiples formatos de texto e imagen para mayor flexibilidad de estudio."
-                },
-                {
-                  question: "¿Como o Tutor de Estudos pode te ajudar após a análise do documento?",
-                  options: [
-                    "Haciendo el resumen por ti",
-                    "Respondiendo preguntas complejas y explicando conceptos de forma personalizada",
-                    "Bloqueando el acceso a los archivos",
-                    "Creando un nuevo archivo desde cero"
-                  ],
-                  answer: "Respondiendo preguntas complejas y explicando conceptos de forma personalizada",
-                  explanation: "El Tutor interactivo interactúa directamente según el contexto del documento analizado."
-                }
-              ] : [
-                {
-                  question: "What is the primary objective of Astra Learning when analyzing this document?",
-                  options: [
-                    "Just reading the text without organizing",
-                    "Transforming the content into dynamic resources like Summary, Tutor, Quiz, and Mind Map",
-                    "Translating the document into other languages without explaining",
-                    "Permanently deleting the file from the cloud"
-                  ],
-                  answer: "Transforming the content into dynamic resources like Summary, Tutor, Quiz, and Mind Map",
-                  explanation: "Astra analyzes the material to create an active and multimodal learning experience."
-                },
-                {
-                  question: "Which file formats are supported by Astra Learning in the 'Document' source?",
-                  options: [
-                    "Only MP3 files",
-                    "Only PNG images",
-                    "PDF, TXT, DOCX, and images",
-                    "Complex Excel spreadsheets"
-                  ],
-                  answer: "PDF, TXT, DOCX, and images",
-                  explanation: "Astra supports multiple text and image formats for study flexibility."
-                },
-                {
-                  question: "How can the Study Tutor help you after analyzing the document?",
-                  options: [
-                    "Writing the summary for you",
-                    "Answering complex questions and explaining concepts in a personalized way",
-                    "Blocking access to files",
-                    "Creating a new file from scratch"
-                  ],
-                  answer: "Answering complex questions and explaining concepts in a personalized way",
-                  explanation: "The interactive Tutor engages directly based on the context of the analyzed document."
-                }
-              ],
-              mind_map: {
-                topic: fileName,
-                children: currentLang === 'pt' ? [
-                  {
-                    topic: "Conceitos Fundamentais",
-                    children: [
-                      { topic: "Análise Estrutural" },
-                      { topic: "Extração Semântica" }
-                    ]
-                  },
-                  {
-                    topic: "Fixação Prática",
-                    children: [
-                      { topic: "Resolução de Quizzes" },
-                      { topic: "Diálogo com o Tutor" }
-                    ]
-                  },
-                  {
-                    topic: "Formatos Soportados",
-                    children: [
-                      { topic: "Documentos (PDF, TXT, DOCX)" },
-                      { topic: "Imagens e Gráficos" }
-                    ]
-                  }
-                ] : currentLang === 'es' ? [
-                  {
-                    topic: "Conceptos Fundamentales",
-                    children: [
-                      { topic: "Análisis Estructural" },
-                      { topic: "Extracción Semántica" }
-                    ]
-                  },
-                  {
-                    topic: "Retención Práctica",
-                    children: [
-                      { topic: "Resolución de Cuestionarios" },
-                      { topic: "Diálogo con el Tutor" }
-                    ]
-                  },
-                  {
-                    topic: "Formatos Soportados",
-                    children: [
-                      { topic: "Documentos (PDF, TXT, DOCX)" },
-                      { topic: "Imágenes y Gráficos" }
-                    ]
-                  }
-                ] : [
-                  {
-                    topic: "Fundamental Concepts",
-                    children: [
-                      { topic: "Structural Analysis" },
-                      { topic: "Semantic Extraction" }
-                    ]
-                  },
-                  {
-                    topic: "Practical Retention",
-                    children: [
-                      { topic: "Quiz Solving" },
-                      { topic: "Tutor Dialogue" }
-                    ]
-                  },
-                  {
-                    topic: "Supported Formats",
-                    children: [
-                      { topic: "Documents (PDF, TXT, DOCX)" },
-                      { topic: "Images & Graphics" }
-                    ]
-                  }
-                ]
-              },
-              tutor_questions: currentLang === 'pt' ? [
-                "Me explique os pontos fundamentais do documento",
-                "Como posso aplicar esses conceitos na prática?",
-                "Crie um roteiro de estudos baseado nesse arquivo"
-              ] : currentLang === 'es' ? [
-                "Explícame los puntos fundamentales de este documento",
-                "¿Cómo puedo aplicar estos conceptos en la práctica?",
-                "Crea un plan de estudio basado en este archivo"
-              ] : [
-                "Explain the core points of this document to me",
-                "How can I apply these concepts in practice?",
-                "Create a study plan based on this file"
-              ],
-              limitations: []
-            };
-            
-            setCurrentResult(mockResult);
-            setActiveTab(preferences.defaultStudyFormat);
-            setIsAnalyzing(false);
-            setSelectedFile(null);
-          }, 1000);
-        }, 1000);
-      }, 1000);
-    }, 1000);
+        setCurrentResult(data);
+        setActiveTab(preferences.defaultStudyFormat);
+        setIsAnalyzing(false);
+        setSelectedFile(null);
+        fetchHistory();
+      }, 800);
+
+    } catch (error: any) {
+      if (statusInterval) clearInterval(statusInterval);
+      setIsAnalyzing(false);
+      console.error("Document analysis failed:", error);
+
+      let errorMessage = currentLang === 'pt' ? "Falha na análise do documento" : currentLang === 'es' ? "Fallo en el análisis del documento" : "Document analysis failed";
+      let errorDetails = "";
+      
+      if (error.response) {
+        const resData = error.response?.data;
+        errorMessage = (typeof resData === 'object' && resData?.error) ? resData.error : `${errorMessage} (${error.response.status})`;
+        errorDetails = (typeof resData === 'object' && resData?.details) ? resData.details : error.message;
+        
+        if (error.response.status === 500 && errorDetails.includes("GEMINI_API_KEY")) {
+          errorMessage = currentLang === 'pt' ? "Configuração Necessária" : currentLang === 'es' ? "Configuración Necesaria" : "Configuration Required";
+          errorDetails = currentLang === 'pt' ? "A chave da API do Gemini não foi encontrada ou é inválida. Por favor, verifique as variáveis de ambiente." : "The Gemini API key was not found or is invalid. Please check the environment variables.";
+        }
+      } else if (error.request) {
+        errorMessage = t.noResponse;
+        errorDetails = t.networkIssue;
+      } else {
+        errorDetails = error.message;
+      }
+
+      showToast(`${errorMessage}: ${errorDetails || ''}`);
+    }
   };
 
   // History delete/clear state
@@ -1966,14 +1877,14 @@ export default function App() {
               channel: data.video?.channel || '',
               thumbnail: data.video?.thumbnail || ''
             },
-            mode: data.mode,
-            summary: data.summary,
-            key_points: data.key_points,
-            quiz: data.quiz,
-            mind_map: data.mind_map,
+            mode: data.mode || 'transcript',
+            summary: data.summary || '',
+            key_points: data.key_points || [],
+            quiz: data.quiz || [],
+            mind_map: data.mind_map || null,
             tutor_questions: data.tutor_questions || [],
             limitations: data.limitations || [],
-            transcript: data.transcript,
+            transcript: data.transcript || '',
             createdAt: serverTimestamp(),
             lastAnalyzedAt: serverTimestamp()
           });
@@ -1987,14 +1898,14 @@ export default function App() {
               channel: data.video?.channel || '',
               thumbnail: data.video?.thumbnail || ''
             },
-            mode: data.mode,
-            summary: data.summary,
-            key_points: data.key_points,
-            quiz: data.quiz,
-            mind_map: data.mind_map,
+            mode: data.mode || 'transcript',
+            summary: data.summary || '',
+            key_points: data.key_points || [],
+            quiz: data.quiz || [],
+            mind_map: data.mind_map || null,
             tutor_questions: data.tutor_questions || [],
             limitations: data.limitations || [],
-            transcript: data.transcript,
+            transcript: data.transcript || '',
             createdAt: serverTimestamp(),
             lastAnalyzedAt: serverTimestamp()
           });
@@ -3927,25 +3838,47 @@ export default function App() {
                       </div>
                       <div className="space-y-3 max-w-lg">
                         <h3 className={`text-xl sm:text-2xl font-bold tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-slate-900'}`}>
-                          {currentLang === 'pt' ? 'Comece analisando um vídeo' : currentLang === 'es' ? 'Comienza analizando un video' : 'Start by analyzing a video'}
+                          {currentLang === 'pt' ? 'Comece com uma fonte de estudo' : currentLang === 'es' ? 'Comienza con una fuente de estudio' : 'Start with a study source'}
                         </h3>
                         <p className={`text-sm sm:text-base leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                          {currentLang === 'pt' ? 'Cole uma URL do YouTube, escolha uma funcionalidade e deixe o Astra transformar o conteúdo em uma experiência de estudo.' : 
-                           currentLang === 'es' ? 'Pega una URL de YouTube, elige una funcionalidad y deja que Astra transforme el contenido en una experiencia de estudio.' : 
-                           'Paste a YouTube URL, choose a feature, and let Astra turn the content into a study experience.'}
+                          {currentLang === 'pt' ? 'Cole uma URL do YouTube ou envie um documento para transformar o conteúdo em resumo, tutor, quiz e mapa mental.' : 
+                           currentLang === 'es' ? 'Pega una URL de YouTube o sube un documento para transformar el contenido en resumen, tutor, cuestionario y mapa mental.' : 
+                           'Paste a YouTube URL or upload a document to turn the content into summary, tutor, quiz, and mind map.'}
                         </p>
                       </div>
                       
-                      <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 w-full max-w-xs sm:max-w-md justify-center">
+                      <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 pt-2 w-full max-w-xs sm:max-w-xl justify-center">
                         <motion.button 
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={focusUrlInput}
-                          className="w-full sm:w-auto px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300"
+                          onClick={() => {
+                            setSelectedSourceType('youtube');
+                            setTimeout(() => {
+                              focusUrlInput();
+                            }, 50);
+                          }}
+                          className="w-full sm:w-auto px-5 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300"
                         >
                           <Youtube size={16} />
                           <span>
                             {currentLang === 'pt' ? 'Colar URL' : currentLang === 'es' ? 'Pegar URL' : 'Paste URL'}
+                          </span>
+                        </motion.button>
+
+                        <motion.button 
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            setSelectedSourceType('document');
+                            setTimeout(() => {
+                              document.getElementById('document-upload-input')?.click();
+                            }, 50);
+                          }}
+                          className="w-full sm:w-auto px-5 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300"
+                        >
+                          <FileUp size={16} />
+                          <span>
+                            {currentLang === 'pt' ? 'Enviar documento' : currentLang === 'es' ? 'Subir documento' : 'Upload document'}
                           </span>
                         </motion.button>
                         
@@ -3953,7 +3886,7 @@ export default function App() {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={() => setDashboardSubView('history')}
-                          className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 border ${
+                          className={`w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 border ${
                             isDarkMode 
                               ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 text-zinc-300' 
                               : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm'

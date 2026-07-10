@@ -9,9 +9,17 @@ import { YoutubeTranscript } from 'youtube-transcript';
 import axios from 'axios';
 import "dotenv/config";
 import { GoogleGenAI, Type } from "@google/genai";
+import multer from "multer";
+import { PDFParse } from "pdf-parse";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Configure multer for in-memory file uploads (max 25MB limit to support 20MB PDFs)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
 
 // Lazy Initialize AI Client for GoogleGenAI
 let cachedAIClient: GoogleGenAI | null = null;
@@ -306,11 +314,11 @@ async function initializeTutorSession(
       },
       outputAudioTranscription: {},
       inputAudioTranscription: {},
-      systemInstruction: `You are Astra Learning AI, the ultimate neural study companion. You are guiding a student on the video: "${videoTitle}".\n\n` +
-      `Context from Video:\n${(transcript || "").substring(0, 15000)}\n\n` +
+      systemInstruction: `You are Astra Learning AI, the ultimate neural study companion. You are guiding a student on the study source: "${videoTitle}".\n\n` +
+      `Context from the study source:\n${(transcript || "").substring(0, 15000)}\n\n` +
       `Pedagogical Guidelines:\n` +
       `1. Be the ultimate mentor. Don't just give answers—ask targeted questions that guide the user to the answer.\n` +
-      `2. Use specific examples from the transcript to build your explanations.\n` +
+      `2. Use specific examples from the study source context to build your explanations.\n` +
       `3. If the user seems lost, simplify the concept using a real-world analogy.\n` +
       `4. Acknowledge the user's progress. Use phrases like "Exactly!", "Great catch", "You've got it".\n` +
       `5. Keep your spoken responses concise and energetic. Aim for natural conversation patterns.\n\n` +
@@ -689,6 +697,308 @@ async function startServer() {
     }
   });
 
+  // Analyze Document Endpoint
+  app.post("/api/analyze-source", upload.single("file"), async (req, res) => {
+    const { sourceType, documentType, lang: reqLang = "en", targetLanguage, fileName, fileSize } = req.body;
+    const lang = targetLanguage || reqLang || "en";
+    
+    const langNames: Record<string, string> = {
+      'pt': 'Portuguese',
+      'en': 'English',
+      'es': 'Spanish'
+    };
+    const targetLangName = langNames[lang] || 'English';
+
+    if (sourceType !== "document" || (documentType !== "txt" && documentType !== "pdf")) {
+      if (documentType === "docx" || ["png", "jpg", "jpeg", "webp"].includes(documentType)) {
+        return res.status(400).json({
+          error: lang === "pt" ? "Processamento de DOCX e imagem será ativado nas próximas etapas."
+                 : lang === "es" ? "El procesamiento de DOCX e imagen se activará en las próximas etapas."
+                 : "DOCX and image processing will be enabled in upcoming steps."
+        });
+      }
+      return res.status(400).json({
+        error: lang === "pt" ? "Processamento de PDF, DOCX e imagem será ativado nas próximas etapas."
+               : lang === "es" ? "El procesamiento de PDF, DOCX e imagen se activará en las próximas etapas."
+               : "PDF, DOCX, and image processing will be enabled in upcoming steps."
+      });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({
+        error: lang === "pt" ? "Nenhum arquivo enviado." : lang === "es" ? "No se subió ningún archivo." : "No file uploaded."
+      });
+    }
+
+    // 1. Validate file size based on document type
+    if (documentType === "txt") {
+      const maxSize = 5 * 1024 * 1024;
+      if (file.size > maxSize) {
+      return res.status(400).json({
+        error: lang === "pt" ? "O arquivo TXT excede o limite de 5 MB."
+               : lang === "es" ? "El archivo TXT supera el límite de 5 MB."
+               : "The TXT file exceeds the 5 MB limit."
+      });
+    }
+    } else if (documentType === "pdf") {
+      const maxSize = 20 * 1024 * 1024;
+      if (file.size > maxSize) {
+        return res.status(400).json({
+          error: lang === "pt" ? "O PDF excede o limite de 20 MB."
+                 : lang === "es" ? "El PDF supera o límite de 20 MB."
+                 : "The PDF exceeds the 20 MB limit."
+        });
+      }
+    }
+
+    try {
+      let normalizedText = "";
+      let pageCount = 1;
+      let extractedCharacters = 0;
+
+      // 2. Extract text and get page count/characters metadata based on type
+      if (documentType === "txt") {
+        const rawContent = file.buffer.toString("utf8");
+        normalizedText = rawContent.trim();
+        pageCount = 1;
+        extractedCharacters = normalizedText.length;
+      } else if (documentType === "pdf") {
+        let parser;
+        try {
+          parser = new PDFParse({ data: file.buffer });
+          const textResult = await parser.getText();
+          const infoResult = await parser.getInfo({ parsePageInfo: false });
+          normalizedText = (textResult.text || "").trim();
+          pageCount = infoResult.total || 1;
+          extractedCharacters = normalizedText.length;
+        } catch (parseErr: any) {
+          console.error("[Backend] PDF parsing failed:", parseErr);
+          return res.status(400).json({
+            error: lang === "pt" ? "Falha ao ler o arquivo PDF. Verifique se o arquivo não está corrompido ou protegido por senha."
+                   : lang === "es" ? "Fallo al leer el archivo PDF. Verifique si el archivo no está dañado o protegido por contraseña."
+                   : "Failed to read the PDF file. Please verify if the file is not corrupted or password-protected."
+          });
+        } finally {
+          if (parser) {
+            try {
+              await parser.destroy();
+            } catch (destroyErr) {
+              console.error("[Backend] Error destroying PDFParse instance:", destroyErr);
+            }
+          }
+        }
+      }
+
+      // 3. Validate text length
+      if (normalizedText.length < 100) {
+        if (documentType === "pdf") {
+          return res.status(400).json({
+            error: lang === "pt" ? "O texto extraído do PDF é insuficiente para análise (mínimo de 100 caracteres)."
+                   : lang === "es" ? "El texto extraído del PDF es insuficiente para el análisis (mínimo de 100 caracteres)."
+                   : "The extracted PDF text is insufficient for analysis (minimum of 100 characters)."
+          });
+        } else {
+          return res.status(400).json({
+            error: lang === "pt" ? "O arquivo não possui texto suficiente para análise."
+                   : lang === "es" ? "El archivo no contiene suficiente texto para el análisis."
+                   : "The file does not contain enough text for analysis."
+          });
+        }
+      }
+
+      if (documentType === "pdf" && normalizedText.length > 30000) {
+        console.log(`[Backend] /api/analyze-source: PDF text exceeded 30k chars (${normalizedText.length} chars). Truncating to 30k chars.`);
+        normalizedText = normalizedText.substring(0, 30000) + "\n\n[... TEXT TRUNCATED FOR PERFORMANCE ...]";
+        extractedCharacters = normalizedText.length;
+      }
+
+      if (documentType === "txt" && normalizedText.length > 30000) {
+        return res.status(400).json({
+          error: lang === "pt" ? "O texto do arquivo é muito longo. Reduza o conteúdo ou divida em partes."
+                 : lang === "es" ? "El texto del archivo es demasiado largo. Reduce el contenido o divídelo en partes."
+                 : "The file text is too long. Reduce the content or split it into parts."
+        });
+      }
+
+      console.log(`[Backend] /api/analyze-source: Processing ${documentType.toUpperCase()} "${file.originalname}" (${normalizedText.length} chars) in ${targetLangName}`);
+
+      // 4. Generate Study Content using Gemini API
+      const prompt = `Analyze the following learning document text from the file "${file.originalname}".
+Generate a comprehensive educational summary, key points, interactive quiz, and a simple high-level overview mind map.
+
+Source type: Document
+Document type: ${documentType.toUpperCase()}
+Use the provided text as the learning source.
+
+EXPLANATION LEVEL DIRECTIVE (CRITICAL):
+${getExplanationInstruction("intermediate", lang)}
+
+CRITICAL FOR MIND MAP GENERATION:
+1. Create a simple high-level mind map representing 3 to 5 core branches/categories radiating from the main topic.
+2. Each node should have a 'topic' (short, 1-3 words), 'importance' (1-5), 'category', and 'icon'.
+3. Categories: 'Concept', 'Example', 'Detail', 'Definition', 'Method', 'Benefit', 'Risk', 'Trend'.
+4. Icons: Use Lucide icon names like 'Zap', 'BookOpen', 'Target', 'Layers', 'Cpu', 'Globe', 'Activity', 'TrendingUp', 'CheckCircle', 'AlertCircle'.
+
+GENERAL CRITICAL:
+1. Content must be in ${targetLangName}.
+2. Response must be valid JSON only.
+3. Summary should be 3-4 paragraphs of high-quality Markdown.
+
+LANGUAGE DIRECTIVE (CRITICAL):
+IMPORTANT: The final answer must be written entirely in ${targetLangName}. The source document, title, or content may be in another language, but you must understand it and translate/adapt the generated content to ${targetLangName}. Do not mix languages. Target language: ${targetLangName}. Use the source content only as input. Generate the final response entirely in ${targetLangName}. Do not output any language other than ${targetLangName}. Do not mix interface language and source document language.
+Understand the source content, but always produce the final answer entirely in ${targetLangName}. All fields in the response (including summary, key_points, question/options/explanation in quiz, topic in mind_map, tutor_questions, and limitations) must be fully translated/written in ${targetLangName}. Do not mix languages.
+
+Document Content:
+${normalizedText}`;
+
+      const aiClient = getAI();
+      let geminiResult;
+      try {
+        geminiResult = await generateContentWithRetry(aiClient, {
+          model: "gemini-3.5-flash",
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING, description: "A highly concise, professional and educational title generated from the document's content" },
+                summary: { type: Type.STRING },
+                key_points: { type: Type.ARRAY, items: { type: Type.STRING } },
+                quiz: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: { type: Type.STRING },
+                      options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                      answer: { type: Type.STRING },
+                      explanation: { type: Type.STRING }
+                    },
+                    required: ["question", "options", "answer", "explanation"]
+                  }
+                },
+                mind_map: {
+                  type: Type.OBJECT,
+                  properties: {
+                    topic: { type: Type.STRING },
+                    importance: { type: Type.NUMBER, description: "Importance score 1-5" },
+                    children: { 
+                      type: Type.ARRAY, 
+                      items: { 
+                        type: Type.OBJECT,
+                        properties: {
+                          topic: { type: Type.STRING },
+                          importance: { type: Type.NUMBER },
+                          category: { type: Type.STRING },
+                          icon: { type: Type.STRING }
+                        },
+                        required: ["topic"]
+                      } 
+                    }
+                  },
+                  required: ["topic", "children"]
+                },
+                tutor_questions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                limitations: { type: Type.ARRAY, items: { type: Type.STRING } }
+              },
+              required: ["title", "summary", "key_points", "quiz", "mind_map", "tutor_questions", "limitations"]
+            }
+          }
+        });
+      } catch (geminiErr: any) {
+        console.error("[Backend] Gemini generation failed for document:", geminiErr);
+        if (documentType === "pdf") {
+          return res.status(500).json({
+            error: lang === "pt" ? "O conteúdo do PDF é muito complexo ou excede a capacidade do modelo de IA. Reduza o documento ou tente outro arquivo."
+                   : lang === "es" ? "El contenido del PDF es demasiado complejo o supera la capacidad del modelo de IA. Reduzca el documento o intente con otro archivo."
+                   : "The PDF content is too complex or exceeds the AI model capacity. Reduce the document or try another file.",
+            details: geminiErr.message
+          });
+        } else {
+          throw geminiErr;
+        }
+      }
+
+      const rawText = geminiResult.text || "";
+      console.log(`[Backend] Document Gemini raw response received (${rawText.length} chars)`);
+      
+      let analysisData = safeParseAIJSON(rawText);
+      if (!analysisData) {
+        throw new Error("Failed to parse Gemini JSON output for document");
+      }
+
+      // Ensure title is set and clean
+      const docTitle = analysisData.title || file.originalname.replace(/\.[^/.]+$/, "");
+
+      // Mind map normalization
+      if (analysisData.mind_map) {
+        const mm = analysisData.mind_map;
+        if (!mm.topic) mm.topic = docTitle;
+        const isPt = lang === 'pt';
+        const isEs = lang === 'es';
+        if (!mm.children || mm.children.length < 3) {
+          const fallbackBranches = [
+            { topic: isPt ? "Conceitos Chave" : isEs ? "Conceptos Clave" : "Key Concepts", category: "Concept", icon: "Layers", importance: 5, children: [] },
+            { topic: isPt ? "Aplicações Práticas" : isEs ? "Aplicaciones Prácticas" : "Practical Applications", category: "Method", icon: "Target", importance: 4, children: [] },
+            { topic: isPt ? "Detalhes Adicionais" : isEs ? "Detalles Adicionales" : "Additional Details", category: "Detail", icon: "BookOpen", importance: 3, children: [] }
+          ];
+          mm.children = [...(mm.children || []), ...fallbackBranches];
+        }
+        const normalizeNode = (node: any) => {
+          if (!node || typeof node !== 'object') return;
+          if (!node.topic && node.title) node.topic = node.title;
+          if (!node.topic) node.topic = "Topic";
+          if (!node.children && node.branches) node.children = node.branches;
+          if (!node.children && node.subtopics) node.children = node.subtopics;
+          if (!Array.isArray(node.children)) node.children = [];
+          node.children.forEach((child: any) => normalizeNode(child));
+        };
+        normalizeNode(mm);
+      }
+
+      // Return the response in a structured form matching frontend expected shape
+      res.json({
+        video: {
+          videoId: `doc-${Date.now()}`,
+          url: `document://${file.originalname}`,
+          title: docTitle,
+          channel: lang === 'pt' ? 'Documento Local' : lang === 'es' ? 'Documento Local' : 'Local Document',
+          thumbnail: ""
+        },
+        sourceType: "document",
+        documentType: documentType,
+        fileName: file.originalname,
+        fileSize: file.size,
+        title: docTitle,
+        mode: "transcript",
+        message: lang === 'pt' ? "Análise gerada a partir do documento." : lang === 'es' ? "Análisis generado a partir del documento." : "Analysis generated from document.",
+        summary: analysisData.summary,
+        key_points: analysisData.key_points,
+        quiz: analysisData.quiz,
+        mind_map: analysisData.mind_map,
+        tutor_questions: analysisData.tutor_questions,
+        limitations: analysisData.limitations || [],
+        transcript: normalizedText, // Treat extracted text as the transcript
+        tutorContext: normalizedText,
+        generatedLanguage: lang,
+        sourceMetadata: {
+          pageCount: pageCount,
+          extractedCharacters: extractedCharacters,
+          extractionMethod: documentType === 'pdf' ? "pdf-text" : "txt-text"
+        }
+      });
+
+    } catch (error: any) {
+      console.error("[Backend] Error processing document:", error);
+      res.status(500).json({
+        error: lang === 'pt' ? "Falha ao processar o documento com Gemini." : lang === 'es' ? "Fallo al procesar el documento con Gemini." : "Failed to process the document with Gemini.",
+        details: error.message
+      });
+    }
+  });
+
   // Extra Quiz Questions Generation Endpoint (Secure server-side proxy)
   app.post("/api/generate-extra-questions", async (req, res) => {
     const { title, content, lang: reqLang = 'en', targetLanguage, count = 5, explanationLevel = 'intermediate' } = req.body;
@@ -910,10 +1220,15 @@ Formato obrigatório:
 
       function collectAllLabels(nodes: any[]): string[] {
         const labels: string[] = [];
+        if (!Array.isArray(nodes)) return labels;
         nodes.forEach((node: any) => {
-          if (node.label) labels.push(node.label);
-          if (node.children?.length) {
-            labels.push(...collectAllLabels(node.children));
+          if (node && typeof node === "object") {
+            if (node.label && typeof node.label === "string") {
+              labels.push(node.label);
+            }
+            if (node.children?.length) {
+              labels.push(...collectAllLabels(node.children));
+            }
           }
         });
         return labels;
@@ -923,24 +1238,10 @@ Formato obrigatório:
         if (!mindMap) return false;
         if (!mindMap.centralTopic) return false;
         if (!Array.isArray(mindMap.nodes)) return false;
-        if (mindMap.nodes.length < 6) return false;
+        if (mindMap.nodes.length < 3) return false;
 
         const totalNodes = countNodes(mindMap.nodes);
-        if (totalNodes < 25) return false;
-
-        const branchesWithChildren = mindMap.nodes.filter(
-          (node: any) => Array.isArray(node.children) && node.children.length >= 3
-        );
-
-        if (branchesWithChildren.length < 6) return false;
-
-        const hasThirdLevel = mindMap.nodes.some((node: any) =>
-          node.children?.some((child: any) =>
-            child.children && child.children.length > 0
-          )
-        );
-
-        if (!hasThirdLevel) return false;
+        if (totalNodes < 10) return false;
 
         const invalidLabels = [
           "youtube",
