@@ -22,6 +22,9 @@ interface AuthContextType {
   subscriptionStatus: string;
   stripeSubscriptionId?: string;
   stripeCustomerId?: string;
+  billingInterval?: string;
+  currentPeriodEnd?: any;
+  cancelAtPeriodEnd?: boolean;
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -40,6 +43,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('active');
   const [stripeSubscriptionId, setStripeSubscriptionId] = useState<string>('');
   const [stripeCustomerId, setStripeCustomerId] = useState<string>('');
+  const [billingInterval, setBillingInterval] = useState<string>('month');
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState<any>(null);
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState<boolean>(false);
 
   useEffect(() => {
     if (!user) {
@@ -47,6 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSubscriptionStatus('active');
       setStripeSubscriptionId('');
       setStripeCustomerId('');
+      setBillingInterval('month');
+      setCurrentPeriodEnd(null);
+      setCancelAtPeriodEnd(false);
       return;
     }
 
@@ -58,11 +67,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSubscriptionStatus(data.subscriptionStatus || 'active');
         setStripeSubscriptionId(data.stripeSubscriptionId || '');
         setStripeCustomerId(data.stripeCustomerId || '');
+        setBillingInterval(data.billingInterval || 'month');
+        setCurrentPeriodEnd(data.currentPeriodEnd || null);
+        setCancelAtPeriodEnd(data.cancelAtPeriodEnd || false);
       } else {
         setUserPlan('free');
         setSubscriptionStatus('active');
         setStripeSubscriptionId('');
         setStripeCustomerId('');
+        setBillingInterval('month');
+        setCurrentPeriodEnd(null);
+        setCancelAtPeriodEnd(false);
       }
     }, (error) => {
       console.error("Error listening to user document:", error);
@@ -78,9 +93,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       const userData: any = {
         uid: currentUser.uid,
-        email: currentUser.email,
-        displayName: currentUser.displayName,
-        photoURL: currentUser.photoURL,
+        email: currentUser.email || '',
+        displayName: currentUser.displayName || '',
+        photoURL: currentUser.photoURL || '',
         updatedAt: serverTimestamp()
       };
 
@@ -89,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userData.plan = 'free';
       }
 
+      console.log("Syncing basic user profile only:", currentUser.uid);
       await setDoc(userRef, userData, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${currentUser.uid}`);
@@ -216,6 +232,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscriptionStatus,
       stripeSubscriptionId,
       stripeCustomerId,
+      billingInterval,
+      currentPeriodEnd,
+      cancelAtPeriodEnd,
       signInWithGoogle, 
       signUpWithEmail, 
       signInWithEmail, 

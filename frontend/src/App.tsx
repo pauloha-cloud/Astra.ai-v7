@@ -1469,11 +1469,13 @@ export default function App() {
     try {
       setCheckoutLoadingPlan(planId);
 
+      const mappedPlanId = planId === 'starter' ? 'start' : planId;
+
       // Check if user has an active Stripe subscription to perform an upgrade instead of a new checkout
       const isUpgrade = stripeSubscriptionId && stripeSubscriptionId.length > 0 && userPlan && userPlan !== 'free';
 
       if (isUpgrade) {
-        console.log(`[Stripe Upgrade] Upgrading user ${user.uid} from ${userPlan} to ${planId}`);
+        console.log(`[Stripe Upgrade] Upgrading user ${user.uid} from ${userPlan} to ${mappedPlanId}`);
         const response = await fetch('/api/stripe/update-subscription', {
           method: 'POST',
           headers: {
@@ -1481,7 +1483,7 @@ export default function App() {
           },
           body: JSON.stringify({
             userId: user.uid,
-            newPlan: planId
+            newPlan: mappedPlanId
           }),
         });
 
@@ -1491,10 +1493,10 @@ export default function App() {
         }
 
         const successMsg = currentLang === 'pt'
-          ? `Parabéns! Seu plano foi atualizado para ${planId.toUpperCase()} com sucesso.`
+          ? `Parabéns! Seu plano foi atualizado para ${mappedPlanId.toUpperCase()} com sucesso.`
           : currentLang === 'es'
-            ? `¡Felicitaciones! Su plan se ha actualizado a ${planId.toUpperCase()} con éxito.`
-            : `Congratulations! Your plan has been successfully updated to ${planId.toUpperCase()}.`;
+            ? `¡Felicitaciones! Su plan se ha actualizado a ${mappedPlanId.toUpperCase()} con éxito.`
+            : `Congratulations! Your plan has been successfully updated to ${mappedPlanId.toUpperCase()}.`;
         
         showToast(successMsg);
         return;
@@ -1507,7 +1509,7 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          plan: planId,
+          plan: mappedPlanId,
           userEmail: user.email,
           userId: user.uid,
           successUrl: `${window.location.origin}/dashboard?checkout=success`,
@@ -2411,7 +2413,7 @@ export default function App() {
                     ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
                     : 'bg-orange-50 border-orange-100 text-orange-600'
                 }`}>
-                  {userPlan === 'pro' ? 'Pro' : userPlan === 'explorer' ? 'Explorer' : userPlan === 'starter' ? 'Starter' : (currentLang === 'pt' ? 'Gratuito' : currentLang === 'es' ? 'Gratuito' : 'Free')}
+                  {userPlan === 'pro' ? 'Pro' : userPlan === 'explorer' ? 'Explorer' : (userPlan === 'starter' || userPlan === 'start') ? 'Starter' : (currentLang === 'pt' ? 'Gratuito' : currentLang === 'es' ? 'Gratuito' : 'Free')}
                 </span>
 
                 {/* Upgrade Button */}
@@ -2422,7 +2424,7 @@ export default function App() {
                   >
                     <Zap size={13} className="fill-white animate-pulse" />
                     <span>
-                      {(userPlan === 'starter' || userPlan === 'explorer')
+                      {(userPlan === 'starter' || userPlan === 'start' || userPlan === 'explorer')
                         ? (currentLang === 'pt' ? 'Melhorar plano' : currentLang === 'es' ? 'Mejorar plan' : 'Upgrade plan')
                         : (currentLang === 'pt' ? 'Upgrade' : currentLang === 'es' ? 'Upgrade' : 'Upgrade')}
                     </span>
@@ -3448,7 +3450,7 @@ export default function App() {
           </section>
 
           <div id="pricing">
-            <Pricing t={t} isDarkMode={isDarkMode} lang={currentLang} />
+            <Pricing t={t} isDarkMode={isDarkMode} lang={currentLang} showToast={showToast} />
           </div>
 
           <FAQ lang={currentLang} isDarkMode={isDarkMode} />
@@ -3663,6 +3665,7 @@ export default function App() {
                   onOpenPrivacyPolicy={() => setView('privacy-policy')}
                   onOpenTermsOfUse={() => setView('terms')}
                   onOpenCookiePrefs={() => setForceCookiePrefs(true)}
+                  showToast={showToast}
                 />
               ) : dashboardSubView === 'history' ? (
                 <HistoryView 
@@ -4671,7 +4674,7 @@ export default function App() {
                     popular: false
                   }
                 ].map((plan) => {
-                  const isActive = userPlan === plan.id;
+                  const isActive = userPlan === plan.id || (plan.id === 'starter' && userPlan === 'start') || (plan.id === 'start' && userPlan === 'starter');
                   const isLoading = checkoutLoadingPlan === plan.id;
 
                   return (

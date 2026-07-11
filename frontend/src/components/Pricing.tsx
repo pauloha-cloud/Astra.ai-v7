@@ -10,6 +10,7 @@ interface Props {
   t: any;
   isDarkMode?: boolean;
   lang?: string;
+  showToast?: (message: string) => void;
 }
 
 // Secure placeholders as requested
@@ -341,7 +342,7 @@ function getBilledAnnuallyText(total: string, lang: string) {
   return `Billed annually at $${total}`;
 }
 
-export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
+export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props) => {
   const { user, userPlan, stripeSubscriptionId } = useAuth();
   const [isAnnual, setIsAnnual] = useState(true);
   const [isLoading, setIsLoading] = useState<string | null>(null);
@@ -414,8 +415,66 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
   ];
 
   const handleSubscribe = async (planId: string) => {
+    const notify = (msg: string) => {
+      if (showToast) {
+        showToast(msg);
+      } else {
+        alert(msg);
+      }
+    };
+
     if (!user) {
-      alert(local.signInToChoose);
+      notify(local.signInToChoose);
+      return;
+    }
+
+    const mappedPlanId = planId === 'starter' ? 'start' : planId;
+    const PLAN_TIERS: Record<string, number> = {
+      free: 0,
+      start: 1,
+      starter: 1,
+      explorer: 2,
+      pro: 3
+    };
+    const currentTier = PLAN_TIERS[(userPlan || 'free').toLowerCase()];
+    const cardTier = PLAN_TIERS[mappedPlanId.toLowerCase()];
+    const hasStripeSub = stripeSubscriptionId && stripeSubscriptionId.length > 0;
+
+    // Redirect to billing portal if user has active sub and clicks active or lower card
+    if (hasStripeSub && cardTier <= currentTier) {
+      try {
+        setIsLoading(planId);
+        const response = await fetch('/api/stripe/create-portal-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.uid }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Failed to create portal session');
+        }
+
+        const data = await response.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error('No portal URL received');
+        }
+      } catch (err: any) {
+        console.error('Error opening billing portal from Pricing card:', err);
+        notify(
+          lang === 'pt' 
+            ? 'Erro ao carregar o portal. Acesse as Configurações para gerenciar sua assinatura.' 
+            : lang === 'es'
+              ? 'Error al cargar el portal. Vaya a Ajustes para gestionar su suscripción.'
+              : 'Error loading the portal. Go to Settings to manage your subscription.'
+        );
+      } finally {
+        setIsLoading(null);
+      }
       return;
     }
 
@@ -426,7 +485,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
       const isUpgrade = stripeSubscriptionId && stripeSubscriptionId.length > 0 && userPlan && userPlan !== 'free';
 
       if (isUpgrade) {
-        console.log(`[Stripe Upgrade] Upgrading user ${user.uid} from ${userPlan} to ${planId}`);
+        console.log(`[Stripe Upgrade] Upgrading user ${user.uid} from ${userPlan} to ${mappedPlanId}`);
         const response = await fetch('/api/stripe/update-subscription', {
           method: 'POST',
           headers: {
@@ -434,7 +493,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
           },
           body: JSON.stringify({
             userId: user.uid,
-            newPlan: planId
+            newPlan: mappedPlanId
           }),
         });
 
@@ -444,16 +503,16 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
         }
 
         const successMsg = lang === 'pt'
-          ? `Parabéns! Seu plano foi atualizado para ${planId.toUpperCase()} com sucesso.`
+          ? `Parabéns! Seu plano foi atualizado para ${mappedPlanId.toUpperCase()} com sucesso.`
           : lang === 'es'
-            ? `¡Felicitaciones! Su plan se ha actualizado a ${planId.toUpperCase()} con éxito.`
-            : `Congratulations! Your plan has been successfully updated to ${planId.toUpperCase()}.`;
+            ? `¡Felicitaciones! Su plan se ha actualizado a ${mappedPlanId.toUpperCase()} con éxito.`
+            : `Congratulations! Your plan has been successfully updated to ${mappedPlanId.toUpperCase()}.`;
         
-        alert(successMsg);
+        notify(successMsg);
         return;
       }
 
-      console.log(`[Stripe Checkout] Initiating checkout for user: ${user.email}, plan: ${planId}`);
+      console.log(`[Stripe Checkout] Initiating checkout for user: ${user.email}, plan: ${mappedPlanId}`);
       
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
@@ -461,7 +520,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          plan: planId,
+          plan: mappedPlanId,
           userEmail: user.email,
           userId: user.uid,
           successUrl: `${window.location.origin}/dashboard?checkout=success`,
@@ -482,14 +541,18 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
       }
     } catch (error: any) {
       console.error('[Stripe Checkout/Upgrade] Error:', error);
-      alert(error.message || 'Error processing transaction');
+      notify(error.message || 'Error processing transaction');
     } finally {
       setIsLoading(null);
     }
   };
 
   const handleBuyAddon = (addonId: string) => {
-    alert(local.checkoutSoon);
+    if (showToast) {
+      showToast(local.checkoutSoon);
+    } else {
+      alert(local.checkoutSoon);
+    }
   };
 
   return (
@@ -764,23 +827,49 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
                 </div>
 
                 {/* Primary plan CTA */}
-                <button 
-                  type="button"
-                  disabled={isLoading !== null}
-                  onClick={() => handleSubscribe(plan.id)}
-                  className={`w-full py-3.5 mt-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 group relative overflow-hidden shadow active:scale-95 ${
-                    isLoading === plan.id
-                      ? 'bg-orange-600/50 cursor-not-allowed text-white/50 border-orange-600/50'
-                      : isMostPopular 
-                        ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/10' 
-                        : isDarkMode
-                          ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
-                          : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200'
-                  }`}
-                >
-                  <span className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-out" />
-                  {isLoading === plan.id ? '...' : plan.cta}
-                </button>
+                {(() => {
+                  const PLAN_TIERS_LOCAL: Record<string, number> = {
+                    free: 0,
+                    start: 1,
+                    starter: 1,
+                    explorer: 2,
+                    pro: 3
+                  };
+                  const currentTier = PLAN_TIERS_LOCAL[(userPlan || 'free').toLowerCase()];
+                  const cardTier = PLAN_TIERS_LOCAL[plan.id.toLowerCase()];
+                  const hasStripeSub = stripeSubscriptionId && stripeSubscriptionId.length > 0;
+
+                  let buttonText = plan.cta;
+                  if (user) {
+                    if (currentTier === cardTier) {
+                      buttonText = lang === 'pt' ? 'PLANO ATIVO' : lang === 'es' ? 'PLAN ACTIVO' : 'ACTIVE PLAN';
+                    } else if (cardTier > currentTier) {
+                      buttonText = lang === 'pt' ? 'Melhorar plano' : lang === 'es' ? 'Mejorar plan' : 'Upgrade Plan';
+                    } else if (hasStripeSub && cardTier < currentTier) {
+                      buttonText = lang === 'pt' ? 'Gerenciar no portal' : lang === 'es' ? 'Gestionar en el portal' : 'Manage in portal';
+                    }
+                  }
+
+                  return (
+                    <button 
+                      type="button"
+                      disabled={isLoading !== null}
+                      onClick={() => handleSubscribe(plan.id)}
+                      className={`w-full py-3.5 mt-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 group relative overflow-hidden shadow active:scale-95 ${
+                        isLoading === plan.id
+                          ? 'bg-orange-600/50 cursor-not-allowed text-white/50 border-orange-600/50'
+                          : isMostPopular 
+                            ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/10' 
+                            : isDarkMode
+                              ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                              : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200'
+                      }`}
+                    >
+                      <span className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-out" />
+                      {isLoading === plan.id ? '...' : buttonText}
+                    </button>
+                  );
+                })()}
               </motion.div>
             );
           })}

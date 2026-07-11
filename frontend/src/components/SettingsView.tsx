@@ -20,8 +20,13 @@ import {
   ChevronRight,
   HeartHandshake,
   FileText,
-  Cookie
+  Cookie,
+  CreditCard,
+  Calendar,
+  ShieldCheck,
+  Loader2
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SettingsViewProps {
   user: any;
@@ -40,6 +45,7 @@ interface SettingsViewProps {
   onOpenPrivacyPolicy?: () => void;
   onOpenTermsOfUse?: () => void;
   onOpenCookiePrefs?: () => void;
+  showToast?: (message: string) => void;
 }
 
 export function SettingsView({
@@ -54,7 +60,8 @@ export function SettingsView({
   onUpdatePreference,
   onOpenPrivacyPolicy,
   onOpenTermsOfUse,
-  onOpenCookiePrefs
+  onOpenCookiePrefs,
+  showToast
 }: SettingsViewProps) {
   const studyFormat = preferences.defaultStudyFormat;
   const explanationLevel = preferences.explanationLevel;
@@ -70,6 +77,51 @@ export function SettingsView({
 
   const setQuizQuestionCount = (val: 5 | 10 | 15 | 20 | 25) => {
     onUpdatePreference('defaultQuizQuestionCount', val);
+  };
+
+  const { 
+    subscriptionStatus, 
+    stripeSubscriptionId, 
+    stripeCustomerId, 
+    billingInterval, 
+    currentPeriodEnd, 
+    cancelAtPeriodEnd 
+  } = useAuth();
+
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
+
+  const handleOpenPortal = async () => {
+    try {
+      setPortalLoading(true);
+      setPortalError(null);
+      const res = await fetch('/api/stripe/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.uid })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to create portal session');
+      }
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No url returned from server');
+      }
+    } catch (err: any) {
+      console.error('Portal redirect error:', err);
+      setPortalError(
+        currentLang === 'pt'
+          ? 'Erro ao carregar o portal de cobrança. Verifique se você possui uma assinatura ativa ou tente novamente mais tarde.'
+          : currentLang === 'es'
+            ? 'Error al cargar el portal de facturación. Verifique si tiene una suscripción activa o intente más tarde.'
+            : 'Error loading the billing portal. Verify you have an active subscription or try again later.'
+      );
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
   // Modal states
@@ -373,7 +425,7 @@ export function SettingsView({
                       ? 'bg-orange-600/10 text-orange-400 border border-orange-500/20' 
                       : 'bg-orange-50 text-orange-700 border border-orange-100'
                   }`}>
-                    {t.account.plan}: <span className="underline uppercase font-bold">{userPlan && userPlan !== 'free' ? userPlan : (currentLang === 'pt' ? 'Gratuito' : currentLang === 'es' ? 'Gratuito' : 'Free')}</span>
+                    {t.account.plan}: <span className="underline uppercase font-bold">{userPlan && userPlan !== 'free' ? ((userPlan === 'start' || userPlan === 'starter') ? 'STARTER' : userPlan) : (currentLang === 'pt' ? 'Gratuito' : currentLang === 'es' ? 'Gratuito' : 'Free')}</span>
                   </span>
                 </div>
               </div>
@@ -720,6 +772,171 @@ export function SettingsView({
             </div>
           </div>
         </motion.div>
+
+        {/* Card 5: Plano e Assinatura (Full-width card inside the grid) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className={`col-span-1 md:col-span-2 p-6 rounded-3xl border flex flex-col justify-between shadow-sm transition-all duration-300 ${
+            isDarkMode 
+              ? 'bg-[#0c0c0e] border-zinc-800/80 hover:border-zinc-700/80 shadow-black/20' 
+              : 'bg-white border-slate-200/80 hover:shadow-md hover:shadow-slate-100/50'
+          }`}
+          id="settings_card_billing"
+        >
+          <div className="space-y-6">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <h3 className={`font-bold uppercase tracking-wider text-xs flex items-center gap-2 ${
+                  isDarkMode ? 'text-zinc-400' : 'text-slate-500'
+                }`}>
+                  <CreditCard size={16} className="text-orange-500" /> {currentLang === 'pt' ? 'Plano e Assinatura' : currentLang === 'es' ? 'Plan y Suscripción' : 'Plan & Subscription'}
+                </h3>
+                <p className={`text-xs ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                  {currentLang === 'pt' 
+                    ? 'Gerencie os detalhes do seu plano, ciclo de faturamento e portal do Stripe.' 
+                    : currentLang === 'es' 
+                      ? 'Gestiona los detalles de tu plan, ciclo de facturación y portal de Stripe.' 
+                      : 'Manage your plan details, billing cycle, and Stripe portal.'}
+                </p>
+              </div>
+              
+              {/* Badge indicating active status */}
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border ${
+                subscriptionStatus === 'active' || subscriptionStatus === 'trialing'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : subscriptionStatus === 'past_due'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
+              }`}>
+                {subscriptionStatus === 'active' 
+                  ? (currentLang === 'pt' ? 'Ativa' : currentLang === 'es' ? 'Activa' : 'Active')
+                  : subscriptionStatus === 'trialing'
+                    ? (currentLang === 'pt' ? 'Período de teste' : currentLang === 'es' ? 'Prueba' : 'Trialing')
+                    : subscriptionStatus === 'past_due'
+                      ? (currentLang === 'pt' ? 'Pagamento pendente' : currentLang === 'es' ? 'Pago pendiente' : 'Past due')
+                      : subscriptionStatus === 'canceled'
+                        ? (currentLang === 'pt' ? 'Cancelada' : currentLang === 'es' ? 'Cancelada' : 'Canceled')
+                        : (subscriptionStatus || 'Active').toUpperCase()}
+              </span>
+            </div>
+
+            {/* Billing Grid Info */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              
+              {/* 1. Plano Atual */}
+              <div className={`p-4 rounded-2xl border ${
+                isDarkMode ? 'bg-zinc-900/20 border-zinc-800/60' : 'bg-slate-50 border-slate-200/60'
+              }`}>
+                <span className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${
+                  isDarkMode ? 'text-zinc-500' : 'text-slate-400'
+                }`}>
+                  {currentLang === 'pt' ? 'Plano Atual' : currentLang === 'es' ? 'Plan Actual' : 'Current Plan'}
+                </span>
+                <span className="text-lg font-black italic text-orange-500 uppercase tracking-wide">
+                  {userPlan === 'start' || userPlan === 'starter'
+                    ? 'Starter'
+                    : userPlan === 'explorer'
+                      ? 'Explorer'
+                      : userPlan === 'pro'
+                        ? 'Pro'
+                        : (currentLang === 'pt' || currentLang === 'es' ? 'Gratuito' : 'Free')}
+                </span>
+              </div>
+
+              {/* 2. Ciclo de Faturamento */}
+              <div className={`p-4 rounded-2xl border ${
+                isDarkMode ? 'bg-zinc-900/20 border-zinc-800/60' : 'bg-slate-50 border-slate-200/60'
+              }`}>
+                <span className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${
+                  isDarkMode ? 'text-zinc-500' : 'text-slate-400'
+                }`}>
+                  {currentLang === 'pt' ? 'Ciclo de Cobrança' : currentLang === 'es' ? 'Ciclo de Cobro' : 'Billing Cycle'}
+                </span>
+                <span className={`text-sm font-black uppercase tracking-wider ${isDarkMode ? 'text-zinc-300' : 'text-slate-700'}`}>
+                  {billingInterval === 'year' || billingInterval === 'annual'
+                    ? (currentLang === 'pt' || currentLang === 'es' ? 'Anual' : 'Yearly')
+                    : (currentLang === 'pt' ? 'Mensal' : currentLang === 'es' ? 'Mensual' : 'Monthly')}
+                </span>
+              </div>
+
+              {/* 3. Próxima Fatura ou Data de Expiração */}
+              <div className={`p-4 rounded-2xl border ${
+                isDarkMode ? 'bg-zinc-900/20 border-zinc-800/60' : 'bg-slate-50 border-slate-200/60'
+              }`}>
+                <span className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${
+                  isDarkMode ? 'text-zinc-500' : 'text-slate-400'
+                }`}>
+                  {cancelAtPeriodEnd 
+                    ? (currentLang === 'pt' ? 'Expira em' : currentLang === 'es' ? 'Vence el' : 'Expires on')
+                    : (currentLang === 'pt' ? 'Próxima Cobrança' : currentLang === 'es' ? 'Próximo Cobro' : 'Next Billing')}
+                </span>
+                <span className={`text-sm font-black ${isDarkMode ? 'text-zinc-300' : 'text-slate-700'}`}>
+                  {currentPeriodEnd ? (
+                    <span className="flex items-center gap-1.5">
+                      <Calendar size={14} className="text-orange-500" />
+                      {(() => {
+                        let date: Date;
+                        if (currentPeriodEnd.toDate && typeof currentPeriodEnd.toDate === 'function') {
+                          date = currentPeriodEnd.toDate();
+                        } else if (currentPeriodEnd.seconds) {
+                          date = new Date(currentPeriodEnd.seconds * 1000);
+                        } else {
+                          date = new Date(currentPeriodEnd);
+                        }
+                        return date.toLocaleDateString(
+                          currentLang === 'pt' ? 'pt-BR' : currentLang === 'es' ? 'es-ES' : 'en-US',
+                          { day: 'numeric', month: 'short', year: 'numeric' }
+                        );
+                      })()}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </span>
+              </div>
+
+            </div>
+
+            {/* Buttons & Actions */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+              <button
+                onClick={() => setShowPlansModal(true)}
+                className="w-full sm:flex-1 py-3 px-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 text-center shadow-lg shadow-orange-600/15 active:scale-95 cursor-pointer"
+              >
+                {currentLang === 'pt' ? 'Ver Planos' : currentLang === 'es' ? 'Ver Planes' : 'View Plans'}
+              </button>
+
+              <button
+                onClick={handleOpenPortal}
+                disabled={portalLoading || !stripeCustomerId || userPlan === 'free'}
+                className={`w-full sm:flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 border cursor-pointer ${
+                  portalLoading 
+                    ? 'bg-zinc-800 border-zinc-700 text-zinc-500' 
+                    : !stripeCustomerId || userPlan === 'free'
+                      ? 'bg-zinc-900/30 border-zinc-800/80 text-zinc-600 cursor-not-allowed opacity-50'
+                      : isDarkMode 
+                        ? 'bg-zinc-900/50 hover:bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-orange-500/30' 
+                        : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                {portalLoading ? (
+                  <Loader2 size={14} className="animate-spin text-orange-500" />
+                ) : (
+                  <CreditCard size={14} className="text-orange-500" />
+                )}
+                <span>{currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage Subscription'}</span>
+              </button>
+            </div>
+
+            {portalError && (
+              <p className="text-red-500 text-xs font-semibold animate-pulse">
+                {portalError}
+              </p>
+            )}
+          </div>
+        </motion.div>
       </div>
 
       {/* --- MODAL 1: PRE-DEFINED PLANS DIALOG --- */}
@@ -793,7 +1010,13 @@ export function SettingsView({
                   isDarkMode 
                     ? 'bg-[#121217] border-zinc-800' 
                     : 'bg-slate-50 border-slate-200'
-                }`} onClick={() => alert(t.plans.comingSoon)}>
+                }`} onClick={() => {
+                  if (showToast) {
+                    showToast(t.plans.comingSoon);
+                  } else {
+                    alert(t.plans.comingSoon);
+                  }
+                }}>
                   <div className="space-y-1">
                     <span className="text-[10px] font-black uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full inline-block mb-1">
                       PRO

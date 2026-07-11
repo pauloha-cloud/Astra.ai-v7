@@ -48,7 +48,7 @@ service cloud.firestore {
         && data.email is string && data.email.size() <= 256
         && (data.get('displayName', null) == null || (data.get('displayName', '') is string && data.get('displayName', '').size() <= 256))
         && (data.get('photoURL', null) == null || (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 4096))
-        && (data.get('plan', 'free') in ['free', 'basic', 'premium']);
+        && (data.get('plan', 'free') in ['free', 'start', 'starter', 'explorer', 'pro', 'basic', 'premium']);
     }
 
     function isValidAnalysis(data) {
@@ -84,9 +84,13 @@ service cloud.firestore {
       
       allow update: if isOwner(userId) 
         && incoming().updatedAt == request.time
-        && incoming().uid == existing().uid
-        // plan only changeable by admin or remains same
-        && (incoming().plan == existing().plan || isAdmin())
+        && incoming().uid == userId
+        // plan and subscription details only changeable by admin (or remains unchanged)
+        && (incoming().get('plan', 'free') == existing().get('plan', 'free'))
+        && (incoming().get('subscriptionStatus', 'active') == existing().get('subscriptionStatus', 'active'))
+        && (incoming().get('stripeCustomerId', '') == existing().get('stripeCustomerId', ''))
+        && (incoming().get('stripeSubscriptionId', '') == existing().get('stripeSubscriptionId', ''))
+        && (incoming().get('stripePriceId', '') == existing().get('stripePriceId', ''))
         && isValidUser(incoming());
 
       // Sub-collection rule for preferences following Master Gate pattern (check parent)

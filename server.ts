@@ -15,6 +15,8 @@ import fs from "fs";
 import Stripe from "stripe";
 import { initializeApp as initializeFirebaseApp } from "firebase/app";
 import { getFirestore as getFirebaseFirestore, doc as firebaseDoc, updateDoc as firebaseUpdateDoc, setDoc as firebaseSetDoc, collection as firebaseCollection, query as firebaseQuery, where as firebaseWhere, getDocs as firebaseGetDocs, getDoc as firebaseGetDoc, serverTimestamp as firebaseServerTimestamp } from "firebase/firestore";
+import { initializeApp as initializeAdminApp, getApps as getAdminApps, getApp as getAdminApp } from "firebase-admin/app";
+import { getFirestore as getAdminFirestore, FieldValue as AdminFieldValue } from "firebase-admin/firestore";
 // @ts-ignore
 import mammoth from "mammoth";
 
@@ -366,6 +368,32 @@ function getFirebaseDb(): any {
   }
 }
 
+let cachedAdminDb: any = null;
+function getFirebaseAdminDb(): any {
+  if (cachedAdminDb) return cachedAdminDb;
+  try {
+    const firebaseConfigPath = path.resolve(__dirname, "./firebase-applet-config.json");
+    if (!fs.existsSync(firebaseConfigPath)) {
+      throw new Error(`Firebase configuration file not found at ${firebaseConfigPath}`);
+    }
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+    const apps = getAdminApps();
+    let adminApp;
+    if (apps.length === 0) {
+      adminApp = initializeAdminApp({
+        projectId: firebaseConfig.projectId,
+      });
+    } else {
+      adminApp = apps[0] || getAdminApp();
+    }
+    cachedAdminDb = getAdminFirestore(adminApp, firebaseConfig.firestoreDatabaseId);
+    return cachedAdminDb;
+  } catch (err: any) {
+    console.error("[Backend Firebase Admin] Initialization failed:", err);
+    throw err;
+  }
+}
+
 function getPlanLimits(planId: string) {
   let vLimit = 0;
   let mAnalyses = 50;
@@ -404,19 +432,19 @@ async function findUserAndSubscriptionUpdate(
   email: string | undefined, 
   subscriptionData: any
 ): Promise<boolean> {
-  const db = getFirebaseDb();
+  const db = getFirebaseAdminDb();
   let userRef: any = null;
   let foundUserId: string | null = null;
   let isNewDoc = false;
 
   // 1. Try finding by userId
   if (userId) {
-    const docRef = firebaseDoc(db, "users", userId);
+    const docRef = db.collection("users").doc(userId);
     try {
-      const docSnap = await firebaseGetDoc(docRef);
+      const docSnap = await docRef.get();
       userRef = docRef;
       foundUserId = userId;
-      if (docSnap.exists()) {
+      if (docSnap.exists) {
         console.log(`[Stripe Webhook] Found user directly by ID: ${userId}`);
       } else {
         console.log(`[Stripe Webhook] User document does not exist for ID: ${userId}. Will auto-create.`);
@@ -432,11 +460,10 @@ async function findUserAndSubscriptionUpdate(
     const cleanEmail = email.toLowerCase().trim();
     console.log(`[Stripe Webhook] Looking up user by email query: ${cleanEmail}`);
     try {
-      const q = firebaseQuery(firebaseCollection(db, "users"), firebaseWhere("email", "==", cleanEmail));
-      const querySnapshot = await firebaseGetDocs(q);
+      const querySnapshot = await db.collection("users").where("email", "==", cleanEmail).get();
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
-        userRef = firebaseDoc(db, "users", userDoc.id);
+        userRef = db.collection("users").doc(userDoc.id);
         foundUserId = userDoc.id;
         console.log(`[Stripe Webhook] Found user by email query: ${cleanEmail}, user UID: ${userDoc.id}`);
       }
@@ -447,13 +474,20 @@ async function findUserAndSubscriptionUpdate(
 
   // If we couldn't find a doc but we have a direct userId from checkout session metadata, use it as fallback to create a new profile doc
   if (!userRef && userId) {
-    userRef = firebaseDoc(db, "users", userId);
+    userRef = db.collection("users").doc(userId);
     foundUserId = userId;
     isNewDoc = true;
     console.log(`[Stripe Webhook] Creating fallback user document for ID: ${userId}`);
   }
 
   if (userRef && foundUserId) {
+    console.log("Updating subscription with Admin SDK:", {
+      userId: foundUserId,
+      plan: subscriptionData.plan,
+      stripeCustomerId: subscriptionData.stripeCustomerId,
+      stripeSubscriptionId: subscriptionData.stripeSubscriptionId
+    });
+
     console.log("Updating user subscription:", {
       userId: foundUserId,
       email: email || "",
@@ -465,16 +499,16 @@ async function findUserAndSubscriptionUpdate(
     try {
       const finalData: any = {
         ...subscriptionData,
-        updatedAt: firebaseServerTimestamp()
+        updatedAt: AdminFieldValue.serverTimestamp()
       };
       if (isNewDoc) {
-        finalData.createdAt = firebaseServerTimestamp();
+        finalData.createdAt = AdminFieldValue.serverTimestamp();
         if (email) {
           finalData.email = email;
         }
         finalData.uid = foundUserId;
       }
-      await firebaseSetDoc(userRef, finalData, { merge: true });
+      await userRef.set(finalData, { merge: true });
       console.log(`[Stripe Webhook] Successfully wrote user ${foundUserId} (isNewDoc: ${isNewDoc}) with plan ${subscriptionData.plan}`);
       return true;
     } catch (err) {
@@ -493,42 +527,47 @@ async function findUserByStripeIdsAndUpdate(
   stripeCustomerId: string | undefined, 
   subscriptionData: any
 ): Promise<boolean> {
-  const db = getFirebaseDb();
+  const db = getFirebaseAdminDb();
   let userRef: any = null;
   let foundUserId: string | null = null;
 
   // 1. Query by stripeSubscriptionId
   if (stripeSubscriptionId) {
-    const q = firebaseQuery(firebaseCollection(db, "users"), firebaseWhere("stripeSubscriptionId", "==", stripeSubscriptionId));
-    const querySnapshot = await firebaseGetDocs(q);
+    const querySnapshot = await db.collection("users").where("stripeSubscriptionId", "==", stripeSubscriptionId).get();
     if (!querySnapshot.empty) {
       const userDoc = querySnapshot.docs[0];
-      userRef = firebaseDoc(db, "users", userDoc.id);
+      userRef = db.collection("users").doc(userDoc.id);
       foundUserId = userDoc.id;
     }
   }
 
   // 2. Query by stripeCustomerId if not found by subscription ID
   if (!userRef && stripeCustomerId) {
-    const q = firebaseQuery(firebaseCollection(db, "users"), firebaseWhere("stripeCustomerId", "==", stripeCustomerId));
-    const querySnapshot = await firebaseGetDocs(q);
+    const querySnapshot = await db.collection("users").where("stripeCustomerId", "==", stripeCustomerId).get();
     if (!querySnapshot.empty) {
       const userDoc = querySnapshot.docs[0];
-      userRef = firebaseDoc(db, "users", userDoc.id);
+      userRef = db.collection("users").doc(userDoc.id);
       foundUserId = userDoc.id;
     }
   }
 
   if (userRef && foundUserId) {
+    console.log("Updating subscription with Admin SDK:", {
+      userId: foundUserId,
+      plan: subscriptionData.plan,
+      stripeCustomerId: subscriptionData.stripeCustomerId || stripeCustomerId,
+      stripeSubscriptionId: subscriptionData.stripeSubscriptionId || stripeSubscriptionId
+    });
+
     console.log("Updating user subscription from webhook event:", {
       userId: foundUserId,
       stripeSubscriptionId,
       subscriptionData
     });
     try {
-      await firebaseUpdateDoc(userRef, {
+      await userRef.update({
         ...subscriptionData,
-        updatedAt: firebaseServerTimestamp()
+        updatedAt: AdminFieldValue.serverTimestamp()
       });
       return true;
     } catch (err) {
@@ -587,14 +626,24 @@ async function handleSubscriptionUpdated(subscription: any) {
 
     let resolvedPlan = subscription.metadata?.plan;
     if (!resolvedPlan && priceId) {
-      if (priceId === process.env.STRIPE_STARTER_PRICE_ID) resolvedPlan = "starter";
+      if (priceId === process.env.STRIPE_STARTER_PRICE_ID) resolvedPlan = "start";
       else if (priceId === process.env.STRIPE_EXPLORER_PRICE_ID) resolvedPlan = "explorer";
       else if (priceId === process.env.STRIPE_PRO_PRICE_ID) resolvedPlan = "pro";
     }
+    if (resolvedPlan === "starter") {
+      resolvedPlan = "start";
+    }
+
+    const billingInterval = subscription.items.data[0]?.price.recurring?.interval || "month";
+    const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    const cancelAtPeriodEnd = subscription.cancel_at_period_end || false;
 
     const updateData: any = {
       subscriptionStatus: status,
-      stripePriceId: priceId
+      stripePriceId: priceId,
+      billingInterval,
+      currentPeriodEnd,
+      cancelAtPeriodEnd
     };
 
     if (resolvedPlan) {
@@ -675,8 +724,8 @@ async function startServer() {
       switch (event.type) {
         case "checkout.session.completed": {
           const session = dataObject as Stripe.Checkout.Session;
-          console.log("Stripe webhook received:", event.type);
-          console.log("Checkout session:", {
+          console.log("[Stripe Webhook] Received checkout.session.completed event");
+          console.log("[Stripe Webhook] Checkout session details:", {
             email: session.customer_email,
             customer: session.customer,
             subscription: session.subscription,
@@ -692,16 +741,19 @@ async function startServer() {
           const metadataUserEmail = session.metadata?.userEmail;
           const email = customerEmail || metadataUserEmail || undefined;
 
-          const plan = session.metadata?.plan;
+          let plan = session.metadata?.plan;
+          if (plan === "starter") {
+            plan = "start";
+          }
           const stripeCustomerId = session.customer as string;
           const stripeSubscriptionId = session.subscription as string;
 
-          console.log("Webhook user lookup:", {
+          console.log("[Stripe Webhook] Webhook user lookup identifiers:", {
             userId,
             email,
             plan,
-            customer: session.customer,
-            subscription: session.subscription
+            customer: stripeCustomerId,
+            subscription: stripeSubscriptionId
           });
 
           if (!plan) {
@@ -711,10 +763,14 @@ async function startServer() {
 
           let stripePriceId: string | undefined = undefined;
           let stripeProductId: string | undefined = undefined;
+          let billingInterval = "month";
+          let currentPeriodEnd: any = null;
+          let cancelAtPeriodEnd = false;
+
           if (stripeSubscriptionId) {
             try {
               const stripe = getStripe();
-              const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+              const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId) as any;
               const item = sub.items.data[0];
               if (item) {
                 stripePriceId = item.price.id;
@@ -723,7 +779,10 @@ async function startServer() {
                 } else if (item.price.product && typeof item.price.product === "object") {
                   stripeProductId = (item.price.product as any).id;
                 }
+                billingInterval = item.price.recurring?.interval || "month";
               }
+              currentPeriodEnd = new Date(sub.current_period_end * 1000);
+              cancelAtPeriodEnd = sub.cancel_at_period_end;
             } catch (err) {
               console.error("[Stripe Webhook] Error retrieving subscription details from Stripe:", err);
             }
@@ -731,6 +790,7 @@ async function startServer() {
 
           if (!stripePriceId) {
             const priceMap: Record<string, string | undefined> = {
+              start: process.env.STRIPE_STARTER_PRICE_ID,
               starter: process.env.STRIPE_STARTER_PRICE_ID,
               explorer: process.env.STRIPE_EXPLORER_PRICE_ID,
               pro: process.env.STRIPE_PRO_PRICE_ID
@@ -746,10 +806,18 @@ async function startServer() {
             subscriptionStatus: "active",
             stripePriceId,
             stripeProductId,
+            billingInterval,
+            currentPeriodEnd,
+            cancelAtPeriodEnd,
             ...limits
           };
 
-          await findUserAndSubscriptionUpdate(userId, email, subscriptionData);
+          const success = await findUserAndSubscriptionUpdate(userId, email, subscriptionData);
+          if (!success) {
+            const errorMsg = `Failed to update user profile in Firestore from checkout.session.completed. User with ID ${userId || 'none'} and email ${email || 'none'} could not be found or processed.`;
+            console.error(`[Stripe Webhook] ERROR: ${errorMsg}`);
+            throw new Error(errorMsg);
+          }
           break;
         }
 
@@ -783,9 +851,13 @@ async function startServer() {
 
           let resolvedPlan = plan;
           if (!resolvedPlan && priceId) {
-            if (priceId === process.env.STRIPE_STARTER_PRICE_ID) resolvedPlan = "starter";
+            if (priceId === process.env.STRIPE_STARTER_PRICE_ID) resolvedPlan = "start";
             else if (priceId === process.env.STRIPE_EXPLORER_PRICE_ID) resolvedPlan = "explorer";
             else if (priceId === process.env.STRIPE_PRO_PRICE_ID) resolvedPlan = "pro";
+          }
+
+          if (resolvedPlan === "starter") {
+            resolvedPlan = "start";
           }
 
           const userId = subscription.metadata?.userId;
@@ -803,6 +875,10 @@ async function startServer() {
             }
           }
 
+          const billingInterval = (subscription as any).items.data[0]?.price.recurring?.interval || "month";
+          const currentPeriodEnd = new Date((subscription as any).current_period_end * 1000);
+          const cancelAtPeriodEnd = (subscription as any).cancel_at_period_end || false;
+
           if (resolvedPlan) {
             const limits = getPlanLimits(resolvedPlan);
             const subscriptionData = {
@@ -812,6 +888,9 @@ async function startServer() {
               subscriptionStatus: status || "active",
               stripePriceId: priceId,
               stripeProductId: productId,
+              billingInterval,
+              currentPeriodEnd,
+              cancelAtPeriodEnd,
               ...limits
             };
             await findUserAndSubscriptionUpdate(userId, email, subscriptionData);
@@ -852,26 +931,30 @@ async function startServer() {
         return res.status(400).json({ error: "Missing plan or userEmail parameter." });
       }
 
-      const validPlans = ["starter", "explorer", "pro"];
+      const validPlans = ["start", "starter", "explorer", "pro"];
       if (!validPlans.includes(plan)) {
         return res.status(400).json({ error: "Invalid plan specified." });
       }
 
+      // Normalize starter to start
+      const targetPlan = (plan === "starter" ? "start" : plan);
+
       const priceMap: Record<string, string | undefined> = {
-        starter: process.env.STRIPE_STARTER_PRICE_ID,
-        explorer: process.env.STRIPE_EXPLORER_PRICE_ID,
-        pro: process.env.STRIPE_PRO_PRICE_ID
+        start: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+        starter: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+        explorer: process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT",
+        pro: process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi"
       };
 
-      const priceId = priceMap[plan];
+      const priceId = priceMap[targetPlan];
       if (!priceId) {
-        return res.status(500).json({ error: `Stripe price ID for plan '${plan}' is not configured on the server.` });
+        return res.status(500).json({ error: `Stripe price ID for plan '${targetPlan}' is not configured on the server.` });
       }
 
       const stripe = getStripe();
       const FRONTEND_URL = process.env.FRONTEND_URL || process.env.APP_URL || "http://localhost:3000";
 
-      console.log(`[Stripe] Creating subscription checkout session for: ${userEmail}, userId: ${userId || 'none'}, plan: ${plan}`);
+      console.log(`[Stripe] Creating subscription checkout session for: ${userEmail}, userId: ${userId || 'none'}, plan: ${targetPlan}`);
 
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
@@ -882,7 +965,7 @@ async function startServer() {
         cancel_url: cancelUrl || `${FRONTEND_URL}/pricing`,
         client_reference_id: userId || undefined,
         metadata: {
-          plan,
+          plan: targetPlan,
           userId: userId || "",
           userEmail,
           app: "astra-learning-ai"
@@ -905,21 +988,24 @@ async function startServer() {
         return res.status(400).json({ error: "Missing userId or newPlan parameters." });
       }
 
-      const validPlans = ["starter", "explorer", "pro"];
+      const validPlans = ["start", "starter", "explorer", "pro"];
       if (!validPlans.includes(newPlan)) {
         return res.status(400).json({ error: "Invalid plan specified." });
       }
 
-      // 1. Get user document from Firestore
-      const db = getFirebaseDb();
-      const userRef = firebaseDoc(db, "users", userId);
-      const userDoc = await firebaseGetDoc(userRef);
+      // Normalize starter to start
+      const targetPlan = (newPlan === "starter" ? "start" : newPlan);
 
-      if (!userDoc.exists()) {
+      // 1. Get user document from Firestore using Admin SDK
+      const adminDb = getFirebaseAdminDb();
+      const userRef = adminDb.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
         return res.status(404).json({ error: "User not found in database." });
       }
 
-      const userData = userDoc.data();
+      const userData = userDoc.data() || {};
       const stripeSubscriptionId = userData.stripeSubscriptionId;
 
       if (!stripeSubscriptionId) {
@@ -928,14 +1014,15 @@ async function startServer() {
 
       // 2. Fetch price ID for new plan
       const priceMap: Record<string, string | undefined> = {
+        start: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
         starter: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
         explorer: process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT",
         pro: process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi"
       };
 
-      const priceId = priceMap[newPlan];
+      const priceId = priceMap[targetPlan];
       if (!priceId) {
-        return res.status(500).json({ error: `Stripe price ID for plan '${newPlan}' is not configured.` });
+        return res.status(500).json({ error: `Stripe price ID for plan '${targetPlan}' is not configured.` });
       }
 
       const stripe = getStripe();
@@ -947,39 +1034,91 @@ async function startServer() {
         return res.status(404).json({ error: "Subscription not found on Stripe." });
       }
 
-      console.log(`[Stripe Update] Updating subscription ${stripeSubscriptionId} to price ${priceId} for plan ${newPlan}`);
+      console.log(`[Stripe Update] Updating subscription ${stripeSubscriptionId} to price ${priceId} for plan ${targetPlan}`);
       
       // Update subscription item
-      const updatedSubscription = await stripe.subscriptions.update(stripeSubscriptionId, {
+      const updatedSubscription: any = await stripe.subscriptions.update(stripeSubscriptionId, {
         items: [{
           id: subscription.items.data[0].id,
           price: priceId,
         }],
         proration_behavior: "create_prorations",
         metadata: {
-          plan: newPlan,
+          plan: targetPlan,
           userId: userId,
           userEmail: userData.email || ""
         }
       });
 
-      // 3. Update user document in Firestore
-      const limits = getPlanLimits(newPlan);
+      // 3. Update user document in Firestore using Admin SDK
+      console.log("Updating subscription with Admin SDK:", {
+        userId,
+        plan: targetPlan,
+        stripeCustomerId: userData.stripeCustomerId || "",
+        stripeSubscriptionId
+      });
+
+      const limits = getPlanLimits(targetPlan);
+      const billingInterval = updatedSubscription.items.data[0]?.price.recurring?.interval || "month";
+      const currentPeriodEnd = new Date(updatedSubscription.current_period_end * 1000);
+      const cancelAtPeriodEnd = updatedSubscription.cancel_at_period_end || false;
+
       const updateData = {
-        plan: newPlan,
+        plan: targetPlan,
         subscriptionStatus: updatedSubscription.status || "active",
         stripePriceId: priceId,
+        billingInterval,
+        currentPeriodEnd,
+        cancelAtPeriodEnd,
         ...limits,
-        updatedAt: firebaseServerTimestamp()
+        updatedAt: AdminFieldValue.serverTimestamp()
       };
 
-      await firebaseUpdateDoc(userRef, updateData);
+      await userRef.update(updateData);
 
-      console.log(`[Stripe Update] Successfully upgraded user ${userId} to ${newPlan}`);
-      res.json({ success: true, plan: newPlan, subscriptionStatus: updatedSubscription.status });
+      console.log(`[Stripe Update] Successfully upgraded user ${userId} to ${targetPlan}`);
+      res.json({ success: true, plan: targetPlan, subscriptionStatus: updatedSubscription.status });
     } catch (err: any) {
       console.error("[Stripe Update] Failed to update subscription:", err);
       res.status(500).json({ error: err.message || "Internal server error updating subscription." });
+    }
+  });
+
+  // Stripe Billing Customer Portal Session Endpoint
+  app.post("/api/stripe/create-portal-session", async (req: express.Request, res: express.Response) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "Missing userId parameter." });
+      }
+
+      const db = getFirebaseAdminDb();
+      const userRef = db.collection("users").doc(userId);
+      const userSnap = await userRef.get();
+
+      if (!userSnap.exists) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      const userData = userSnap.data() || {};
+      const stripeCustomerId = userData.stripeCustomerId;
+
+      if (!stripeCustomerId) {
+        return res.status(400).json({ error: "No billing profile found. Please subscribe to a plan first." });
+      }
+
+      const stripe = getStripe();
+      const FRONTEND_URL = process.env.FRONTEND_URL || process.env.APP_URL || "http://localhost:3000";
+
+      const session = await stripe.billingPortal.sessions.create({
+        customer: stripeCustomerId,
+        return_url: `${FRONTEND_URL}/settings`
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("[Stripe Portal] Failed to create portal session:", err);
+      res.status(500).json({ error: err.message || "Internal server error creating portal session." });
     }
   });
 
