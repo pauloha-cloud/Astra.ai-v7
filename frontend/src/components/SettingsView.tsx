@@ -25,6 +25,7 @@ import {
 
 interface SettingsViewProps {
   user: any;
+  userPlan?: string;
   currentLang: 'pt' | 'en' | 'es';
   setCurrentLang: (lang: 'pt' | 'en' | 'es') => void;
   isDarkMode: boolean;
@@ -43,6 +44,7 @@ interface SettingsViewProps {
 
 export function SettingsView({
   user,
+  userPlan = 'free',
   currentLang,
   setCurrentLang,
   isDarkMode,
@@ -371,7 +373,7 @@ export function SettingsView({
                       ? 'bg-orange-600/10 text-orange-400 border border-orange-500/20' 
                       : 'bg-orange-50 text-orange-700 border border-orange-100'
                   }`}>
-                    {t.account.plan}: <span className="underline">Free</span>
+                    {t.account.plan}: <span className="underline uppercase font-bold">{userPlan && userPlan !== 'free' ? userPlan : (currentLang === 'pt' ? 'Gratuito' : currentLang === 'es' ? 'Gratuito' : 'Free')}</span>
                   </span>
                 </div>
               </div>

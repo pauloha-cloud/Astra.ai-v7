@@ -22,13 +22,18 @@ import {
   Loader2,
   HelpCircle,
   Copy,
-  Check
+  Check,
+  Layers,
+  Sparkles,
+  ChevronLeft,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import { AnalysisResult, generateExtraQuestions } from '../services/geminiService';
 import { StudyTutor } from './StudyTutor';
 import { InteractiveMindMap } from './InteractiveMindMap';
+import { api } from '../lib/api';
 
 interface Props {
   data: AnalysisResult;
@@ -36,8 +41,8 @@ interface Props {
   isDarkMode?: boolean;
   t: any;
   lang?: string;
-  activeTab?: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript';
-  setActiveTab?: (tab: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript') => void;
+  activeTab?: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript' | 'flashcards';
+  setActiveTab?: (tab: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript' | 'flashcards') => void;
   showInternalTabs?: boolean;
   preferences?: any;
 }
@@ -53,7 +58,7 @@ export const AnalysisResultView = ({
   showInternalTabs = true,
   preferences
 }: Props) => {
-  const [internalActiveTab, setInternalActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript'>('summary');
+  const [internalActiveTab, setInternalActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript' | 'flashcards'>('summary');
   const activeTab = externalActiveTab || internalActiveTab;
   const setActiveTab = externalSetActiveTab || setInternalActiveTab;
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
@@ -72,6 +77,99 @@ export const AnalysisResultView = ({
   // New Summary & Transcript enhanced experience states & functions
   const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+
+  // Flashcards state
+  const [viewMode, setViewMode] = useState<'slider' | 'grid'>('slider');
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [flippedGridCards, setFlippedGridCards] = useState<Record<number, boolean>>({});
+  const [learnedCards, setLearnedCards] = useState<Record<number, boolean>>({});
+
+  const getSlugifiedTitle = (titleText: string) => {
+    if (!titleText) return 'untitled';
+    return titleText
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .slice(0, 50);
+  };
+
+  const getFormattedDate = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleExportCSV = (flashcards: any[]) => {
+    if (!flashcards || flashcards.length === 0) return;
+    
+    const escapeCSVField = (field: string | any) => {
+      if (field === null || field === undefined) return '""';
+      const stringVal = String(field);
+      const escaped = stringVal.replace(/"/g, '""');
+      return `"${escaped}"`;
+    };
+
+    const headers = ["Front", "Back", "Topic", "Difficulty"];
+    const rows = flashcards.map(fc => [
+      escapeCSVField(fc.front || ''),
+      escapeCSVField(fc.back || ''),
+      escapeCSVField(fc.topic || ''),
+      escapeCSVField(fc.difficulty || '')
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\r\n');
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    
+    const rawTitle = data.video?.title || data.title || 'analysis';
+    const slug = getSlugifiedTitle(rawTitle);
+    const dateStr = getFormattedDate();
+    
+    a.href = url;
+    a.download = `astra-flashcards-${slug}-${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportTSV = (flashcards: any[]) => {
+    if (!flashcards || flashcards.length === 0) return;
+
+    const cleanTSVField = (field: string | any) => {
+      if (field === null || field === undefined) return '';
+      return String(field)
+        .replace(/\t/g, ' ')
+        .replace(/[\r\n]+/g, ' ');
+    };
+
+    const headers = ["Front", "Back", "Topic", "Difficulty"];
+    const rows = flashcards.map(fc => [
+      cleanTSVField(fc.front || ''),
+      cleanTSVField(fc.back || ''),
+      cleanTSVField(fc.topic || ''),
+      cleanTSVField(fc.difficulty || '')
+    ]);
+
+    const tsvContent = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\r\n');
+    const blob = new Blob([tsvContent], { type: "text/tab-separated-values;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    
+    const rawTitle = data.video?.title || data.title || 'analysis';
+    const slug = getSlugifiedTitle(rawTitle);
+    const dateStr = getFormattedDate();
+    
+    a.href = url;
+    a.download = `astra-flashcards-${slug}-${dateStr}.tsv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const parsePoint = (point: string) => {
     let title = '';
@@ -290,35 +388,20 @@ export const AnalysisResultView = ({
     setIsGeneratingMindMap(true);
     setMindMapError(null);
     try {
-      const response = await fetch('/api/generate-mindmap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          title: data.video?.title || "Video",
-          summary: data.summary || "",
-          keyTakeaways: data.key_points || [],
-          actionableLessons: (data as any).actionable_lessons || (data as any).actionableLessons || [],
-          transcript: data.transcript || "",
-          fallbackReason: data.mode === 'metadata_fallback' ? (data.message || "Transcript unavailable") : "",
-          lang: lang,
-          targetLanguage: lang,
-          explanationLevel: localStorage.getItem('astra_pref_level') || 'intermediate'
-        })
+      const response = await api.post('/generate-mindmap', {
+        title: data.video?.title || "Video",
+        summary: data.summary || "",
+        keyTakeaways: data.key_points || [],
+        actionableLessons: (data as any).actionable_lessons || (data as any).actionableLessons || [],
+        transcript: data.transcript || "",
+        fallbackReason: data.mode === 'metadata_fallback' ? (data.message || "Transcript unavailable") : "",
+        lang: lang,
+        targetLanguage: lang,
+        explanationLevel: localStorage.getItem('astra_pref_level') || 'intermediate'
       });
 
-      if (!response.ok) {
-        let errMsg = "";
-        try {
-          const errData = await response.json();
-          errMsg = errData.message;
-        } catch (_) {}
-        throw new Error(errMsg || "Failed to generate mind map");
-      }
-
-      const result = await response.json();
-      if (result.mindMap) {
+      const result = response.data;
+      if (result && result.mindMap) {
         setLocalMindMap(result.mindMap);
         data.mind_map = result.mindMap;
       } else {
@@ -326,7 +409,15 @@ export const AnalysisResultView = ({
       }
     } catch (error: any) {
       console.error("Failed to generate mind map:", error);
-      setMindMapError(error.message || t.mindMapError || "Não foi possível gerar o mapa mental. Tente novamente.");
+      let errMsg = error.message || t.mindMapError || "Não foi possível gerar o mapa mental. Tente novamente.";
+      if (error.response?.data?.message) {
+        errMsg = error.response.data.message;
+      } else if (error.isHtmlResponse) {
+        errMsg = lang === 'pt' ? "Sessão expirada ou cookies bloqueados. Por favor, recarregue a página." :
+                 lang === 'es' ? "Sesión expirada o cookies bloqueadas. Por favor, recargue la página." :
+                 "Session expired or cookies blocked. Please refresh the page.";
+      }
+      setMindMapError(errMsg);
     } finally {
       setIsGeneratingMindMap(false);
     }
@@ -379,7 +470,7 @@ export const AnalysisResultView = ({
       {showInternalTabs && (
         <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b p-1.5 gap-2 transition-colors ${isDarkMode ? 'border-white/5 bg-[#080808]' : 'border-slate-200 bg-slate-50'}`}>
           <div className="flex flex-1 items-center gap-1.5 overflow-x-auto no-scrollbar">
-            {(['summary', 'quiz', 'mindmap', 'tutor', 'transcript'] as const).map((tab) => (
+            {(['summary', 'quiz', 'mindmap', 'tutor', 'transcript', 'flashcards'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -400,6 +491,7 @@ export const AnalysisResultView = ({
                 {tab === 'mindmap' && <BrainCircuit size={16} className={activeTab === tab ? 'rotate-12' : ''} />}
                 {tab === 'tutor' && <MessageSquare size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
                 {tab === 'transcript' && <FileText size={16} className={activeTab === tab ? 'animate-bounce' : ''} />}
+                {tab === 'flashcards' && <Layers size={16} className={activeTab === tab ? 'animate-pulse' : ''} />}
                 <span className="capitalize font-bold text-[10px] sm:text-xs tracking-widest">{t[tab]}</span>
               </button>
             ))}
@@ -526,6 +618,24 @@ export const AnalysisResultView = ({
                   </span>
                 </div>
               </div>
+
+              {/* Low confidence warning banner if confidence is low */}
+              {data.sourceMetadata?.confidence === 'low' && (
+                <div className={`mb-6 p-4 rounded-2xl flex items-start gap-3 border ${
+                  isDarkMode 
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' 
+                    : 'bg-amber-50 border-amber-200 text-amber-700 shadow-sm'
+                }`}>
+                  <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                  <div className="text-xs sm:text-sm font-semibold leading-relaxed">
+                    {lang === 'pt' 
+                      ? 'A imagem foi analisada, mas parte do conteúdo pode não ter sido reconhecida com precisão.' 
+                      : lang === 'es' 
+                        ? 'La imagen fue analizada, pero parte del contenido puede no haberse reconocido con precisión.' 
+                        : 'The image was analyzed, but some content may not have been recognized accurately.'}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-8">
                 {/* Resumo Geral */}
@@ -1177,6 +1287,648 @@ export const AnalysisResultView = ({
               <div className={`p-8 rounded-[2rem] border transition-colors leading-relaxed opacity-80 text-sm sm:text-base ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
                 {data.transcript || t.noTranscript}
               </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'flashcards' && (
+            <motion.div
+              key="flashcards"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-6"
+            >
+              {(() => {
+                const flashcards = data.flashcards || [];
+
+                const flashcardTexts = {
+                  pt: {
+                    title: "Flashcards do Astra",
+                    subtitle: "Pratique e memorize os conceitos chaves com cartões interativos.",
+                    front: "Frente",
+                    back: "Verso",
+                    flip: "Clique no cartão para revelar a resposta",
+                    prev: "Anterior",
+                    next: "Próximo",
+                    difficulty: "Dificuldade",
+                    topic: "Tópico",
+                    basic: "Básico",
+                    intermediate: "Intermediário",
+                    advanced: "Avançado",
+                    viewGrid: "Grade",
+                    viewSlider: "Fichas",
+                    noFlashcards: "Não há flashcards para exportar.",
+                    statsProgress: "Progresso",
+                    flipButton: "Virar card",
+                    showAnswer: "Ver resposta",
+                    showQuestion: "Ver pergunta",
+                    markReviewed: "Marcar como revisado",
+                    noAnswer: "Resposta não disponível para este flashcard.",
+                    questionLabel: "Pergunta",
+                    answerLabel: "Resposta"
+                  },
+                  en: {
+                    title: "Astra Flashcards",
+                    subtitle: "Practice and memorize key concepts with interactive cards.",
+                    front: "Front",
+                    back: "Back",
+                    flip: "Click on the card to flip and reveal the answer",
+                    prev: "Previous",
+                    next: "Next",
+                    difficulty: "Difficulty",
+                    topic: "Topic",
+                    basic: "Basic",
+                    intermediate: "Intermediate",
+                    advanced: "Advanced",
+                    viewGrid: "Grid",
+                    viewSlider: "Slider",
+                    noFlashcards: "There are no flashcards to export.",
+                    statsProgress: "Progress",
+                    flipButton: "Flip card",
+                    showAnswer: "Show answer",
+                    showQuestion: "Show question",
+                    markReviewed: "Mark as reviewed",
+                    noAnswer: "Answer not available for this flashcard.",
+                    questionLabel: "Question",
+                    answerLabel: "Answer"
+                  },
+                  es: {
+                    title: "Flashcards de Astra",
+                    subtitle: "Practica y memoriza los conceptos clave con tarjetas interactivas.",
+                    front: "Frente",
+                    back: "Reverso",
+                    flip: "Haz clic en la tarjeta para revelar a respuesta",
+                    prev: "Anterior",
+                    next: "Siguiente",
+                    difficulty: "Dificultad",
+                    topic: "Tema",
+                    basic: "Básico",
+                    intermediate: "Intermedio",
+                    advanced: "Avanzado",
+                    viewGrid: "Cuadrícula",
+                    viewSlider: "Deslizador",
+                    noFlashcards: "No hay flashcards para exportar.",
+                    statsProgress: "Progreso",
+                    flipButton: "Girar tarjeta",
+                    showAnswer: "Ver respuesta",
+                    showQuestion: "Ver pregunta",
+                    markReviewed: "Marcar como revisado",
+                    noAnswer: "Respuesta no disponible para este flashcard.",
+                    questionLabel: "Pregunta",
+                    answerLabel: "Respuesta"
+                  }
+                }[lang as 'pt' | 'en' | 'es'] || {
+                  title: "Astra Flashcards",
+                  subtitle: "Practice and memorize key concepts with interactive cards.",
+                  front: "Front",
+                  back: "Back",
+                  flip: "Click on the card to flip and reveal the answer",
+                  prev: "Previous",
+                  next: "Next",
+                  difficulty: "Difficulty",
+                  topic: "Topic",
+                  basic: "Basic",
+                  intermediate: "Intermediate",
+                  advanced: "Advanced",
+                  viewGrid: "Grid",
+                  viewSlider: "Slider",
+                  noFlashcards: "There are no flashcards to export.",
+                  statsProgress: "Progress",
+                  flipButton: "Flip card",
+                  showAnswer: "Show answer",
+                  showQuestion: "Show question",
+                  markReviewed: "Mark as reviewed",
+                  noAnswer: "Answer not available for this flashcard.",
+                  questionLabel: "Question",
+                  answerLabel: "Answer"
+                };
+
+                if (flashcards.length === 0) {
+                  return (
+                    <div className={`flex flex-col items-center justify-center p-20 border-2 border-dashed rounded-[3rem] transition-colors ${isDarkMode ? 'border-white/10 text-gray-500' : 'border-slate-300 text-slate-500 bg-slate-50/50'} min-h-[350px]`}>
+                      <Layers size={54} className="mb-6 text-orange-500 opacity-80" />
+                      <h3 className={`text-lg font-bold mb-2 text-center ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                        {flashcardTexts.noFlashcards}
+                      </h3>
+                    </div>
+                  );
+                }
+
+                const currentCard = flashcards[currentCardIndex];
+                const learnedCount = Object.keys(learnedCards).filter(k => learnedCards[Number(k)]).length;
+                const progressPercentage = Math.round((learnedCount / flashcards.length) * 100);
+
+                const handleNext = () => {
+                  setIsFlipped(false);
+                  setCurrentCardIndex((prev) => (prev + 1) % flashcards.length);
+                };
+
+                const handlePrev = () => {
+                  setIsFlipped(false);
+                  setCurrentCardIndex((prev) => (prev - 1 + flashcards.length) % flashcards.length);
+                };
+
+                const toggleLearned = (idx: number, e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  setLearnedCards(prev => ({
+                    ...prev,
+                    [idx]: !prev[idx]
+                  }));
+                };
+
+                const getDifficultyBadge = (difficulty: string) => {
+                  const colors = {
+                    basic: isDarkMode ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                    intermediate: isDarkMode ? 'bg-amber-500/15 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200',
+                    advanced: isDarkMode ? 'bg-rose-500/15 text-rose-400 border-rose-500/20' : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }[difficulty as 'basic' | 'intermediate' | 'advanced'] || (isDarkMode ? 'bg-zinc-500/15 text-zinc-400' : 'bg-zinc-100 text-zinc-700');
+
+                  const labels = {
+                    basic: flashcardTexts.basic,
+                    intermediate: flashcardTexts.intermediate,
+                    advanced: flashcardTexts.advanced
+                  }[difficulty as 'basic' | 'intermediate' | 'advanced'] || difficulty;
+
+                  return (
+                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${colors}`}>
+                      {labels}
+                    </span>
+                  );
+                };
+
+                return (
+                  <div className="space-y-6">
+                    {/* Flashcards Header */}
+                    <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b transition-colors ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+                      <div>
+                        <h2 className={`text-xl font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                          <Layers size={22} className="text-orange-500" />
+                          {flashcardTexts.title}
+                        </h2>
+                        <p className={`text-xs ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                          {flashcardTexts.subtitle}
+                        </p>
+                      </div>
+
+                      {/* Controls Area */}
+                      <div className="flex flex-wrap items-center gap-3 self-start lg:self-auto">
+                        {/* Export Buttons */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleExportCSV(flashcards)}
+                            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                              isDarkMode
+                                ? 'bg-zinc-900 border-white/5 hover:border-orange-500/50 hover:text-orange-400 text-zinc-300'
+                                : 'bg-white border-slate-200 hover:border-orange-500/50 hover:text-orange-600 text-slate-700 shadow-sm'
+                            }`}
+                          >
+                            <Download size={13} className="text-orange-500" />
+                            <span>{lang === 'pt' ? 'Exportar CSV' : lang === 'es' ? 'Exportar CSV' : 'Export CSV'}</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => handleExportTSV(flashcards)}
+                            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                              isDarkMode
+                                ? 'bg-zinc-900 border-white/5 hover:border-orange-500/50 hover:text-orange-400 text-zinc-300'
+                                : 'bg-white border-slate-200 hover:border-orange-500/50 hover:text-orange-600 text-slate-700 shadow-sm'
+                            }`}
+                          >
+                            <Download size={13} className="text-orange-500" />
+                            <span>{lang === 'pt' ? 'Exportar TSV' : lang === 'es' ? 'Exportar TSV' : 'Export TSV'}</span>
+                          </button>
+                        </div>
+
+                        {/* View Mode Switcher */}
+                        <div className={`flex p-1 rounded-xl border ${isDarkMode ? 'bg-[#121216] border-white/5' : 'bg-slate-100 border-slate-200'}`}>
+                          <button
+                            onClick={() => setViewMode('slider')}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                              viewMode === 'slider'
+                                ? 'bg-orange-600 text-white shadow'
+                                : isDarkMode ? 'text-zinc-500 hover:text-white' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            {flashcardTexts.viewSlider}
+                          </button>
+                          <button
+                            onClick={() => setViewMode('grid')}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                              viewMode === 'grid'
+                                ? 'bg-orange-600 text-white shadow'
+                                : isDarkMode ? 'text-zinc-500 hover:text-white' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            {flashcardTexts.viewGrid}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Help/Export Banner */}
+                    <div className={`p-4 rounded-[1.5rem] border transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                      isDarkMode 
+                        ? 'bg-[#121216]/40 border-white/5 text-zinc-400' 
+                        : 'bg-orange-50/20 border-orange-200/40 text-slate-600'
+                    }`}>
+                      <div className="flex items-start gap-2.5">
+                        <Sparkles size={16} className="text-orange-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className={`font-semibold ${isDarkMode ? 'text-zinc-200' : 'text-slate-800'}`}>
+                            {lang === 'pt' 
+                              ? 'Exporte em CSV ou TSV para importar seus flashcards no Anki.' 
+                              : lang === 'es' 
+                                ? 'Exporta en CSV o TSV para importar tus flashcards en Anki.' 
+                                : 'Export as CSV or TSV to import your flashcards into Anki.'}
+                          </p>
+                          <p className={`text-[11px] mt-0.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                            💡 {lang === 'pt' 
+                              ? 'TSV costuma funcionar melhor para importação simples no Anki.' 
+                              : lang === 'es' 
+                                ? 'TSV suele funcionar mejor para importaciones simples en Anki.' 
+                                : 'TSV usually works best for simple Anki imports.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress tracker */}
+                    <div className={`p-4 rounded-2xl border transition-colors ${isDarkMode ? 'bg-zinc-950/40 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex justify-between items-center text-xs font-semibold mb-2">
+                        <span className={isDarkMode ? 'text-zinc-400' : 'text-slate-600'}>
+                          {flashcardTexts.statsProgress}: {learnedCount} / {flashcards.length} ({progressPercentage}%)
+                        </span>
+                      </div>
+                      <div className={`h-2 w-full rounded-full overflow-hidden ${isDarkMode ? 'bg-zinc-800' : 'bg-slate-200'}`}>
+                        <motion.div 
+                          className="h-full bg-gradient-to-r from-orange-600 to-orange-400"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${progressPercentage}%` }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Render Selected Mode */}
+                    {viewMode === 'slider' ? (
+                      <div className="flex flex-col items-center justify-center space-y-6 py-4">
+                        {/* 3D Flip Card Container */}
+                        <div className="w-full max-w-2xl [perspective:1000px] h-80 sm:h-96">
+                          <motion.div
+                            onClick={() => setIsFlipped(!isFlipped)}
+                            initial={false}
+                            animate={{ rotateY: isFlipped ? 180 : 0 }}
+                            transition={{ duration: 0.5, ease: "easeInOut" }}
+                            className="w-full h-full relative [transform-style:preserve-3d] cursor-pointer"
+                          >
+                            {/* FRONT SIDE */}
+                            <div className={`absolute inset-0 w-full h-full p-6 rounded-3xl border flex flex-col justify-between [backface-visibility:hidden] shadow-xl ${
+                              isDarkMode 
+                                ? 'bg-[#0f0f12] border-white/10 text-white' 
+                                : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                            }`}>
+                              {/* Topo layout */}
+                              <div className="flex justify-between items-center gap-2 border-b border-zinc-800/10 dark:border-white/5 pb-3">
+                                <div className="flex flex-col items-start gap-0.5">
+                                  <span className="text-[11px] font-bold text-orange-500 uppercase tracking-wider">
+                                    {lang === 'pt' ? `Card ${currentCardIndex + 1} de ${flashcards.length}` : lang === 'es' ? `Tarjeta ${currentCardIndex + 1} de ${flashcards.length}` : `Card ${currentCardIndex + 1} of ${flashcards.length}`}
+                                  </span>
+                                  <span className={`text-[11px] font-medium truncate max-w-[150px] sm:max-w-[200px] ${isDarkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
+                                    {currentCard.topic}
+                                  </span>
+                                </div>
+                                
+                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  {getDifficultyBadge(currentCard.difficulty)}
+                                  <button
+                                    onClick={(e) => toggleLearned(currentCardIndex, e)}
+                                    className={`px-2 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[10px] font-bold ${
+                                      learnedCards[currentCardIndex]
+                                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
+                                        : isDarkMode 
+                                          ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                    }`}
+                                    title={flashcardTexts.markReviewed}
+                                  >
+                                    <Check size={11} className={learnedCards[currentCardIndex] ? "stroke-[3px]" : ""} />
+                                    <span className="hidden sm:inline">{flashcardTexts.markReviewed}</span>
+                                  </button>
+                                  
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const textToCopy = `${flashcardTexts.questionLabel}:\n${currentCard.front}\n\n${flashcardTexts.answerLabel}:\n${currentCard.back || flashcardTexts.noAnswer}\n\n${flashcardTexts.topic}:\n${currentCard.topic}\n\n${flashcardTexts.difficulty}:\n${currentCard.difficulty}`;
+                                      navigator.clipboard.writeText(textToCopy);
+                                    }}
+                                    className={`p-1 rounded-lg border transition-all ${
+                                      isDarkMode 
+                                        ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                    }`}
+                                    title={lang === 'pt' ? 'Copiar Flashcard' : lang === 'es' ? 'Copiar Flashcard' : 'Copy Flashcard'}
+                                  >
+                                    <Copy size={11} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Centro layout */}
+                              <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+                                <span className="text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 font-bold mb-3">
+                                  {flashcardTexts.front}
+                                </span>
+                                <h3 className="text-base sm:text-lg md:text-xl font-bold leading-relaxed max-w-lg">
+                                  {currentCard.front}
+                                </h3>
+                              </div>
+
+                              <div className={`text-[10px] font-mono text-center tracking-widest uppercase transition-opacity duration-300 ${isDarkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
+                                {flashcardTexts.flip}
+                              </div>
+                            </div>
+
+                            {/* BACK SIDE */}
+                            <div className={`absolute inset-0 w-full h-full p-6 rounded-3xl border flex flex-col justify-between [backface-visibility:hidden] [transform:rotateY(180deg)] shadow-xl ${
+                              isDarkMode 
+                                ? 'bg-orange-950/20 border-orange-500/20 text-white' 
+                                : 'bg-orange-50/50 border-orange-200/60 text-slate-800 shadow-slate-200/50'
+                            }`}>
+                              {/* Topo layout */}
+                              <div className="flex justify-between items-center gap-2 border-b border-zinc-800/10 dark:border-white/5 pb-3 [transform:rotateY(180deg)]">
+                                <div className="flex flex-col items-start gap-0.5">
+                                  <span className="text-[11px] font-bold text-orange-500 uppercase tracking-wider">
+                                    {lang === 'pt' ? `Card ${currentCardIndex + 1} de ${flashcards.length}` : lang === 'es' ? `Tarjeta ${currentCardIndex + 1} de ${flashcards.length}` : `Card ${currentCardIndex + 1} of ${flashcards.length}`}
+                                  </span>
+                                  <span className={`text-[11px] font-medium truncate max-w-[150px] sm:max-w-[200px] ${isDarkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
+                                    {currentCard.topic}
+                                  </span>
+                                </div>
+                                
+                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  {getDifficultyBadge(currentCard.difficulty)}
+                                  <button
+                                    onClick={(e) => toggleLearned(currentCardIndex, e)}
+                                    className={`px-2 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[10px] font-bold ${
+                                      learnedCards[currentCardIndex]
+                                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
+                                        : isDarkMode 
+                                          ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                    }`}
+                                    title={flashcardTexts.markReviewed}
+                                  >
+                                    <Check size={11} className={learnedCards[currentCardIndex] ? "stroke-[3px]" : ""} />
+                                    <span className="hidden sm:inline">{flashcardTexts.markReviewed}</span>
+                                  </button>
+                                  
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const textToCopy = `${flashcardTexts.questionLabel}:\n${currentCard.front}\n\n${flashcardTexts.answerLabel}:\n${currentCard.back || flashcardTexts.noAnswer}\n\n${flashcardTexts.topic}:\n${currentCard.topic}\n\n${flashcardTexts.difficulty}:\n${currentCard.difficulty}`;
+                                      navigator.clipboard.writeText(textToCopy);
+                                    }}
+                                    className={`p-1 rounded-lg border transition-all ${
+                                      isDarkMode 
+                                        ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                    }`}
+                                    title={lang === 'pt' ? 'Copiar Flashcard' : lang === 'es' ? 'Copiar Flashcard' : 'Copy Flashcard'}
+                                  >
+                                    <Copy size={11} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Centro layout */}
+                              <div className="flex-1 flex flex-col items-center justify-center text-center px-4 [transform:rotateY(180deg)]">
+                                <span className="text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold mb-3">
+                                  {flashcardTexts.back}
+                                </span>
+                                <p className="text-sm leading-relaxed max-w-lg font-medium">
+                                  {currentCard.back ? currentCard.back : <span className="text-zinc-500 italic">{flashcardTexts.noAnswer}</span>}
+                                </p>
+                              </div>
+
+                              <div className={`text-[10px] font-mono text-center tracking-widest uppercase [transform:rotateY(180deg)] ${isDarkMode ? 'text-orange-500/40' : 'text-orange-600/40'}`}>
+                                {flashcardTexts.flip}
+                              </div>
+                            </div>
+                          </motion.div>
+                        </div>
+
+                        {/* Primary Flip Button */}
+                        <button
+                          onClick={() => setIsFlipped(!isFlipped)}
+                          className="px-6 py-3 rounded-2xl text-sm font-extrabold bg-orange-600 hover:bg-orange-700 text-white shadow-lg hover:shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer mt-2"
+                        >
+                          <RefreshCw size={15} className={`transition-transform duration-500 ${isFlipped ? 'rotate-180' : ''}`} />
+                          <span>{flashcardTexts.flipButton}</span>
+                        </button>
+
+                        {/* Slider navigation controls */}
+                        <div className="flex items-center gap-6 mt-2">
+                          <button
+                            onClick={handlePrev}
+                            className={`px-4 py-2 rounded-xl border transition-all flex items-center gap-2 text-xs font-bold ${
+                              isDarkMode 
+                                ? 'bg-zinc-900 border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800' 
+                                : 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm'
+                            }`}
+                          >
+                            <ChevronLeft size={14} />
+                            <span>{flashcardTexts.prev}</span>
+                          </button>
+
+                          <span className={`text-xs font-mono font-bold tracking-widest ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
+                            {currentCardIndex + 1} / {flashcards.length}
+                          </span>
+
+                          <button
+                            onClick={handleNext}
+                            className={`px-4 py-2 rounded-xl border transition-all flex items-center gap-2 text-xs font-bold ${
+                              isDarkMode 
+                                ? 'bg-zinc-900 border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800' 
+                                : 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm'
+                            }`}
+                          >
+                            <span>{flashcardTexts.next}</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Grid View */
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 py-4">
+                        {flashcards.map((card, idx) => {
+                          const isCardFlipped = !!flippedGridCards[idx];
+                          const isCardLearned = !!learnedCards[idx];
+                          return (
+                            <div key={idx} className="[perspective:1000px] h-80">
+                              <motion.div
+                                onClick={() => {
+                                  setFlippedGridCards(prev => ({
+                                    ...prev,
+                                    [idx]: !prev[idx]
+                                  }));
+                                }}
+                                initial={false}
+                                animate={{ rotateY: isCardFlipped ? 180 : 0 }}
+                                transition={{ duration: 0.4, ease: "easeInOut" }}
+                                className="w-full h-full relative [transform-style:preserve-3d] cursor-pointer"
+                              >
+                                {/* Grid Card FRONT */}
+                                <div className={`absolute inset-0 w-full h-full p-5 rounded-2xl border flex flex-col justify-between [backface-visibility:hidden] shadow ${
+                                  isDarkMode 
+                                    ? 'bg-[#0f0f12] border-white/10 text-white' 
+                                    : 'bg-white border-slate-200 text-slate-800 shadow-slate-100'
+                                }`}>
+                                  {/* Header */}
+                                  <div className="flex justify-between items-center pb-2 border-b border-zinc-800/10 dark:border-white/5">
+                                    <span className={`text-[10px] font-mono tracking-widest uppercase ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'} font-bold`}>
+                                      {flashcardTexts.front}
+                                    </span>
+                                    
+                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                      {/* Copy button */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const textToCopy = `${flashcardTexts.questionLabel}:\n${card.front}\n\n${flashcardTexts.answerLabel}:\n${card.back || flashcardTexts.noAnswer}\n\n${flashcardTexts.topic}:\n${card.topic}\n\n${flashcardTexts.difficulty}:\n${card.difficulty}`;
+                                          navigator.clipboard.writeText(textToCopy);
+                                        }}
+                                        className={`p-1 rounded-lg border transition-all ${
+                                          isDarkMode 
+                                            ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                        }`}
+                                        title={lang === 'pt' ? 'Copiar Flashcard' : lang === 'es' ? 'Copiar Flashcard' : 'Copy Flashcard'}
+                                      >
+                                        <Copy size={11} />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Content */}
+                                  <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-3 overflow-hidden">
+                                    <span className="text-[9px] font-bold uppercase text-orange-500 tracking-wider mb-1">
+                                      {card.topic}
+                                    </span>
+                                    <h4 className="text-xs font-bold leading-relaxed max-h-[85px] overflow-y-auto no-scrollbar">
+                                      {card.front}
+                                    </h4>
+                                    
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFlippedGridCards(prev => ({ ...prev, [idx]: true }));
+                                      }}
+                                      className="mt-2.5 w-full py-1.5 px-3 rounded-xl bg-orange-600/10 hover:bg-orange-600 text-orange-600 hover:text-white dark:text-orange-400 dark:hover:text-white dark:bg-orange-500/10 text-[10px] font-bold transition-all border border-orange-500/20"
+                                    >
+                                      {flashcardTexts.showAnswer}
+                                    </button>
+                                  </div>
+
+                                  {/* Footer */}
+                                  <div className="flex justify-between items-center pt-2 border-t border-zinc-800/10 dark:border-white/5">
+                                    {getDifficultyBadge(card.difficulty)}
+                                    <button
+                                      onClick={(e) => toggleLearned(idx, e)}
+                                      className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[10px] font-bold ${
+                                        isCardLearned
+                                          ? 'bg-[#10b981]/20 border-[#10b981] text-[#10b981]'
+                                          : isDarkMode 
+                                            ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                      }`}
+                                    >
+                                      <Check size={11} className={isCardLearned ? "stroke-[3px]" : ""} />
+                                      <span>{isCardLearned ? (lang === 'pt' ? 'Revisado' : lang === 'es' ? 'Revisado' : 'Reviewed') : flashcardTexts.markReviewed}</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Grid Card BACK */}
+                                <div className={`absolute inset-0 w-full h-full p-5 rounded-2xl border [backface-visibility:hidden] [transform:rotateY(180deg)] shadow ${
+                                  isDarkMode 
+                                    ? 'bg-[#151210] border-orange-500/10 text-white' 
+                                    : 'bg-orange-50/35 border-orange-200/50 text-slate-800 shadow-slate-100'
+                                }`}>
+                                  <div className="flex flex-col justify-between h-full w-full [transform:rotateY(180deg)]">
+                                    {/* Header */}
+                                    <div className="flex justify-between items-center pb-2 border-b border-orange-500/10">
+                                      <span className="text-[10px] font-mono tracking-widest uppercase text-orange-500 font-bold">
+                                        {flashcardTexts.back}
+                                      </span>
+                                      
+                                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                        {/* Copy button */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const textToCopy = `${flashcardTexts.questionLabel}:\n${card.front}\n\n${flashcardTexts.answerLabel}:\n${card.back || flashcardTexts.noAnswer}\n\n${flashcardTexts.topic}:\n${card.topic}\n\n${flashcardTexts.difficulty}:\n${card.difficulty}`;
+                                            navigator.clipboard.writeText(textToCopy);
+                                          }}
+                                          className={`p-1 rounded-lg border transition-all ${
+                                            isDarkMode 
+                                              ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                          }`}
+                                          title={lang === 'pt' ? 'Copiar Flashcard' : lang === 'es' ? 'Copiar Flashcard' : 'Copy Flashcard'}
+                                        >
+                                          <Copy size={11} />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-3 overflow-hidden">
+                                      <span className="text-[9px] font-bold uppercase text-orange-500 tracking-wider mb-1">
+                                        {card.topic}
+                                      </span>
+                                      <p className="text-xs leading-relaxed max-h-[85px] overflow-y-auto no-scrollbar font-medium">
+                                        {card.back ? card.back : <span className="text-zinc-500 italic">{flashcardTexts.noAnswer}</span>}
+                                      </p>
+                                      
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setFlippedGridCards(prev => ({ ...prev, [idx]: false }));
+                                        }}
+                                        className="mt-2.5 w-full py-1.5 px-3 rounded-xl bg-orange-600/15 hover:bg-orange-600 text-orange-600 hover:text-white dark:text-orange-400 dark:hover:text-white text-[10px] font-bold transition-all border border-orange-500/20"
+                                      >
+                                        {flashcardTexts.showQuestion}
+                                      </button>
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="flex justify-between items-center pt-2 border-t border-orange-500/10">
+                                      {getDifficultyBadge(card.difficulty)}
+                                      <button
+                                        onClick={(e) => toggleLearned(idx, e)}
+                                        className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[10px] font-bold ${
+                                          isCardLearned
+                                            ? 'bg-[#10b981]/20 border-[#10b981] text-[#10b981]'
+                                            : isDarkMode 
+                                              ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                        }`}
+                                      >
+                                        <Check size={11} className={isCardLearned ? "stroke-[3px]" : ""} />
+                                        <span>{isCardLearned ? (lang === 'pt' ? 'Revisado' : lang === 'es' ? 'Revisado' : 'Reviewed') : flashcardTexts.markReviewed}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </motion.div>
           )}
         </AnimatePresence>

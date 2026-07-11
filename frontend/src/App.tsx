@@ -16,6 +16,7 @@ import {
   LogOut,
   Settings,
   History,
+  Layers,
   User as UserIcon,
   Languages,
   Loader2,
@@ -65,10 +66,11 @@ import { HistoryView } from './components/HistoryView';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
 import { CookieConsent } from './components/CookieConsent';
+import { BillingSuccess } from './components/BillingSuccess';
 
 // User Preferences
 export interface UserPreferences {
-  defaultStudyFormat: 'summary' | 'quiz' | 'tutor' | 'mindmap';
+  defaultStudyFormat: 'summary' | 'quiz' | 'tutor' | 'mindmap' | 'flashcards';
   explanationLevel: 'basic' | 'intermediate' | 'advanced';
   defaultQuizQuestionCount: 5 | 10 | 15 | 20 | 25;
 }
@@ -177,7 +179,7 @@ export const loadLocalPreferences = (): UserPreferences => {
   const quizCount = Number(localStorage.getItem(PREF_QUIZ_COUNT_KEY));
 
   return {
-    defaultStudyFormat: (format === 'summary' || format === 'quiz' || format === 'tutor' || format === 'mindmap') ? format : DEFAULT_PREFERENCES.defaultStudyFormat,
+    defaultStudyFormat: (format === 'summary' || format === 'quiz' || format === 'tutor' || format === 'mindmap' || format === 'flashcards') ? format : DEFAULT_PREFERENCES.defaultStudyFormat,
     explanationLevel: (level === 'basic' || level === 'intermediate' || level === 'advanced') ? level : DEFAULT_PREFERENCES.explanationLevel,
     defaultQuizQuestionCount: (quizCount === 5 || quizCount === 10 || quizCount === 15 || quizCount === 20 || quizCount === 25) ? (quizCount as 5 | 10 | 15 | 20 | 25) : DEFAULT_PREFERENCES.defaultQuizQuestionCount
   };
@@ -200,7 +202,7 @@ export const loadUserPreferences = async (userId?: string): Promise<UserPreferen
     if (docSnap.exists()) {
       const data = docSnap.data();
       const loaded: UserPreferences = {
-        defaultStudyFormat: (data.defaultStudyFormat === 'summary' || data.defaultStudyFormat === 'quiz' || data.defaultStudyFormat === 'tutor' || data.defaultStudyFormat === 'mindmap') ? data.defaultStudyFormat : local.defaultStudyFormat,
+        defaultStudyFormat: (data.defaultStudyFormat === 'summary' || data.defaultStudyFormat === 'quiz' || data.defaultStudyFormat === 'tutor' || data.defaultStudyFormat === 'mindmap' || data.defaultStudyFormat === 'flashcards') ? data.defaultStudyFormat : local.defaultStudyFormat,
         explanationLevel: (data.explanationLevel === 'basic' || data.explanationLevel === 'intermediate' || data.explanationLevel === 'advanced') ? data.explanationLevel : local.explanationLevel,
         defaultQuizQuestionCount: (data.defaultQuizQuestionCount === 5 || data.defaultQuizQuestionCount === 10 || data.defaultQuizQuestionCount === 15 || data.defaultQuizQuestionCount === 20 || data.defaultQuizQuestionCount === 25) ? (data.defaultQuizQuestionCount as 5 | 10 | 15 | 20 | 25) : local.defaultQuizQuestionCount
       };
@@ -246,7 +248,7 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
 };
 
 // Types
-type ComponentState = 'landing' | 'dashboard' | 'privacy-policy' | 'terms';
+type ComponentState = 'landing' | 'dashboard' | 'privacy-policy' | 'terms' | 'billing-success';
 type Language = 'pt' | 'en' | 'es';
 
 const TRANSLATIONS = {
@@ -331,6 +333,7 @@ const TRANSLATIONS = {
     noResults: "Nenhum resultado para",
     adjustSearch: "Tente ajustar sua pesquisa ou palavras-chave.",
     summary: "Resumo",
+    flashcards: "Flashcards",
     summarySectionTitle: "Seu Resumo",
     summarySectionDesc: "Explore os principais tópicos extraídos do vídeo.",
     summaryKeyTakeaways: "Principais aprendizados",
@@ -631,6 +634,7 @@ const TRANSLATIONS = {
     noResults: "No results for",
     adjustSearch: "Try adjusting your search or keywords.",
     summary: "Summary",
+    flashcards: "Flashcards",
     summarySectionTitle: "Your Summary",
     summarySectionDesc: "Explore the main topics extracted from the video.",
     summaryKeyTakeaways: "Key takeaways",
@@ -931,6 +935,7 @@ const TRANSLATIONS = {
     noResults: "No hay resultados para",
     adjustSearch: "Prueba ajustando tu búsqueda o palabras clave.",
     summary: "Resumen",
+    flashcards: "Flashcards",
     summarySectionTitle: "Tu resumen",
     summarySectionDesc: "Explora los principales temas extraídos del video.",
     summaryKeyTakeaways: "Aprendizajes clave",
@@ -1383,6 +1388,9 @@ function getFirstName(user: any) {
 export default function App() {
   const { 
     user, 
+    userPlan,
+    subscriptionStatus,
+    stripeSubscriptionId,
     signInWithGoogle, 
     signUpWithEmail, 
     signInWithEmail, 
@@ -1417,12 +1425,142 @@ export default function App() {
   const [isFeaturesModalOpen, setIsFeaturesModalOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isBillingModalOpen, setIsBillingModalOpen] = useState(false);
+  const [showAuthRequiredModal, setShowAuthRequiredModal] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Handle Stripe Checkout redirects in URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutStatus = params.get('checkout');
+    if (checkoutStatus) {
+      if (checkoutStatus === 'success') {
+        const msg = currentLang === 'pt' 
+          ? 'Pagamento confirmado. Seu plano será atualizado em instantes.' 
+          : currentLang === 'es' 
+            ? 'Pago confirmado. Tu plan se actualizará en breve.' 
+            : 'Payment confirmed. Your plan will be updated shortly.';
+        showToast(msg);
+        // Switch view to dashboard to show user their active workspace
+        setView('dashboard');
+        setDashboardSubView('panel');
+      } else if (checkoutStatus === 'cancel') {
+        const msg = currentLang === 'pt' 
+          ? 'Upgrade cancelado. Você pode tentar novamente quando quiser.' 
+          : currentLang === 'es' 
+            ? 'Upgrade cancelado. Puedes intentarlo de nuevo cuando quieras.' 
+            : 'Upgrade canceled. You can try again anytime.';
+        showToast(msg);
+      }
+      
+      // Clean up URL query parameters without full page reload
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, [currentLang]);
+
+  const handleCheckout = async (planId: string) => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    try {
+      setCheckoutLoadingPlan(planId);
+
+      // Check if user has an active Stripe subscription to perform an upgrade instead of a new checkout
+      const isUpgrade = stripeSubscriptionId && stripeSubscriptionId.length > 0 && userPlan && userPlan !== 'free';
+
+      if (isUpgrade) {
+        console.log(`[Stripe Upgrade] Upgrading user ${user.uid} from ${userPlan} to ${planId}`);
+        const response = await fetch('/api/stripe/update-subscription', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.uid,
+            newPlan: planId
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Failed to update subscription');
+        }
+
+        const successMsg = currentLang === 'pt'
+          ? `Parabéns! Seu plano foi atualizado para ${planId.toUpperCase()} com sucesso.`
+          : currentLang === 'es'
+            ? `¡Felicitaciones! Su plan se ha actualizado a ${planId.toUpperCase()} con éxito.`
+            : `Congratulations! Your plan has been successfully updated to ${planId.toUpperCase()}.`;
+        
+        showToast(successMsg);
+        return;
+      }
+
+      // Normal subscription flow for free plans
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          plan: planId,
+          userEmail: user.email,
+          userId: user.uid,
+          successUrl: `${window.location.origin}/dashboard?checkout=success`,
+          cancelUrl: `${window.location.origin}/dashboard?checkout=cancel`
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to initiate checkout session');
+      }
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL received from server');
+      }
+    } catch (err: any) {
+      console.error('[Stripe Checkout/Upgrade] Error:', err);
+      const errorMsg = currentLang === 'pt' 
+        ? 'Erro ao processar transação de assinatura.' 
+        : currentLang === 'es' 
+          ? 'Error al procesar la transacción de suscripción.' 
+          : 'Error processing subscription transaction.';
+      showToast(`${errorMsg} ${err.message || ''}`);
+    } finally {
+      setCheckoutLoadingPlan(null);
+    }
+  };
 
   // Analysis State
   const [videoUrl, setVideoUrl] = useState('');
   const [selectedSourceType, setSelectedSourceType] = useState<'youtube' | 'document' | 'website' | 'drive'>('youtube');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setImagePreviewUrl(null);
+      return;
+    }
+    const isFileImage = selectedFile.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp'].includes(selectedFile.name.split('.').pop()?.toLowerCase() || '');
+    if (isFileImage) {
+      const url = URL.createObjectURL(selectedFile);
+      setImagePreviewUrl(url);
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    } else {
+      setImagePreviewUrl(null);
+    }
+  }, [selectedFile]);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
@@ -1464,19 +1602,30 @@ export default function App() {
     if (!selectedFile) return;
 
     const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
+    const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(fileExt || '');
     
-    // Check if the document type is neither txt nor pdf
-    if (fileExt !== 'txt' && fileExt !== 'pdf') {
+    // Check supported types
+    if (fileExt !== 'txt' && fileExt !== 'pdf' && fileExt !== 'docx' && !isImage) {
       showToast(
-        currentLang === 'pt' ? "Processamento de DOCX e imagem será ativado nas próximas etapas." :
-        currentLang === 'es' ? "El procesamiento de DOCX e imagen se activará en las próximas etapas." :
-        "DOCX and image processing will be enabled in upcoming steps."
+        currentLang === 'pt' ? "Tipo de imagem não suportado. Envie PNG, JPG, JPEG ou WEBP." :
+        currentLang === 'es' ? "Tipo de imagen no compatible. Sube PNG, JPG, JPEG o WEBP." :
+        "Unsupported image type. Upload PNG, JPG, JPEG, or WEBP."
       );
       return;
     }
 
     // Validate size based on format
-    if (fileExt === 'txt') {
+    if (isImage) {
+      const maxSize = 10 * 1024 * 1024;
+      if (selectedFile.size > maxSize) {
+        showToast(
+          currentLang === 'pt' ? "A imagem excede o limite de 10 MB." :
+          currentLang === 'es' ? "La imagen supera el límite de 10 MB." :
+          "The image exceeds the 10 MB limit."
+        );
+        return;
+      }
+    } else if (fileExt === 'txt') {
       const maxSize = 5 * 1024 * 1024;
       if (selectedFile.size > maxSize) {
         showToast(
@@ -1496,29 +1645,76 @@ export default function App() {
         );
         return;
       }
+    } else if (fileExt === 'docx') {
+      const maxSize = 20 * 1024 * 1024;
+      if (selectedFile.size > maxSize) {
+        showToast(
+          currentLang === 'pt' ? "O DOCX excede o limite de 20 MB." :
+          currentLang === 'es' ? "El DOCX supera el límite de 20 MB." :
+          "The DOCX exceeds the 20 MB limit."
+        );
+        return;
+      }
     }
 
     setIsAnalyzing(true);
     
-    const statuses = currentLang === 'pt' ? [
-      "Enviando documento...",
-      "Processando conteúdo...",
-      "Analisando texto...",
-      "Construindo mapa mental...",
-      "Sucesso!"
-    ] : currentLang === 'es' ? [
-      "Enviando documento...",
-      "Procesando contenido...",
-      "Analizando texto...",
-      "Construyendo mapa mental...",
-      "¡Éxito!"
-    ] : [
-      "Uploading document...",
-      "Processing content...",
-      "Analyzing text...",
-      "Building mind map...",
-      "Success!"
-    ];
+    let statuses = [];
+    if (isImage) {
+      statuses = currentLang === 'pt' ? [
+        "Lendo imagem...",
+        "Interpretando conteúdo...",
+        "Gerando análise...",
+        "Sucesso!"
+      ] : currentLang === 'es' ? [
+        "Leyendo imagen...",
+        "Interpretando contenido...",
+        "Generando análisis...",
+        "¡Éxito!"
+      ] : [
+        "Reading image...",
+        "Interpreting content...",
+        "Generating analysis...",
+        "Success!"
+      ];
+    } else if (fileExt === 'docx') {
+      statuses = currentLang === 'pt' ? [
+        "Lendo DOCX...",
+        "Extraindo texto...",
+        "Gerando análise...",
+        "Sucesso!"
+      ] : currentLang === 'es' ? [
+        "Leyendo DOCX...",
+        "Extraendo texto...",
+        "Generando análisis...",
+        "¡Éxito!"
+      ] : [
+        "Reading DOCX...",
+        "Extracting text...",
+        "Generating analysis...",
+        "Success!"
+      ];
+    } else {
+      statuses = currentLang === 'pt' ? [
+        "Enviando documento...",
+        "Processando conteúdo...",
+        "Analisando texto...",
+        "Construindo mapa mental...",
+        "Sucesso!"
+      ] : currentLang === 'es' ? [
+        "Enviando documento...",
+        "Procesando contenido...",
+        "Analizando texto...",
+        "Construyendo mapa mental...",
+        "¡Éxito!"
+      ] : [
+        "Uploading document...",
+        "Processing content...",
+        "Analyzing text...",
+        "Building mind map...",
+        "Success!"
+      ];
+    }
     
     setAnalysisStatus(statuses[0]);
     let statusInterval: any = null;
@@ -1527,7 +1723,7 @@ export default function App() {
       // Create FormData to send the file to the backend
       const formData = new FormData();
       formData.append("sourceType", "document");
-      formData.append("documentType", fileExt || "txt");
+      formData.append("documentType", isImage ? "image" : (fileExt || "txt"));
       formData.append("file", selectedFile);
       formData.append("lang", currentLang);
       formData.append("targetLanguage", currentLang);
@@ -1575,11 +1771,15 @@ export default function App() {
             key_points: data.key_points || [],
             quiz: data.quiz || [],
             mind_map: data.mind_map || null,
+            flashcards: data.flashcards || [],
             tutor_questions: data.tutor_questions || [],
             limitations: data.limitations || [],
             transcript: data.transcript || '',
+            tutorContext: data.tutorContext || data.transcript || '',
+            generatedLanguage: data.generatedLanguage || currentLang || 'en',
+            sourceMetadata: data.sourceMetadata || null,
             sourceType: data.sourceType || "document",
-            documentType: data.documentType || fileExt || "txt",
+            documentType: data.documentType || (isImage ? "image" : (fileExt || "txt")),
             fileName: data.fileName || selectedFile.name,
             fileSize: data.fileSize || selectedFile.size,
             createdAt: serverTimestamp(),
@@ -1587,11 +1787,11 @@ export default function App() {
           });
         } catch (firestoreErr) {
           console.error("Failed to save document analysis to history:", firestoreErr);
-          try {
-            handleFirestoreError(firestoreErr, OperationType.CREATE, analysesPath);
-          } catch (err) {
-            console.error("Handled Firestore save error:", err);
-          }
+          showToast(
+            currentLang === 'pt' ? "Análise gerada, mas não foi possível salvar no histórico." :
+            currentLang === 'es' ? "Análisis generado, pero no se pudo guardar en el historial." :
+            "Analysis generated, but it could not be saved to history."
+          );
         }
       }
 
@@ -1612,7 +1812,10 @@ export default function App() {
       let errorMessage = currentLang === 'pt' ? "Falha na análise do documento" : currentLang === 'es' ? "Fallo en el análisis del documento" : "Document analysis failed";
       let errorDetails = "";
       
-      if (error.response) {
+      if (error.isHtmlResponse) {
+        setShowAuthRequiredModal(true);
+        return;
+      } else if (error.response) {
         const resData = error.response?.data;
         errorMessage = (typeof resData === 'object' && resData?.error) ? resData.error : `${errorMessage} (${error.response.status})`;
         errorDetails = (typeof resData === 'object' && resData?.details) ? resData.details : error.message;
@@ -1720,7 +1923,7 @@ export default function App() {
     await saveUserPreferences(user?.uid, updated);
   };
 
-  const [activeTab, setActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript'>(() => {
+  const [activeTab, setActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript' | 'flashcards'>(() => {
     return loadLocalPreferences().defaultStudyFormat;
   });
 
@@ -1780,6 +1983,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (window.location.pathname === '/billing/success' || window.location.pathname.startsWith('/billing/success')) {
+      setView('billing-success');
+    }
+  }, []);
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
         userMenuRef.current &&
@@ -1816,25 +2025,36 @@ export default function App() {
     }
   };
 
+  const viewRef = useRef(view);
+  viewRef.current = view;
+
   useEffect(() => {
+    const currentView = viewRef.current;
     if (user) {
       if (user.emailVerified) {
         if (verificationSuccess) {
           return;
         }
-        setView('dashboard');
+        if (currentView !== 'billing-success') {
+          setView('dashboard');
+        }
         setShowLoginModal(false);
         setCurrentLang('pt');
         fetchHistory();
       } else {
-        setView('landing');
+        if (currentView !== 'billing-success') {
+          setView('landing');
+        }
         setShowLoginModal(true);
       }
     } else {
-      setView('landing');
+      if (currentView !== 'billing-success') {
+        setView('landing');
+      }
       setHistory([]);
       setDashboardSubView('panel');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, verificationSuccess]);
 
   const handleAnalyze = async () => {
@@ -1882,6 +2102,7 @@ export default function App() {
             key_points: data.key_points || [],
             quiz: data.quiz || [],
             mind_map: data.mind_map || null,
+            flashcards: data.flashcards || [],
             tutor_questions: data.tutor_questions || [],
             limitations: data.limitations || [],
             transcript: data.transcript || '',
@@ -1903,6 +2124,7 @@ export default function App() {
             key_points: data.key_points || [],
             quiz: data.quiz || [],
             mind_map: data.mind_map || null,
+            flashcards: data.flashcards || [],
             tutor_questions: data.tutor_questions || [],
             limitations: data.limitations || [],
             transcript: data.transcript || '',
@@ -1930,7 +2152,10 @@ export default function App() {
       let errorMessage = t.analysisFailed;
       let errorDetails = "";
       
-      if (error.response) {
+      if (error.isHtmlResponse) {
+        setShowAuthRequiredModal(true);
+        return;
+      } else if (error.response) {
         // The server responded with a status code outside the 2xx range
         const data = error.response?.data;
         errorMessage = (typeof data === 'object' && data?.error) ? data.error : `${t.analysisFailed} (${error.response.status})`;
@@ -1950,8 +2175,7 @@ export default function App() {
         errorDetails = error.message;
       }
       
-      // Use a more subtle alert or handle it via state in the future
-      alert(`${errorMessage}\n\n${errorDetails}`);
+      showToast(`${errorMessage}: ${errorDetails || ''}`);
     } finally {
       setIsAnalyzing(false);
       setAnalysisStatus('');
@@ -2150,6 +2374,18 @@ export default function App() {
             <Button variant="ghost" onClick={toggleTheme} isDarkMode={isDarkMode} className={`px-2 sm:px-3 ${isDarkMode ? '' : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700'}`}>
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </Button>
+
+            <button
+              onClick={() => window.open(window.location.href, '_blank')}
+              title={currentLang === 'pt' ? "Abrir em nova aba" : currentLang === 'es' ? "Abrir en nueva pestaña" : "Open in new tab"}
+              className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
+                isDarkMode 
+                  ? 'hover:bg-white/5 text-gray-400 hover:text-white' 
+                  : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-750 hover:text-slate-950'
+              }`}
+            >
+              <ExternalLink size={18} />
+            </button>
             
             {user ? (
               <div className="flex items-center gap-2 sm:gap-4">
@@ -2168,6 +2404,30 @@ export default function App() {
                   <LayoutDashboard size={16} className="text-orange-500" />
                   <span>Dashboard</span>
                 </button>
+
+                {/* Plan Badge */}
+                <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg border shrink-0 ${
+                  isDarkMode 
+                    ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
+                    : 'bg-orange-50 border-orange-100 text-orange-600'
+                }`}>
+                  {userPlan === 'pro' ? 'Pro' : userPlan === 'explorer' ? 'Explorer' : userPlan === 'starter' ? 'Starter' : (currentLang === 'pt' ? 'Gratuito' : currentLang === 'es' ? 'Gratuito' : 'Free')}
+                </span>
+
+                {/* Upgrade Button */}
+                {userPlan !== 'pro' && (
+                  <button
+                    onClick={() => setIsUpgradeModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10 hover:shadow-orange-500/20 hover:brightness-110 active:scale-95 shrink-0"
+                  >
+                    <Zap size={13} className="fill-white animate-pulse" />
+                    <span>
+                      {(userPlan === 'starter' || userPlan === 'explorer')
+                        ? (currentLang === 'pt' ? 'Melhorar plano' : currentLang === 'es' ? 'Mejorar plan' : 'Upgrade plan')
+                        : (currentLang === 'pt' ? 'Upgrade' : currentLang === 'es' ? 'Upgrade' : 'Upgrade')}
+                    </span>
+                  </button>
+                )}
 
                 {/* User menu container */}
                 <div className="relative" ref={userMenuRef}>
@@ -3042,7 +3302,18 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {view === 'privacy-policy' ? (
+      {view === 'billing-success' ? (
+        <main className="pt-20 min-h-screen relative overflow-hidden">
+          <BillingSuccess
+            isDarkMode={isDarkMode}
+            currentLang={currentLang}
+            onBackToDashboard={() => {
+              window.history.replaceState({}, document.title, "/");
+              setView(user ? 'dashboard' : 'landing');
+            }}
+          />
+        </main>
+      ) : view === 'privacy-policy' ? (
         <main className="pt-20 min-h-screen relative overflow-hidden">
           <PrivacyPolicy
             isDarkMode={isDarkMode}
@@ -3381,6 +3652,7 @@ export default function App() {
               {dashboardSubView === 'settings' ? (
                 <SettingsView 
                   user={user}
+                  userPlan={userPlan}
                   currentLang={currentLang}
                   setCurrentLang={setCurrentLang}
                   isDarkMode={isDarkMode}
@@ -3643,9 +3915,15 @@ export default function App() {
                                   : 'bg-slate-50 border-slate-200'
                               }`}>
                                 <div className="flex items-center gap-3">
-                                  <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
-                                    <FileText size={24} />
-                                  </div>
+                                  {imagePreviewUrl ? (
+                                    <div className={`w-14 h-14 rounded-xl overflow-hidden border ${isDarkMode ? 'border-zinc-800' : 'border-slate-200'} shrink-0`}>
+                                      <img src={imagePreviewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                    </div>
+                                  ) : (
+                                    <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                                      <FileText size={24} />
+                                    </div>
+                                  )}
                                   <div className="overflow-hidden">
                                     <p className="text-sm font-bold truncate pr-4">{selectedFile.name}</p>
                                     <p className={`text-xs ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
@@ -3732,12 +4010,13 @@ export default function App() {
                       </div>
 
                   {/* Row 2: Features cards with standard elegant Astra UI */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
                     {([
                       { id: 'summary', label: t.summary, icon: FileText },
                       { id: 'tutor', label: t.tutor, icon: GraduationCap },
                       { id: 'quiz', label: t.quiz, icon: Puzzle },
-                      { id: 'mindmap', label: t.mindmap, icon: BrainCircuit }
+                      { id: 'mindmap', label: t.mindmap, icon: BrainCircuit },
+                      { id: 'flashcards', label: t.flashcards, icon: Layers }
                     ] as const).map((btn) => {
                       const hasResult = !!currentResult;
                       const isActive = activeTab === btn.id;
@@ -4270,6 +4549,314 @@ export default function App() {
                   className="w-full px-6 py-3 text-xs font-semibold rounded-xl bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-600/20 active:scale-95 transition-all text-center cursor-pointer"
                 >
                   {currentLang === 'pt' ? 'Entendi' : currentLang === 'es' ? 'Entendido' : 'Got it'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Upgrade Plans Modal */}
+      <AnimatePresence>
+        {isUpgradeModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsUpgradeModalOpen(false)}
+              className="fixed inset-0 bg-black/85 backdrop-blur-md"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className={`relative w-full max-w-5xl rounded-3xl border p-6 sm:p-8 md:p-10 shadow-2xl z-10 my-8 transition-colors ${
+                isDarkMode 
+                  ? 'bg-[#0a0b10] border-zinc-800 text-white shadow-black' 
+                  : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+              }`}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setIsUpgradeModalOpen(false)}
+                className={`absolute top-6 right-6 p-2 rounded-xl transition-colors cursor-pointer z-20 ${
+                  isDarkMode ? 'hover:bg-zinc-900 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <X size={20} />
+              </button>
+
+              {/* Title & Subtitle */}
+              <div className="flex flex-col items-center text-center space-y-3 mb-8">
+                <div className="inline-flex items-center gap-2 px-3 py-1 text-[11px] font-bold text-orange-500 bg-orange-500/10 rounded-full border border-orange-500/20 uppercase tracking-widest">
+                  <Sparkles size={12} className="fill-orange-500 animate-spin" />
+                  {currentLang === 'pt' ? 'Planos Premium' : currentLang === 'es' ? 'Planes Premium' : 'Premium Plans'}
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+                  {currentLang === 'pt' ? 'Escolha o Plano Ideal para Você' : currentLang === 'es' ? 'Elige el Plan Perfecto para Ti' : 'Choose the Perfect Plan for You'}
+                </h2>
+                <p className={`text-sm max-w-md ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                  {currentLang === 'pt' 
+                    ? 'Aumente seus limites de análise e tenha acesso exclusivo ao Voice Tutor' 
+                    : currentLang === 'es' 
+                      ? 'Aumenta tus límites de análisis y obtén acceso exclusivo al Tutor de Voz' 
+                      : 'Increase your analysis limits and get exclusive access to the Voice Tutor'}
+                </p>
+              </div>
+
+              {/* Billing Cycle Toggle */}
+              <div className="flex justify-center mb-8">
+                <div className={`flex items-center p-1 rounded-full border ${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-slate-100 border-slate-200'}`}>
+                  <button
+                    onClick={() => {}}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      isDarkMode ? 'bg-orange-600 text-white shadow-md shadow-orange-600/15' : 'bg-orange-600 text-white shadow-sm'
+                    }`}
+                  >
+                    {currentLang === 'pt' ? 'Mensal' : currentLang === 'es' ? 'Mensual' : 'Monthly'}
+                  </button>
+                  <span className={`px-3 text-xs font-semibold ${isDarkMode ? 'text-gray-500' : 'text-slate-400'}`}>
+                    {currentLang === 'pt' ? 'Anual (Em breve)' : currentLang === 'es' ? 'Anual (Pronto)' : 'Annual (Soon)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Plan Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  {
+                    id: 'starter',
+                    name: 'Starter',
+                    price: '$9.90',
+                    desc: currentLang === 'pt' ? 'Para aprendizes casuais' : currentLang === 'es' ? 'Para estudiantes ocasionales' : 'For casual learners',
+                    features: currentLang === 'pt' 
+                      ? ['Até 50 análises por mês', 'Vídeos de até 60 minutos', 'Sem Voice Tutor']
+                      : currentLang === 'es'
+                        ? ['Hasta 50 análisis por mes', 'Videos de hasta 60 minutos', 'Sin Tutor de Voz']
+                        : ['Up to 50 analyses/month', 'Videos up to 60 minutes', 'No Voice Tutor'],
+                    cta: currentLang === 'pt' ? 'Escolher Starter' : currentLang === 'es' ? 'Elegir Starter' : 'Choose Starter',
+                    badge: null,
+                    popular: false
+                  },
+                  {
+                    id: 'explorer',
+                    name: 'Explorer',
+                    price: '$19.90',
+                    desc: currentLang === 'pt' ? 'Para estudantes ativos' : currentLang === 'es' ? 'Para estudiantes activos' : 'For active students',
+                    features: currentLang === 'pt' 
+                      ? ['Até 150 análises por mês', 'Prioridade de processamento', '30 min/mês de Voice Tutor']
+                      : currentLang === 'es'
+                        ? ['Hasta 150 análisis por mes', 'Prioridad de procesamiento', '30 min/mes de Tutor de Voz']
+                        : ['Up to 150 analyses/month', 'Standard priority processing', '30 min/month of Voice Tutor'],
+                    cta: currentLang === 'pt' ? 'Escolher Explorer' : currentLang === 'es' ? 'Elegir Explorer' : 'Choose Explorer',
+                    badge: currentLang === 'pt' ? 'Mais Popular' : currentLang === 'es' ? 'Más Popular' : 'Most Popular',
+                    popular: true
+                  },
+                  {
+                    id: 'pro',
+                    name: 'Pro',
+                    price: '$39.90',
+                    desc: currentLang === 'pt' ? 'Para profissionais' : currentLang === 'es' ? 'Para profesionales' : 'For professionals',
+                    features: currentLang === 'pt' 
+                      ? ['Até 300 análises por mês', 'Processamento ultra-rápido', '300 min/mês de Voice Tutor']
+                      : currentLang === 'es'
+                        ? ['Hasta 300 análisis por mes', 'Procesamiento ultra-rápido', '300 min/mes de Tutor de Voz']
+                        : ['Up to 300 analyses/month', 'Ultra-fast priority processing', '300 min/month of Voice Tutor'],
+                    cta: currentLang === 'pt' ? 'Escolher Pro' : currentLang === 'es' ? 'Elegir Pro' : 'Choose Pro',
+                    badge: null,
+                    popular: false
+                  }
+                ].map((plan) => {
+                  const isActive = userPlan === plan.id;
+                  const isLoading = checkoutLoadingPlan === plan.id;
+
+                  return (
+                    <div 
+                      key={plan.id}
+                      className={`relative rounded-3xl p-6 sm:p-8 border transition-all flex flex-col justify-between ${
+                        plan.popular
+                          ? isDarkMode 
+                            ? 'bg-zinc-900/30 border-orange-500 shadow-xl shadow-orange-500/5' 
+                            : 'bg-orange-50/20 border-orange-400 shadow-xl shadow-orange-400/5'
+                          : isDarkMode 
+                            ? 'bg-[#0f1115]/50 border-zinc-800 hover:border-zinc-700' 
+                            : 'bg-slate-50/50 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {plan.badge && (
+                        <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full bg-gradient-to-r from-orange-600 to-amber-500 text-white shadow-md shadow-orange-600/20">
+                          {plan.badge}
+                        </span>
+                      )}
+
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-xl font-bold">{plan.name}</h3>
+                          {isActive && (
+                            <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/25 rounded-md">
+                              {currentLang === 'pt' ? 'Ativo' : currentLang === 'es' ? 'Activo' : 'Active'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-baseline gap-1 mb-2">
+                          <span className="text-3xl sm:text-4xl font-black tracking-tight">{plan.price}</span>
+                          <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-slate-400'}`}>
+                            {currentLang === 'pt' ? '/mês' : currentLang === 'es' ? '/mes' : '/mo'}
+                          </span>
+                        </div>
+
+                        <p className={`text-xs mb-6 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                          {plan.desc}
+                        </p>
+
+                        <div className={`border-t mb-6 ${isDarkMode ? 'border-zinc-800' : 'border-slate-150'}`} />
+
+                        <ul className="space-y-3.5 mb-8">
+                          {plan.features.map((feat, idx) => (
+                            <li key={idx} className="flex items-start gap-2.5 text-xs">
+                              <Check size={14} className="text-orange-500 shrink-0 mt-0.5" />
+                              <span className={isDarkMode ? 'text-gray-300' : 'text-slate-700'}>{feat}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isActive || !!checkoutLoadingPlan}
+                        onClick={() => handleCheckout(plan.id)}
+                        className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          isActive
+                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 cursor-default'
+                            : plan.popular
+                              ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-600/20 active:scale-95'
+                              : isDarkMode
+                                ? 'bg-zinc-800 hover:bg-zinc-750 text-white active:scale-95'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-800 active:scale-95'
+                        } disabled:opacity-50`}
+                      >
+                        {isLoading ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : null}
+                        <span>
+                          {isActive 
+                            ? (currentLang === 'pt' ? 'Plano Ativo' : currentLang === 'es' ? 'Plan Activo' : 'Current Plan')
+                            : isLoading 
+                              ? (currentLang === 'pt' ? 'Processando...' : currentLang === 'es' ? 'Procesando...' : 'Processing...')
+                              : plan.cta}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Secure Checkout Note */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-10 pt-6 border-t border-dashed border-zinc-800 text-center sm:text-left">
+                <div className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-slate-400'} flex items-center gap-1.5`}>
+                  <CreditCard size={14} />
+                  <span>
+                    {currentLang === 'pt' 
+                      ? 'Checkout criptografado 100% seguro processado pelo Stripe' 
+                      : currentLang === 'es' 
+                        ? 'Checkout cifrado 100% seguro procesado por Stripe' 
+                        : '100% secure encrypted checkout processed by Stripe'}
+                  </span>
+                </div>
+                <div className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-slate-400'}`}>
+                  {currentLang === 'pt' ? 'Cancele ou mude de plano a qualquer momento.' : currentLang === 'es' ? 'Cancela o cambia de plan en cualquier momento.' : 'Cancel or change plans at any time.'}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Cookie/Auth Required Modal */}
+      <AnimatePresence>
+        {showAuthRequiredModal && (
+          <div className="fixed inset-0 z-[115] flex items-center justify-center p-4 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAuthRequiredModal(false)}
+              className="absolute inset-0 bg-black/85 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className={`relative w-full max-w-md rounded-3xl border p-6 sm:p-8 shadow-2xl overflow-hidden z-10 ${
+                isDarkMode 
+                  ? 'bg-[#0c0d12] border-zinc-800 text-white shadow-black' 
+                  : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+              }`}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setShowAuthRequiredModal(false)}
+                className={`absolute top-6 right-6 p-2 rounded-xl transition-colors cursor-pointer ${
+                  isDarkMode ? 'hover:bg-zinc-900 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <X size={20} />
+              </button>
+
+              {/* Title & Description */}
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-3.5 bg-orange-600/10 rounded-2xl text-orange-500 shrink-0">
+                  <AlertCircle size={28} className="animate-bounce" />
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black">
+                  {currentLang === 'pt' ? 'Autenticação Requerida' : currentLang === 'es' ? 'Autenticación Requerida' : 'Authentication Required'}
+                </h2>
+                <div className={`text-xs sm:text-sm mt-1 leading-relaxed space-y-3 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+                  <p className="font-semibold">
+                    {currentLang === 'pt' 
+                      ? 'Seu navegador está bloqueando cookies de sessão de terceiros dentro deste frame.' 
+                      : currentLang === 'es' 
+                        ? 'Tu navegador está bloqueando las cookies de sesión de terceros dentro de este marco.' 
+                        : 'Your browser is blocking third-party session cookies inside this preview frame.'}
+                  </p>
+                  <p>
+                    {currentLang === 'pt' 
+                      ? 'Para analisar vídeos e documentos com sucesso, abra o aplicativo em uma nova aba dedicada.' 
+                      : currentLang === 'es' 
+                        ? 'Para analizar videos y documentos con éxito, abre la aplicación en una pestaña nueva.' 
+                        : 'To analyze videos and documents successfully, please open the application in a new dedicated tab.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setShowAuthRequiredModal(false)}
+                  className={`w-full sm:w-1/2 px-4 py-3 text-xs font-semibold rounded-xl border transition-all text-center cursor-pointer ${
+                    isDarkMode 
+                      ? 'border-zinc-800 hover:bg-zinc-900 text-gray-300 hover:text-white' 
+                      : 'border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {currentLang === 'pt' ? 'Cancelar' : currentLang === 'es' ? 'Cancelar' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAuthRequiredModal(false);
+                    window.open(window.location.href, '_blank');
+                  }}
+                  className="w-full sm:w-1/2 px-4 py-3 text-xs font-bold rounded-xl bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-600/20 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <ExternalLink size={14} />
+                  {currentLang === 'pt' ? 'Abrir Nova Aba' : currentLang === 'es' ? 'Abrir Nueva Pestaña' : 'Open New Tab'}
                 </button>
               </div>
             </motion.div>

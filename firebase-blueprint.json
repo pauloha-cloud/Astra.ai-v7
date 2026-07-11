@@ -55,6 +55,19 @@
         },
         "tutor_questions": { "type": "array", "items": { "type": "string" } },
         "limitations": { "type": "array", "items": { "type": "string" } },
+        "flashcards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "front": { "type": "string" },
+              "back": { "type": "string" },
+              "topic": { "type": "string" },
+              "difficulty": { "enum": ["basic", "intermediate", "advanced"] }
+            },
+            "required": ["front", "back", "topic", "difficulty"]
+          }
+        },
         "transcript": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }

@@ -16,7 +16,9 @@ import {
   MessageSquare,
   ArrowRight,
   Sparkles,
-  Inbox
+  Inbox,
+  Layers,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface HistoryViewProps {
@@ -44,6 +46,7 @@ const DICTIONARY = {
     filterQuiz: "Quiz",
     filterMindMap: "Mapa Mental",
     filterTutor: "Tutor",
+    filterFlashcards: "Flashcards",
     clearHistory: "Limpar histórico",
     openAnalysis: "Abrir análise",
     openBtn: "Abrir",
@@ -68,6 +71,7 @@ const DICTIONARY = {
     filterQuiz: "Quiz",
     filterMindMap: "Mind Map",
     filterTutor: "Tutor",
+    filterFlashcards: "Flashcards",
     clearHistory: "Clear history",
     openAnalysis: "Open analysis",
     openBtn: "Open",
@@ -92,6 +96,7 @@ const DICTIONARY = {
     filterQuiz: "Cuestionario",
     filterMindMap: "Mapa Mental",
     filterTutor: "Tutor",
+    filterFlashcards: "Flashcards",
     clearHistory: "Limpiar historial",
     openAnalysis: "Abrir análisis",
     openBtn: "Abrir",
@@ -124,7 +129,7 @@ export function HistoryView({
   onGoToPanel
 }: HistoryViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'summary' | 'quiz' | 'mind_map' | 'tutor'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'summary' | 'quiz' | 'mind_map' | 'tutor' | 'flashcards'>('all');
 
   const lang = DICTIONARY[currentLang] || DICTIONARY.en;
 
@@ -148,6 +153,7 @@ export function HistoryView({
     if (activeFilter === 'quiz') return !!(item.quiz && (Array.isArray(item.quiz) ? item.quiz.length > 0 : Object.keys(item.quiz).length > 0));
     if (activeFilter === 'mind_map') return !!item.mind_map;
     if (activeFilter === 'tutor') return !!(item.tutor_questions && item.tutor_questions.length > 0);
+    if (activeFilter === 'flashcards') return !!(item.flashcards && Array.isArray(item.flashcards) && item.flashcards.length > 0);
 
     return true;
   });
@@ -319,6 +325,21 @@ export function HistoryView({
                     <span>{lang.filterTutor}</span>
                   </button>
 
+                  {/* Flashcards */}
+                  <button
+                    onClick={() => setActiveFilter('flashcards')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      activeFilter === 'flashcards'
+                        ? 'bg-orange-500 text-white shadow-sm font-bold'
+                        : isDarkMode
+                          ? 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                    }`}
+                  >
+                    <Layers size={12} />
+                    <span>{lang.filterFlashcards}</span>
+                  </button>
+
                 </div>
               </div>
 
@@ -344,6 +365,7 @@ export function HistoryView({
                   if (item.quiz && (Array.isArray(item.quiz) ? item.quiz.length > 0 : Object.keys(item.quiz).length > 0)) features.push(lang.filterQuiz);
                   if (item.mind_map) features.push(lang.filterMindMap);
                   if (item.tutor_questions && item.tutor_questions.length > 0) features.push(lang.filterTutor);
+                  if (item.flashcards && Array.isArray(item.flashcards) && item.flashcards.length > 0) features.push(lang.filterFlashcards);
 
                   return (
                     <motion.div 
@@ -361,9 +383,55 @@ export function HistoryView({
                       {/* Video Thumbnail / Document icon left */}
                       <div className={`w-full sm:w-32 h-36 sm:h-20 rounded-xl overflow-hidden shrink-0 relative flex items-center justify-center ${isDarkMode ? 'bg-zinc-900/60' : 'bg-slate-100'}`}>
                         {isDocument ? (
-                          <div className="flex items-center justify-center w-full h-full bg-orange-500/10 text-orange-500 group-hover:scale-105 transition-all duration-300">
-                            <FileText size={28} />
-                          </div>
+                          (() => {
+                            const docType = (item.documentType || 'txt').toLowerCase();
+                            const isImgType = docType === 'image' || ['png', 'jpg', 'jpeg', 'webp'].includes(docType);
+                            const imgLabel = currentLang === 'pt' ? 'Imagem' : currentLang === 'es' ? 'Imagen' : 'Image';
+                            
+                            if (isImgType && thumbnail) {
+                              return (
+                                <img 
+                                  src={thumbnail} 
+                                  alt="" 
+                                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300" 
+                                />
+                              );
+                            }
+                            
+                            if (docType === 'pdf') {
+                              return (
+                                <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-red-600/10 via-orange-600/5 to-amber-500/5 border border-red-500/20 group-hover:border-red-500/40 rounded-xl transition-all duration-300">
+                                  <FileText size={24} className="text-red-500 mb-1" />
+                                  <span className="text-[10px] font-black tracking-wider text-red-500 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/10">PDF</span>
+                                </div>
+                              );
+                            }
+                            
+                            if (docType === 'docx') {
+                              return (
+                                <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-blue-600/10 via-sky-600/5 to-indigo-500/5 border border-blue-500/20 group-hover:border-blue-500/40 rounded-xl transition-all duration-300">
+                                  <FileText size={24} className="text-blue-500 mb-1" />
+                                  <span className="text-[10px] font-black tracking-wider text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/10">DOCX</span>
+                                </div>
+                              );
+                            }
+                            
+                            if (docType === 'txt') {
+                              return (
+                                <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-zinc-600/10 via-slate-600/5 to-neutral-500/5 border border-zinc-500/20 group-hover:border-zinc-500/40 rounded-xl transition-all duration-300">
+                                  <FileText size={24} className="text-zinc-500 mb-1" />
+                                  <span className="text-[10px] font-black tracking-wider text-zinc-500 bg-zinc-500/10 px-2 py-0.5 rounded border border-zinc-500/10">TXT</span>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-orange-600/10 via-orange-500/5 to-amber-500/5 border border-orange-500/20 group-hover:border-orange-500/40 rounded-xl transition-all duration-300">
+                                <ImageIcon size={24} className="text-orange-500 mb-1" />
+                                <span className="text-[10px] font-black tracking-wider text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/10 uppercase">{isImgType ? imgLabel : docType.toUpperCase()}</span>
+                              </div>
+                            );
+                          })()
                         ) : (
                           <>
                             <img 
@@ -402,17 +470,13 @@ export function HistoryView({
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           {/* Dynamic Source badge */}
                           <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold tracking-tight border ${
-                            isDocument || hasTranscript 
-                              ? isDarkMode 
-                                ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
-                                : 'bg-orange-50 border-orange-100 text-orange-700'
-                              : isDarkMode 
-                                ? 'bg-zinc-800/60 border-zinc-700 text-zinc-400' 
-                                : 'bg-slate-100 border-slate-200 text-slate-600'
+                            isDarkMode 
+                              ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
+                              : 'bg-orange-50 border-orange-100 text-orange-700'
                           }`}>
                             {isDocument 
                               ? (currentLang === 'pt' ? 'Fonte: Documento' : currentLang === 'es' ? 'Fuente: Documento' : 'Source: Document') 
-                              : (hasTranscript ? lang.sourceTranscript : lang.sourceMetadata)}
+                              : (currentLang === 'pt' ? 'Fonte: YouTube' : currentLang === 'es' ? 'Fuente: YouTube' : 'Source: YouTube')}
                           </span>
 
                           {isDocument && (
@@ -421,7 +485,13 @@ export function HistoryView({
                                 ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
                                 : 'bg-orange-50 border-orange-100 text-orange-700'
                             }`}>
-                              {(item.documentType || 'TXT').toUpperCase()}
+                              {(() => {
+                                const docType = (item.documentType || 'TXT').toLowerCase();
+                                if (docType === 'image' || ['png', 'jpg', 'jpeg', 'webp'].includes(docType)) {
+                                  return currentLang === 'pt' ? 'Imagem' : currentLang === 'es' ? 'Imagen' : 'Image';
+                                }
+                                return docType.toUpperCase();
+                              })()}
                             </span>
                           )}
 
@@ -442,20 +512,7 @@ export function HistoryView({
                       </div>
 
                       {/* Right-side action buttons */}
-                      <div className="flex items-center justify-end gap-2.5 pt-3 sm:pt-0 border-t sm:border-t-0 border-zinc-200/40 dark:border-zinc-800/40 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        
-                        {/* Inline Open Action button */}
-                        <button
-                          onClick={() => onOpenItem(item)}
-                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                            isDarkMode 
-                              ? 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-800/80' 
-                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200/50'
-                          }`}
-                        >
-                          <span>{lang.openBtn}</span>
-                          <ChevronRight size={13} className="text-zinc-500 group-hover:translate-x-0.5 transition-transform" />
-                        </button>
+                      <div className="flex items-center justify-end gap-2.5 shrink-0" onClick={(e) => e.stopPropagation()}>
 
                         {/* Three Dots Menu */}
                         <div className="relative">

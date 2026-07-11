@@ -374,6 +374,8 @@ const InteractiveMindMapInner = ({
   const tAsk = askTexts[lang as 'pt' | 'es' | 'en'] || askTexts.pt;
   
   const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const fitViewRef = useRef(fitView);
+  fitViewRef.current = fitView;
   const shouldFitViewRef = useRef(true);
 
   useEffect(() => {
@@ -450,11 +452,14 @@ const InteractiveMindMapInner = ({
     
     if (data.centralTopic && Array.isArray(data.nodes)) {
       const transformNode = (node: any, depth = 1): any => {
+        if (depth > 25) return null;
         return {
           topic: node.label,
           description: node.description,
           level: node.level || depth,
-          children: Array.isArray(node.children) ? node.children.map((c: any) => transformNode(c, depth + 1)) : []
+          children: Array.isArray(node.children) 
+            ? node.children.map((c: any) => transformNode(c, depth + 1)).filter(Boolean) 
+            : []
         };
       };
       
@@ -523,6 +528,7 @@ const InteractiveMindMapInner = ({
     );
 
     const parseRecursive = (nodeData: any, parentId: string, parentColorIndex?: number, parentLevel = 1) => {
+      if (parentLevel > 25) return;
       const children = nodeData.children || nodeData.subtopics;
       if (children && Array.isArray(children)) {
         children.forEach((child, index) => {
@@ -702,11 +708,18 @@ The central theme **${topicName}** is a focused and dense learning structure. By
       })
       .catch((err) => {
         console.error("Failed to fetch mindmap chat response:", err);
-        const errorMsg = lang === 'pt'
+        let errorMsg = lang === 'pt'
           ? "Desculpe, não consegui obter uma resposta da IA neste momento. Por favor, tente novamente!"
           : lang === 'es'
             ? "Lo siento, no pude obtener una respuesta de la IA en este momento. ¡Por favor, inténtalo de nuevo!"
             : "Sorry, I couldn't get an AI response right now. Please try again!";
+        if ((err as any).isHtmlResponse) {
+          errorMsg = lang === 'pt'
+            ? "Sessão expirada ou cookies bloqueados. Por favor, recarregue a página ou abra o aplicativo em uma nova aba."
+            : lang === 'es'
+              ? "Sesión expirada o cookies bloqueadas. Por favor, recargue la página o abra la aplicación en una pestaña nueva."
+              : "Session expired or cookies blocked. Please refresh the page or open the application in a new tab.";
+        }
         setAiResponse({
           type: 'markdown',
           title: lang === 'pt' ? "Erro na IA" : lang === 'es' ? "Error en la IA" : "AI Error",
@@ -724,13 +737,17 @@ The central theme **${topicName}** is a focused and dense learning structure. By
     const { masterNodes, masterEdges } = masterGraph;
 
     const hiddenNodes = new Set<string>();
-    const isNodeHidden = (nodeId: string): boolean => {
+    const isNodeHidden = (nodeId: string, visited = new Set<string>()): boolean => {
       if (hiddenNodes.has(nodeId)) return true;
+      if (visited.has(nodeId)) return false; // Break parental/ancestry cycles
       const node = masterNodes.find(n => n.id === nodeId);
       if (!node) return false;
       const parentId = node.data.parentId;
       if (parentId) {
-        if (isNodeHidden(parentId) || collapsedNodes.has(parentId)) {
+        visited.add(nodeId);
+        const parentHidden = isNodeHidden(parentId, visited) || collapsedNodes.has(parentId);
+        visited.delete(nodeId);
+        if (parentHidden) {
           hiddenNodes.add(nodeId);
           return true;
         }
@@ -788,12 +805,14 @@ The central theme **${topicName}** is a focused and dense learning structure. By
 
     if (shouldFitViewRef.current) {
       setTimeout(() => {
-        fitView({ padding: 0.25, duration: 450, maxZoom: 0.95 });
+        if (fitViewRef.current) {
+          fitViewRef.current({ padding: 0.25, duration: 450, maxZoom: 0.95 });
+        }
       }, 100);
       shouldFitViewRef.current = false;
     }
 
-  }, [masterGraph, collapsedNodes, setNodes, setEdges, toggleNode, layout, fitView, isDarkMode]);
+  }, [masterGraph, collapsedNodes, setNodes, setEdges, toggleNode, layout, isDarkMode, lang]);
 
   const hTexts = headerTexts[lang as 'pt' | 'es' | 'en'] || headerTexts['en'];
 

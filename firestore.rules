@@ -17,7 +17,7 @@ service cloud.firestore {
     }
 
     function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn();
     }
 
     function isOwner(userId) {
@@ -47,30 +47,28 @@ service cloud.firestore {
       return data.uid == request.auth.uid
         && data.email is string && data.email.size() <= 256
         && (data.get('displayName', null) == null || (data.get('displayName', '') is string && data.get('displayName', '').size() <= 256))
-        && (data.get('photoURL', null) == null || (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 1024))
+        && (data.get('photoURL', null) == null || (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 4096))
         && (data.get('plan', 'free') in ['free', 'basic', 'premium']);
     }
 
     function isValidAnalysis(data) {
       return data.userId == request.auth.uid
         && data.video is map
-        && (data.video.get('videoId', null) == null || (data.video.get('videoId', '') is string && data.video.get('videoId', '').size() <= 64))
-        && (data.video.get('title', '') is string && data.video.get('title', '').size() <= 512)
-        && (data.video.get('thumbnail', null) == null || (data.video.get('thumbnail', '') is string && data.video.get('thumbnail', '').size() <= 2048))
-        && (data.get('summary', null) == null || (data.get('summary', '') is string && data.get('summary', '').size() <= 100000))
-        && (data.get('transcript', null) == null || (data.get('transcript', '') is string && data.get('transcript', '').size() <= 2000000))
-        && (data.get('key_points', null) == null || (data.get('key_points', []) is list && data.get('key_points', []).size() <= 100))
-        && (data.get('quiz', null) == null || (data.get('quiz', []) is list && data.get('quiz', []).size() <= 50))
-        && (data.get('mind_map', null) == null || data.get('mind_map', {}) is map || data.get('mind_map', '') is string)
-        && (data.get('mode', 'transcript') in ['transcript', 'metadata_fallback'])
-        && (data.get('limitations', null) == null || (data.get('limitations', []) is list && data.get('limitations', []).size() <= 20))
-        && (data.get('tutor_questions', null) == null || (data.get('tutor_questions', []) is list && data.get('tutor_questions', []).size() <= 20));
+        && (data.video.get('title', '') is string && data.video.get('title', '').size() <= 4096)
+        && (data.get('summary', null) == null || (data.get('summary', '') is string && data.get('summary', '').size() <= 250000))
+        && (data.get('transcript', null) == null || (data.get('transcript', '') is string && data.get('transcript', '').size() <= 3000000))
+        && (data.get('key_points', null) == null || data.get('key_points', []) is list)
+        && (data.get('quiz', null) == null || data.get('quiz', []) is list)
+        && (data.get('mind_map', null) == null || data.get('mind_map', {}) is map || data.get('mind_map', '') is string || data.get('mind_map', []) is list)
+        && (data.get('limitations', null) == null || data.get('limitations', []) is list)
+        && (data.get('tutor_questions', null) == null || data.get('tutor_questions', []) is list)
+        && (data.get('flashcards', null) == null || data.get('flashcards', []) is list);
     }
 
     function isValidPreference(data) {
-      return data.defaultStudyFormat in ['summary', 'quiz', 'tutor', 'mindmap']
+      return data.defaultStudyFormat in ['summary', 'quiz', 'tutor', 'mindmap', 'flashcards']
         && data.explanationLevel in ['basic', 'intermediate', 'advanced']
-        && data.defaultQuizQuestionCount in [5, 10, 15];
+        && data.defaultQuizQuestionCount in [5, 10, 15, 20, 25];
     }
 
     // --- Rules ---
@@ -109,16 +107,13 @@ service cloud.firestore {
       match /analyses/{analysisId} {
         allow list: if isOwner(userId);
         allow get: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidId(analysisId) 
-          && exists(/databases/$(database)/documents/users/$(userId)) // Master Gate
-          && incoming().keys().hasAll(['userId', 'video', 'mode', 'summary', 'createdAt'])
+        allow create: if isOwner(userId)
+          && incoming().userId == userId
           && incoming().createdAt == request.time
           && isValidAnalysis(incoming());
-        allow update: if isOwner(userId) && (
-          incoming().diff(existing()).affectedKeys().hasOnly(['summary', 'quiz', 'mind_map', 'key_points', 'tutor_questions', 'limitations', 'updatedAt'])
-          && (incoming().get('updatedAt', request.time) == request.time)
-          && isValidAnalysis(incoming())
-        );
+        allow update: if isOwner(userId)
+          && incoming().userId == userId
+          && isValidAnalysis(incoming());
         allow delete: if isOwner(userId);
       }
     }

@@ -11,6 +11,12 @@ import "dotenv/config";
 import { GoogleGenAI, Type } from "@google/genai";
 import multer from "multer";
 import { PDFParse } from "pdf-parse";
+import fs from "fs";
+import Stripe from "stripe";
+import { initializeApp as initializeFirebaseApp } from "firebase/app";
+import { getFirestore as getFirebaseFirestore, doc as firebaseDoc, updateDoc as firebaseUpdateDoc, setDoc as firebaseSetDoc, collection as firebaseCollection, query as firebaseQuery, where as firebaseWhere, getDocs as firebaseGetDocs, getDoc as firebaseGetDoc, serverTimestamp as firebaseServerTimestamp } from "firebase/firestore";
+// @ts-ignore
+import mammoth from "mammoth";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -330,6 +336,297 @@ async function initializeTutorSession(
   });
 }
 
+// --- STRIPE & FIREBASE BACKEND INTEGRATION HELPERS ---
+let cachedStripeClient: Stripe | null = null;
+function getStripe(): Stripe {
+  if (cachedStripeClient) return cachedStripeClient;
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    throw new Error("STRIPE_SECRET_KEY is not configured on the server.");
+  }
+  cachedStripeClient = new Stripe(key);
+  return cachedStripeClient;
+}
+
+let cachedFirebaseDb: any = null;
+function getFirebaseDb(): any {
+  if (cachedFirebaseDb) return cachedFirebaseDb;
+  try {
+    const firebaseConfigPath = path.resolve(__dirname, "./firebase-applet-config.json");
+    if (!fs.existsSync(firebaseConfigPath)) {
+      throw new Error(`Firebase configuration file not found at ${firebaseConfigPath}`);
+    }
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+    const firebaseApp = initializeFirebaseApp(firebaseConfig);
+    cachedFirebaseDb = getFirebaseFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    return cachedFirebaseDb;
+  } catch (err: any) {
+    console.error("[Backend Firebase] Initialization failed:", err);
+    throw err;
+  }
+}
+
+function getPlanLimits(planId: string) {
+  let vLimit = 0;
+  let mAnalyses = 50;
+  let maxVideoLen = 60;
+
+  if (planId === "explorer") {
+    vLimit = 30;
+    mAnalyses = 150;
+    maxVideoLen = 60;
+  } else if (planId === "pro") {
+    vLimit = 300;
+    mAnalyses = 300;
+    maxVideoLen = 999999;
+  }
+
+  return {
+    voiceTutor: {
+      monthlyIncludedMinutes: vLimit,
+      monthlyUsedMinutes: 0,
+      addonAvailableMinutes: 0,
+      addonUsedMinutes: 0,
+      addonExpiresAt: null,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date()
+    },
+    limits: {
+      monthlyVoiceTutorMinutes: vLimit,
+      monthlyAnalyses: mAnalyses,
+      maxVideoDurationMinutes: maxVideoLen === 999999 ? null : maxVideoLen
+    }
+  };
+}
+
+async function findUserAndSubscriptionUpdate(
+  userId: string | undefined, 
+  email: string | undefined, 
+  subscriptionData: any
+): Promise<boolean> {
+  const db = getFirebaseDb();
+  let userRef: any = null;
+  let foundUserId: string | null = null;
+  let isNewDoc = false;
+
+  // 1. Try finding by userId
+  if (userId) {
+    const docRef = firebaseDoc(db, "users", userId);
+    try {
+      const docSnap = await firebaseGetDoc(docRef);
+      userRef = docRef;
+      foundUserId = userId;
+      if (docSnap.exists()) {
+        console.log(`[Stripe Webhook] Found user directly by ID: ${userId}`);
+      } else {
+        console.log(`[Stripe Webhook] User document does not exist for ID: ${userId}. Will auto-create.`);
+        isNewDoc = true;
+      }
+    } catch (err) {
+      console.error(`[Stripe Webhook] Error fetching user doc by ID ${userId}:`, err);
+    }
+  }
+
+  // 2. Try finding by email query if not found by ID
+  if (!userRef && email) {
+    const cleanEmail = email.toLowerCase().trim();
+    console.log(`[Stripe Webhook] Looking up user by email query: ${cleanEmail}`);
+    try {
+      const q = firebaseQuery(firebaseCollection(db, "users"), firebaseWhere("email", "==", cleanEmail));
+      const querySnapshot = await firebaseGetDocs(q);
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        userRef = firebaseDoc(db, "users", userDoc.id);
+        foundUserId = userDoc.id;
+        console.log(`[Stripe Webhook] Found user by email query: ${cleanEmail}, user UID: ${userDoc.id}`);
+      }
+    } catch (err) {
+      console.error(`[Stripe Webhook] Error querying user by email ${cleanEmail}:`, err);
+    }
+  }
+
+  // If we couldn't find a doc but we have a direct userId from checkout session metadata, use it as fallback to create a new profile doc
+  if (!userRef && userId) {
+    userRef = firebaseDoc(db, "users", userId);
+    foundUserId = userId;
+    isNewDoc = true;
+    console.log(`[Stripe Webhook] Creating fallback user document for ID: ${userId}`);
+  }
+
+  if (userRef && foundUserId) {
+    console.log("Updating user subscription:", {
+      userId: foundUserId,
+      email: email || "",
+      plan: subscriptionData.plan,
+      subscriptionStatus: subscriptionData.subscriptionStatus,
+      isNewDoc
+    });
+
+    try {
+      const finalData: any = {
+        ...subscriptionData,
+        updatedAt: firebaseServerTimestamp()
+      };
+      if (isNewDoc) {
+        finalData.createdAt = firebaseServerTimestamp();
+        if (email) {
+          finalData.email = email;
+        }
+        finalData.uid = foundUserId;
+      }
+      await firebaseSetDoc(userRef, finalData, { merge: true });
+      console.log(`[Stripe Webhook] Successfully wrote user ${foundUserId} (isNewDoc: ${isNewDoc}) with plan ${subscriptionData.plan}`);
+      return true;
+    } catch (err) {
+      console.error(`[Stripe Webhook] Critical Error setting user doc ${foundUserId} in Firestore:`, err);
+      throw err;
+    }
+  } else {
+    const errorMsg = `User not found and cannot be created for Stripe checkout session. userId: ${userId || 'none'}, email: ${email || 'none'}`;
+    console.error(`[Stripe Webhook] ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
+}
+
+async function findUserByStripeIdsAndUpdate(
+  stripeSubscriptionId: string, 
+  stripeCustomerId: string | undefined, 
+  subscriptionData: any
+): Promise<boolean> {
+  const db = getFirebaseDb();
+  let userRef: any = null;
+  let foundUserId: string | null = null;
+
+  // 1. Query by stripeSubscriptionId
+  if (stripeSubscriptionId) {
+    const q = firebaseQuery(firebaseCollection(db, "users"), firebaseWhere("stripeSubscriptionId", "==", stripeSubscriptionId));
+    const querySnapshot = await firebaseGetDocs(q);
+    if (!querySnapshot.empty) {
+      const userDoc = querySnapshot.docs[0];
+      userRef = firebaseDoc(db, "users", userDoc.id);
+      foundUserId = userDoc.id;
+    }
+  }
+
+  // 2. Query by stripeCustomerId if not found by subscription ID
+  if (!userRef && stripeCustomerId) {
+    const q = firebaseQuery(firebaseCollection(db, "users"), firebaseWhere("stripeCustomerId", "==", stripeCustomerId));
+    const querySnapshot = await firebaseGetDocs(q);
+    if (!querySnapshot.empty) {
+      const userDoc = querySnapshot.docs[0];
+      userRef = firebaseDoc(db, "users", userDoc.id);
+      foundUserId = userDoc.id;
+    }
+  }
+
+  if (userRef && foundUserId) {
+    console.log("Updating user subscription from webhook event:", {
+      userId: foundUserId,
+      stripeSubscriptionId,
+      subscriptionData
+    });
+    try {
+      await firebaseUpdateDoc(userRef, {
+        ...subscriptionData,
+        updatedAt: firebaseServerTimestamp()
+      });
+      return true;
+    } catch (err) {
+      console.error(`[Stripe Webhook] Error updating user doc ${foundUserId} with subscription data:`, err);
+      throw err;
+    }
+  } else {
+    console.warn(`[Stripe Webhook] No user found for stripeSubscriptionId: ${stripeSubscriptionId} or stripeCustomerId: ${stripeCustomerId}`);
+    return false;
+  }
+}
+
+async function cancelUserSubscriptionByStripeId(stripeSubscriptionId: string, stripeCustomerId?: string) {
+  if (!stripeSubscriptionId) return;
+  try {
+    const freeLimits = getPlanLimits("free");
+    const updateData = {
+      plan: "free",
+      subscriptionStatus: "canceled",
+      ...freeLimits
+    };
+    const updated = await findUserByStripeIdsAndUpdate(stripeSubscriptionId, stripeCustomerId, updateData);
+    if (updated) {
+      console.log(`[Stripe Webhook] Successfully canceled subscription ${stripeSubscriptionId}`);
+    } else {
+      console.warn(`[Stripe Webhook] No user found with subscription ID ${stripeSubscriptionId} to cancel`);
+    }
+  } catch (error) {
+    console.error(`[Stripe Webhook] Error canceling user subscription ${stripeSubscriptionId}:`, error);
+  }
+}
+
+async function handlePaymentFailedByStripeId(stripeSubscriptionId: string, stripeCustomerId?: string) {
+  if (!stripeSubscriptionId) return;
+  try {
+    const updateData = {
+      subscriptionStatus: "payment_failed"
+    };
+    const updated = await findUserByStripeIdsAndUpdate(stripeSubscriptionId, stripeCustomerId, updateData);
+    if (updated) {
+      console.log(`[Stripe Webhook] Marked subscription ${stripeSubscriptionId} as payment_failed`);
+    } else {
+      console.warn(`[Stripe Webhook] No user found with subscription ID ${stripeSubscriptionId} to mark as payment_failed`);
+    }
+  } catch (error) {
+    console.error(`[Stripe Webhook] Error marking payment failure for subscription ${stripeSubscriptionId}:`, error);
+  }
+}
+
+async function handleSubscriptionUpdated(subscription: any) {
+  if (!subscription || !subscription.id) return;
+  try {
+    const stripeSubscriptionId = subscription.id;
+    const status = subscription.status;
+    const priceId = subscription.items.data[0]?.price.id;
+
+    let resolvedPlan = subscription.metadata?.plan;
+    if (!resolvedPlan && priceId) {
+      if (priceId === process.env.STRIPE_STARTER_PRICE_ID) resolvedPlan = "starter";
+      else if (priceId === process.env.STRIPE_EXPLORER_PRICE_ID) resolvedPlan = "explorer";
+      else if (priceId === process.env.STRIPE_PRO_PRICE_ID) resolvedPlan = "pro";
+    }
+
+    const updateData: any = {
+      subscriptionStatus: status,
+      stripePriceId: priceId
+    };
+
+    if (resolvedPlan) {
+      updateData.plan = resolvedPlan;
+      const limits = getPlanLimits(resolvedPlan);
+      Object.assign(updateData, limits);
+    }
+
+    const success = await findUserByStripeIdsAndUpdate(stripeSubscriptionId, subscription.customer as string, updateData);
+    if (!success) {
+      const userId = subscription.metadata?.userId;
+      let email = subscription.metadata?.userEmail;
+      if (!email && subscription.customer) {
+        try {
+          const stripe = getStripe();
+          const customer = await stripe.customers.retrieve(subscription.customer as string);
+          if (customer && !(customer as any).deleted) {
+            email = (customer as any).email || undefined;
+          }
+        } catch (err) {}
+      }
+      await findUserAndSubscriptionUpdate(userId, email, {
+        ...updateData,
+        stripeSubscriptionId,
+        stripeCustomerId: subscription.customer as string
+      });
+    }
+  } catch (error) {
+    console.error(`[Stripe Webhook] Error handling subscription updated for ${subscription.id}:`, error);
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -345,7 +642,346 @@ async function startServer() {
   };
 
   app.use(cors());
+
+  // Stripe Webhook Endpoint (requires raw body, defined before express.json()!)
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req: express.Request, res: express.Response) => {
+    const sig = req.headers["stripe-signature"];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!sig) {
+      console.warn("[Stripe Webhook] Missing stripe-signature header.");
+      return res.status(400).send("Webhook Error: Missing stripe-signature header.");
+    }
+
+    if (!webhookSecret) {
+      console.warn("[Stripe Webhook] STRIPE_WEBHOOK_SECRET is not configured on the server.");
+      return res.status(400).send("Webhook Error: STRIPE_WEBHOOK_SECRET is not configured.");
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      const stripe = getStripe();
+      event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
+    } catch (err: any) {
+      console.error(`[Stripe Webhook] Signature verification failed:`, err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    const dataObject = event.data.object as any;
+    console.log(`[Stripe Webhook] Received event of type: ${event.type}`);
+
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = dataObject as Stripe.Checkout.Session;
+          console.log("Stripe webhook received:", event.type);
+          console.log("Checkout session:", {
+            email: session.customer_email,
+            customer: session.customer,
+            subscription: session.subscription,
+            metadata: session.metadata,
+            client_reference_id: session.client_reference_id
+          });
+
+          const metadataUserId = session.metadata?.userId;
+          const clientReferenceId = session.client_reference_id;
+          const userId = metadataUserId || clientReferenceId || undefined;
+
+          const customerEmail = session.customer_details?.email || session.customer_email;
+          const metadataUserEmail = session.metadata?.userEmail;
+          const email = customerEmail || metadataUserEmail || undefined;
+
+          const plan = session.metadata?.plan;
+          const stripeCustomerId = session.customer as string;
+          const stripeSubscriptionId = session.subscription as string;
+
+          console.log("Webhook user lookup:", {
+            userId,
+            email,
+            plan,
+            customer: session.customer,
+            subscription: session.subscription
+          });
+
+          if (!plan) {
+            console.warn("[Stripe Webhook] Plan metadata is missing.");
+            break;
+          }
+
+          let stripePriceId: string | undefined = undefined;
+          let stripeProductId: string | undefined = undefined;
+          if (stripeSubscriptionId) {
+            try {
+              const stripe = getStripe();
+              const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+              const item = sub.items.data[0];
+              if (item) {
+                stripePriceId = item.price.id;
+                if (typeof item.price.product === "string") {
+                  stripeProductId = item.price.product;
+                } else if (item.price.product && typeof item.price.product === "object") {
+                  stripeProductId = (item.price.product as any).id;
+                }
+              }
+            } catch (err) {
+              console.error("[Stripe Webhook] Error retrieving subscription details from Stripe:", err);
+            }
+          }
+
+          if (!stripePriceId) {
+            const priceMap: Record<string, string | undefined> = {
+              starter: process.env.STRIPE_STARTER_PRICE_ID,
+              explorer: process.env.STRIPE_EXPLORER_PRICE_ID,
+              pro: process.env.STRIPE_PRO_PRICE_ID
+            };
+            stripePriceId = priceMap[plan];
+          }
+
+          const limits = getPlanLimits(plan);
+          const subscriptionData = {
+            plan,
+            stripeCustomerId,
+            stripeSubscriptionId,
+            subscriptionStatus: "active",
+            stripePriceId,
+            stripeProductId,
+            ...limits
+          };
+
+          await findUserAndSubscriptionUpdate(userId, email, subscriptionData);
+          break;
+        }
+
+        case "customer.subscription.deleted": {
+          const subscription = dataObject as Stripe.Subscription;
+          console.log(`[Stripe Webhook] Subscription deleted: ${subscription.id}`);
+          await cancelUserSubscriptionByStripeId(subscription.id, subscription.customer as string);
+          break;
+        }
+
+        case "invoice.payment_failed": {
+          const invoice = dataObject as any;
+          console.log(`[Stripe Webhook] Invoice payment failed for subscription: ${invoice.subscription}`);
+          if (invoice.subscription) {
+            await handlePaymentFailedByStripeId(invoice.subscription as string, invoice.customer as string);
+          }
+          break;
+        }
+
+        case "customer.subscription.created": {
+          const subscription = dataObject as Stripe.Subscription;
+          console.log(`[Stripe Webhook] Subscription created: ${subscription.id}`);
+          
+          const stripeSubscriptionId = subscription.id;
+          const stripeCustomerId = subscription.customer as string;
+          const status = subscription.status;
+
+          const plan = subscription.metadata?.plan || (subscription.items.data[0]?.price as any)?.metadata?.plan || undefined; 
+          const priceId = subscription.items.data[0]?.price.id;
+          const productId = typeof subscription.items.data[0]?.price.product === "string" ? subscription.items.data[0]?.price.product : (subscription.items.data[0]?.price.product as any)?.id;
+
+          let resolvedPlan = plan;
+          if (!resolvedPlan && priceId) {
+            if (priceId === process.env.STRIPE_STARTER_PRICE_ID) resolvedPlan = "starter";
+            else if (priceId === process.env.STRIPE_EXPLORER_PRICE_ID) resolvedPlan = "explorer";
+            else if (priceId === process.env.STRIPE_PRO_PRICE_ID) resolvedPlan = "pro";
+          }
+
+          const userId = subscription.metadata?.userId;
+          let email = subscription.metadata?.userEmail;
+
+          if (!email && stripeCustomerId) {
+            try {
+              const stripe = getStripe();
+              const customer = await stripe.customers.retrieve(stripeCustomerId);
+              if (customer && !(customer as any).deleted) {
+                email = (customer as any).email || undefined;
+              }
+            } catch (err) {
+              console.error("[Stripe Webhook] Error retrieving customer for created subscription:", err);
+            }
+          }
+
+          if (resolvedPlan) {
+            const limits = getPlanLimits(resolvedPlan);
+            const subscriptionData = {
+              plan: resolvedPlan,
+              stripeCustomerId,
+              stripeSubscriptionId,
+              subscriptionStatus: status || "active",
+              stripePriceId: priceId,
+              stripeProductId: productId,
+              ...limits
+            };
+            await findUserAndSubscriptionUpdate(userId, email, subscriptionData);
+          }
+          break;
+        }
+
+        case "customer.subscription.updated": {
+          console.log(`[Stripe Webhook] Subscription updated: ${dataObject.id}`);
+          await handleSubscriptionUpdated(dataObject);
+          break;
+        }
+
+        case "invoice.payment_succeeded": {
+          console.log(`[Stripe Webhook] Invoice payment succeeded: ${dataObject.id}`);
+          break;
+        }
+
+        default:
+          console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`);
+      }
+    } catch (err: any) {
+      console.error(`[Stripe Webhook] Critical failure processing event ${event.type}:`, err);
+      return res.status(500).send(`Webhook Error: ${err.message || "Internal error"}`);
+    }
+
+    res.json({ received: true });
+  });
+
   app.use(express.json());
+
+  // Stripe Checkout Session Creation Endpoint
+  app.post("/api/stripe/create-checkout-session", async (req: express.Request, res: express.Response) => {
+    try {
+      const { plan, userEmail, userId, successUrl, cancelUrl } = req.body;
+
+      if (!plan || !userEmail) {
+        return res.status(400).json({ error: "Missing plan or userEmail parameter." });
+      }
+
+      const validPlans = ["starter", "explorer", "pro"];
+      if (!validPlans.includes(plan)) {
+        return res.status(400).json({ error: "Invalid plan specified." });
+      }
+
+      const priceMap: Record<string, string | undefined> = {
+        starter: process.env.STRIPE_STARTER_PRICE_ID,
+        explorer: process.env.STRIPE_EXPLORER_PRICE_ID,
+        pro: process.env.STRIPE_PRO_PRICE_ID
+      };
+
+      const priceId = priceMap[plan];
+      if (!priceId) {
+        return res.status(500).json({ error: `Stripe price ID for plan '${plan}' is not configured on the server.` });
+      }
+
+      const stripe = getStripe();
+      const FRONTEND_URL = process.env.FRONTEND_URL || process.env.APP_URL || "http://localhost:3000";
+
+      console.log(`[Stripe] Creating subscription checkout session for: ${userEmail}, userId: ${userId || 'none'}, plan: ${plan}`);
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        payment_method_types: ["card"],
+        customer_email: userEmail,
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: successUrl || `${FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl || `${FRONTEND_URL}/pricing`,
+        client_reference_id: userId || undefined,
+        metadata: {
+          plan,
+          userId: userId || "",
+          userEmail,
+          app: "astra-learning-ai"
+        }
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("[Stripe] Failed to create checkout session:", err);
+      res.status(500).json({ error: err.message || "Internal server error creating checkout session." });
+    }
+  });
+
+  // Stripe Upgrade Subscription Endpoint
+  app.post("/api/stripe/update-subscription", async (req: express.Request, res: express.Response) => {
+    try {
+      const { userId, newPlan } = req.body;
+
+      if (!userId || !newPlan) {
+        return res.status(400).json({ error: "Missing userId or newPlan parameters." });
+      }
+
+      const validPlans = ["starter", "explorer", "pro"];
+      if (!validPlans.includes(newPlan)) {
+        return res.status(400).json({ error: "Invalid plan specified." });
+      }
+
+      // 1. Get user document from Firestore
+      const db = getFirebaseDb();
+      const userRef = firebaseDoc(db, "users", userId);
+      const userDoc = await firebaseGetDoc(userRef);
+
+      if (!userDoc.exists()) {
+        return res.status(404).json({ error: "User not found in database." });
+      }
+
+      const userData = userDoc.data();
+      const stripeSubscriptionId = userData.stripeSubscriptionId;
+
+      if (!stripeSubscriptionId) {
+        return res.status(400).json({ error: "User does not have an active Stripe subscription to update. Please create a new subscription." });
+      }
+
+      // 2. Fetch price ID for new plan
+      const priceMap: Record<string, string | undefined> = {
+        starter: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+        explorer: process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT",
+        pro: process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi"
+      };
+
+      const priceId = priceMap[newPlan];
+      if (!priceId) {
+        return res.status(500).json({ error: `Stripe price ID for plan '${newPlan}' is not configured.` });
+      }
+
+      const stripe = getStripe();
+
+      console.log(`[Stripe Update] Fetching subscription ${stripeSubscriptionId} for user ${userId}`);
+      const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+
+      if (!subscription) {
+        return res.status(404).json({ error: "Subscription not found on Stripe." });
+      }
+
+      console.log(`[Stripe Update] Updating subscription ${stripeSubscriptionId} to price ${priceId} for plan ${newPlan}`);
+      
+      // Update subscription item
+      const updatedSubscription = await stripe.subscriptions.update(stripeSubscriptionId, {
+        items: [{
+          id: subscription.items.data[0].id,
+          price: priceId,
+        }],
+        proration_behavior: "create_prorations",
+        metadata: {
+          plan: newPlan,
+          userId: userId,
+          userEmail: userData.email || ""
+        }
+      });
+
+      // 3. Update user document in Firestore
+      const limits = getPlanLimits(newPlan);
+      const updateData = {
+        plan: newPlan,
+        subscriptionStatus: updatedSubscription.status || "active",
+        stripePriceId: priceId,
+        ...limits,
+        updatedAt: firebaseServerTimestamp()
+      };
+
+      await firebaseUpdateDoc(userRef, updateData);
+
+      console.log(`[Stripe Update] Successfully upgraded user ${userId} to ${newPlan}`);
+      res.json({ success: true, plan: newPlan, subscriptionStatus: updatedSubscription.status });
+    } catch (err: any) {
+      console.error("[Stripe Update] Failed to update subscription:", err);
+      res.status(500).json({ error: err.message || "Internal server error updating subscription." });
+    }
+  });
 
   // Backend Health Check
   const healthHandler = (req: express.Request, res: express.Response) => {
@@ -454,7 +1090,7 @@ async function startServer() {
         // Construct prompt
         const prompt = mode === "transcript" 
           ? `Analyze the following transcript for the video "${metadata.title}" by "${metadata.author_name || "Unknown"}". 
-             Generate a comprehensive educational summary, key points, interactive quiz, and a simple high-level overview mind map.
+             Generate a comprehensive educational summary, key points, interactive quiz, a simple high-level overview mind map, and a set of study flashcards.
              
              EXPLANATION LEVEL DIRECTIVE (CRITICAL):
              ${getExplanationInstruction(explanationLevel, lang)}
@@ -464,6 +1100,12 @@ async function startServer() {
              2. Each node should have a 'topic' (short, 1-3 words), 'importance' (1-5), 'category', and 'icon'.
              3. Categories: 'Concept', 'Example', 'Detail', 'Definition', 'Method', 'Benefit', 'Risk', 'Trend'.
              5. Icons: Use Lucide icon names like 'Zap', 'BookOpen', 'Target', 'Layers', 'Cpu', 'Globe', 'Activity', 'TrendingUp', 'CheckCircle', 'AlertCircle'.
+             
+             CRITICAL FOR FLASHCARDS:
+             1. Generate up to 10 high-quality flashcards under the field 'flashcards'.
+             2. Each flashcard must have a 'front' (a short question or concept prompt), 'back' (a clear and concise answer), 'topic' (the related topic), and 'difficulty' ('basic', 'intermediate', or 'advanced').
+             3. Keep each card focused on one idea, make fronts short/clear and backs concise/objective. Avoid vague questions or overly long answers.
+             4. If the content is short, generate fewer flashcards. Avoid duplicates.
              
              GENERAL CRITICAL:
              1. Content must be in ${targetLang}.
@@ -486,6 +1128,12 @@ async function startServer() {
              1. Create a simple high-level mind map with 3-5 main core categories/branches radiating from the main topic.
              2. Use importance levels 1-5, appropriate categories, and Lucide icons.
              
+             CRITICAL FOR FLASHCARDS:
+             1. Generate up to 10 high-quality flashcards under the field 'flashcards'.
+             2. Each flashcard must have a 'front' (a short question or concept prompt), 'back' (a clear and concise answer), 'topic' (the related topic), and 'difficulty' ('basic', 'intermediate', or 'advanced').
+             3. Keep each card focused on one idea, make fronts short/clear and backs concise/objective. Avoid vague questions or overly long answers.
+             4. If the content is short, generate fewer flashcards. Avoid duplicates.
+             
              OTHER CRITICAL:
              1. Content must be in ${targetLang}.
              2. Response must be valid JSON only.
@@ -497,6 +1145,7 @@ async function startServer() {
                 - mind_map: A structured hierarchy of concepts.
                 - tutor_questions: Relevant questions for deep learning.
                 - limitations: Mention that this analysis is based on metadata/title as the specific video transcript was unavailable.
+                - flashcards: Up to 10 high-quality flashcards.
                 
              LANGUAGE DIRECTIVE (CRITICAL):
              IMPORTANT: The final answer must be written entirely in ${targetLang}. The source video, transcript, title, description, or metadata may be in another language, but you must understand it and translate/adapt the generated content to ${targetLang}. Do not mix languages. Target language: ${targetLang}. You may receive source content in Portuguese, Spanish, English, or another language. Use the source content only as input. Generate the final response entirely in ${targetLang}. Do not output any language other than ${targetLang}. Do not mix interface language and source video language.
@@ -547,9 +1196,22 @@ async function startServer() {
                   required: ["topic", "children"]
                 },
                 tutor_questions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                limitations: { type: Type.ARRAY, items: { type: Type.STRING } }
+                limitations: { type: Type.ARRAY, items: { type: Type.STRING } },
+                flashcards: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      front: { type: Type.STRING },
+                      back: { type: Type.STRING },
+                      topic: { type: Type.STRING },
+                      difficulty: { type: Type.STRING, description: "basic | intermediate | advanced" }
+                    },
+                    required: ["front", "back", "topic", "difficulty"]
+                  }
+                }
               },
-              required: ["summary", "key_points", "quiz", "mind_map", "tutor_questions", "limitations"]
+              required: ["summary", "key_points", "quiz", "mind_map", "tutor_questions", "limitations", "flashcards"]
             }
           }
         });
@@ -591,6 +1253,10 @@ async function startServer() {
             node.children.forEach((child: any) => normalizeNode(child));
           };
           normalizeNode(mm);
+        }
+
+        if (!analysisData.flashcards || !Array.isArray(analysisData.flashcards)) {
+          analysisData.flashcards = [];
         }
 
         console.log("[Backend] Gemini analysis: SUCCESS");
@@ -666,7 +1332,8 @@ async function startServer() {
               : [
                   "AI Analysis is temporarily limited.",
                   "Transcript may be incomplete or unavailable."
-                ]
+                ],
+          flashcards: []
         };
       }
 
@@ -697,6 +1364,118 @@ async function startServer() {
     }
   });
 
+  // Helper function to extract educational content from image using Gemini Vision
+  async function extractEducationalContentFromImage({
+    imageBuffer,
+    mimeType,
+    targetLanguage
+  }: {
+    imageBuffer: Buffer;
+    mimeType: string;
+    targetLanguage: string;
+  }) {
+    const aiClient = getAI();
+    const base64Data = imageBuffer.toString("base64");
+    
+    const imagePart = {
+      inlineData: {
+        mimeType,
+        data: base64Data
+      }
+    };
+
+    const targetLangNames: Record<string, string> = {
+      'pt': 'Portuguese',
+      'en': 'English',
+      'es': 'Spanish'
+    };
+    const targetLangName = targetLangNames[targetLanguage] || 'English';
+
+    const prompt = `You are analyzing an image uploaded by a user to Astra Learning.
+
+The image may contain educational, informational, promotional, professional, or general visual content.
+
+Your task is to extract and interpret all useful content from the image and convert it into a clear study-ready text.
+
+The image may contain:
+- a school question
+- an exam exercise
+- a slide
+- a page from a book
+- handwritten or typed notes
+- a diagram
+- a table
+- a chart
+- an advertisement
+- a promotional flyer
+- a travel offer
+- a social media post
+- a screenshot
+- an infographic
+- a business document
+- general text or visual information
+
+Tasks:
+1. Extract all readable text from the image.
+2. Preserve important numbers, prices, dates, names, locations, times, phone numbers, websites and conditions.
+3. Describe relevant visual elements only when they help understand the content.
+4. Identify what type of content the image appears to be.
+5. Convert the image into a clear structured text that can be used to generate:
+   - summary
+   - key points
+   - quiz
+   - tutor explanation
+   - mind map
+6. If the image is promotional or commercial, summarize the offer and extract the key information.
+7. If the image is an exam question, preserve the question and alternatives exactly when possible.
+8. If the image contains a table, chart, or diagram, describe the structure and key insights.
+9. Only say the content is insufficient if the image is unreadable, empty, blurry, or has almost no identifiable information.
+
+Return valid JSON only.
+
+LANGUAGE RULE:
+The extracted/interpreted content should be written in the selected target language: ${targetLangName}.
+If the image contains original text in another language, translate the interpretation to ${targetLangName}, but preserve names, numbers, prices, dates, websites, phone numbers and important original terms.`;
+
+    const response = await generateContentWithRetry(aiClient, {
+      model: "gemini-3.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            imagePart,
+            { text: prompt }
+          ]
+        }
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            titleSuggestion: { type: Type.STRING },
+            extractedText: { type: Type.STRING },
+            detectedContentType: { type: Type.STRING, description: "exam_question | notes | slide | book_page | diagram | table | chart | advertisement | flyer | screenshot | infographic | document | other" },
+            confidence: { type: Type.STRING, description: "high | medium | low" }
+          },
+          required: ["titleSuggestion", "extractedText", "detectedContentType", "confidence"]
+        }
+      }
+    });
+
+    const parsed = safeParseAIJSON(response.text || "");
+    if (!parsed || !parsed.extractedText) {
+      throw new Error("Failed to parse Gemini Vision output");
+    }
+
+    return {
+      extractedText: parsed.extractedText,
+      detectedContentType: parsed.detectedContentType || "other",
+      confidence: parsed.confidence || "medium",
+      titleSuggestion: parsed.titleSuggestion || "Extracted Content"
+    };
+  }
+
   // Analyze Document Endpoint
   app.post("/api/analyze-source", upload.single("file"), async (req, res) => {
     const { sourceType, documentType, lang: reqLang = "en", targetLanguage, fileName, fileSize } = req.body;
@@ -709,14 +1488,7 @@ async function startServer() {
     };
     const targetLangName = langNames[lang] || 'English';
 
-    if (sourceType !== "document" || (documentType !== "txt" && documentType !== "pdf")) {
-      if (documentType === "docx" || ["png", "jpg", "jpeg", "webp"].includes(documentType)) {
-        return res.status(400).json({
-          error: lang === "pt" ? "Processamento de DOCX e imagem será ativado nas próximas etapas."
-                 : lang === "es" ? "El procesamiento de DOCX e imagen se activará en las próximas etapas."
-                 : "DOCX and image processing will be enabled in upcoming steps."
-        });
-      }
+    if (sourceType !== "document" || (documentType !== "txt" && documentType !== "pdf" && documentType !== "docx" && documentType !== "image")) {
       return res.status(400).json({
         error: lang === "pt" ? "Processamento de PDF, DOCX e imagem será ativado nas próximas etapas."
                : lang === "es" ? "El procesamiento de PDF, DOCX e imagen se activará en las próximas etapas."
@@ -732,7 +1504,27 @@ async function startServer() {
     }
 
     // 1. Validate file size based on document type
-    if (documentType === "txt") {
+    if (documentType === "image") {
+      const maxSize = 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        return res.status(400).json({
+          error: lang === "pt" ? "A imagem excede o limite de 10 MB."
+                 : lang === "es" ? "La imagen supera el límite de 10 MB."
+                 : "The image exceeds the 10 MB limit."
+        });
+      }
+      
+      const fileExt = file.originalname.split('.').pop()?.toLowerCase() || '';
+      const allowedExts = ['png', 'jpg', 'jpeg', 'webp'];
+      const allowedMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+      if (!allowedExts.includes(fileExt) && !allowedMimes.includes(file.mimetype)) {
+        return res.status(400).json({
+          error: lang === "pt" ? "Tipo de imagem não suportado. Envie PNG, JPG, JPEG ou WEBP."
+                 : lang === "es" ? "Tipo de imagen no compatible. Sube PNG, JPG, JPEG o WEBP."
+                 : "Unsupported image type. Upload PNG, JPG, JPEG, or WEBP."
+        });
+      }
+    } else if (documentType === "txt") {
       const maxSize = 5 * 1024 * 1024;
       if (file.size > maxSize) {
       return res.status(400).json({
@@ -750,15 +1542,59 @@ async function startServer() {
                  : "The PDF exceeds the 20 MB limit."
         });
       }
+    } else if (documentType === "docx") {
+      const maxSize = 20 * 1024 * 1024;
+      if (file.size > maxSize) {
+        return res.status(400).json({
+          error: lang === "pt" ? "O DOCX excede o limite de 20 MB."
+                 : lang === "es" ? "El DOCX supera el límite de 20 MB."
+                 : "The DOCX exceeds the 20 MB limit."
+        });
+      }
     }
 
     try {
       let normalizedText = "";
       let pageCount = 1;
       let extractedCharacters = 0;
+      let detectedContentType = "other";
+      let confidence = "high";
+      let titleSuggestion = "";
 
       // 2. Extract text and get page count/characters metadata based on type
-      if (documentType === "txt") {
+      if (documentType === "image") {
+        try {
+          const visionResult = await extractEducationalContentFromImage({
+            imageBuffer: file.buffer,
+            mimeType: file.mimetype || `image/${file.originalname.split('.').pop()?.toLowerCase() || 'png'}`,
+            targetLanguage: lang
+          });
+          
+          normalizedText = visionResult.extractedText;
+          detectedContentType = visionResult.detectedContentType;
+          confidence = visionResult.confidence;
+          titleSuggestion = visionResult.titleSuggestion;
+          pageCount = 1;
+          extractedCharacters = normalizedText.length;
+
+          const isInsufficient = !normalizedText || 
+                                 normalizedText.trim().length < 50;
+          if (isInsufficient) {
+            return res.status(400).json({
+              error: lang === "pt" ? "Não foi possível identificar conteúdo suficiente nesta imagem. Tente enviar uma imagem mais nítida."
+                     : lang === "es" ? "No pudimos identificar suficiente contenido en esta imagen. Intenta subir una imagen más nítida."
+                     : "We couldn't identify enough content in this image. Try uploading a clearer image."
+            });
+          }
+        } catch (visionErr: any) {
+          console.error("[Backend] Gemini Vision extraction failed:", visionErr);
+          return res.status(400).json({
+            error: lang === "pt" ? "Não foi possível analisar esta imagem. Tente enviar uma imagem mais nítida."
+                   : lang === "es" ? "No pudimos analizar esta imagen. Intenta subir una imagen más nítida."
+                   : "We couldn't analyze this image. Try uploading a clearer image."
+          });
+        }
+      } else if (documentType === "txt") {
         const rawContent = file.buffer.toString("utf8");
         normalizedText = rawContent.trim();
         pageCount = 1;
@@ -788,15 +1624,43 @@ async function startServer() {
             }
           }
         }
+      } else if (documentType === "docx") {
+        try {
+          const result = await mammoth.extractRawText({ buffer: file.buffer });
+          normalizedText = (result.value || "").trim();
+          pageCount = 1;
+          extractedCharacters = normalizedText.length;
+
+          if (!normalizedText) {
+            return res.status(400).json({
+              error: lang === "pt" ? "Não foi possível extrair texto deste DOCX. Tente outro arquivo."
+                     : lang === "es" ? "No pudimos extraer texto de este DOCX. Prueba otro archivo."
+                     : "We couldn't extract text from this DOCX. Try another file."
+            });
+          }
+        } catch (docxErr: any) {
+          console.error("[Backend] DOCX parsing failed:", docxErr);
+          return res.status(400).json({
+            error: lang === "pt" ? "Não foi possível processar este DOCX. Tente outro arquivo."
+                   : lang === "es" ? "No pudimos procesar este DOCX. Prueba outro archivo."
+                   : "We couldn't process this DOCX. Try another file."
+          });
+        }
       }
 
       // 3. Validate text length
-      if (normalizedText.length < 100) {
+      if (documentType !== "image" && normalizedText.length < 100) {
         if (documentType === "pdf") {
           return res.status(400).json({
             error: lang === "pt" ? "O texto extraído do PDF é insuficiente para análise (mínimo de 100 caracteres)."
                    : lang === "es" ? "El texto extraído del PDF es insuficiente para el análisis (mínimo de 100 caracteres)."
                    : "The extracted PDF text is insufficient for analysis (minimum of 100 characters)."
+          });
+        } else if (documentType === "docx") {
+          return res.status(400).json({
+            error: lang === "pt" ? "O DOCX não possui texto suficiente para análise."
+                   : lang === "es" ? "El DOCX no contiene suficiente texto para el análisis."
+                   : "The DOCX does not contain enough text for analysis."
           });
         } else {
           return res.status(400).json({
@@ -813,6 +1677,14 @@ async function startServer() {
         extractedCharacters = normalizedText.length;
       }
 
+      if (documentType === "docx" && normalizedText.length > 30000) {
+        return res.status(400).json({
+          error: lang === "pt" ? "O conteúdo do DOCX é muito longo. Reduza o conteúdo ou envie um arquivo menor."
+                 : lang === "es" ? "El contenido del DOCX es demasiado largo. Reduce el contenido o sube un archivo más pequeño."
+                 : "The DOCX content is too long. Reduce the content or upload a smaller file."
+        });
+      }
+
       if (documentType === "txt" && normalizedText.length > 30000) {
         return res.status(400).json({
           error: lang === "pt" ? "O texto do arquivo é muito longo. Reduza o conteúdo ou divida em partes."
@@ -824,12 +1696,45 @@ async function startServer() {
       console.log(`[Backend] /api/analyze-source: Processing ${documentType.toUpperCase()} "${file.originalname}" (${normalizedText.length} chars) in ${targetLangName}`);
 
       // 4. Generate Study Content using Gemini API
-      const prompt = `Analyze the following learning document text from the file "${file.originalname}".
-Generate a comprehensive educational summary, key points, interactive quiz, and a simple high-level overview mind map.
+      let prompt = "";
+      if (documentType === "image") {
+        prompt = `Analyze the following extracted and interpreted image content from the file "${file.originalname}".
+Generate a comprehensive study material containing summary, key points, interactive quiz, a simple high-level overview mind map, and a set of study flashcards.
+
+Source type: Document
+Document type: Image
+Detected content type: ${detectedContentType}
+Use the extracted and interpreted image content as the learning source.
+
+`;
+        const contentTypeStr = String(detectedContentType || "other").toLowerCase();
+        const isPromotional = ["advertisement", "flyer", "screenshot", "infographic", "document", "other"].includes(contentTypeStr) || 
+                              contentTypeStr.includes("promotional") || 
+                              contentTypeStr.includes("offer") ||
+                              contentTypeStr.includes("ad") ||
+                              contentTypeStr.includes("flyer");
+                              
+        if (isPromotional) {
+          prompt += `SPECIAL ADAPTATION FOR COMMERCIAL/PROMOTIONAL/INFORMATIONAL CONTENT:
+Since this is promotional/commercial or informational content (such as an offer, advertisement, flyer, or screenshot):
+1. For the summary: Generate a detailed, highly structured summary of the offer, including a breakdown of the promotion, prices, options, and main details.
+2. For key_points: List the primary information, offers, prices, dates, validity, and terms/conditions.
+3. For the quiz: Create text interpretation and comprehension questions based on the terms, prices, conditions, and details of this promotional offer (instead of purely academic/school questions).
+4. For the mind map: Center it on the main offer. Create core branches mapping: price, destination/product, dates/validity, company/brand, contact/how to acquire, and key terms or conditions.
+5. For the flashcards: Create flashcards focused on the essential details, pricing, conditions, and benefits of the promotional offer or advertisement.
+
+`;
+        }
+      } else {
+        prompt = `Analyze the following learning document text from the file "${file.originalname}".
+Generate a comprehensive educational summary, key points, interactive quiz, a simple high-level overview mind map, and a set of study flashcards.
 
 Source type: Document
 Document type: ${documentType.toUpperCase()}
-Use the provided text as the learning source.
+Use the provided text as the learning source.`;
+      }
+
+      prompt += `
 
 EXPLANATION LEVEL DIRECTIVE (CRITICAL):
 ${getExplanationInstruction("intermediate", lang)}
@@ -839,6 +1744,12 @@ CRITICAL FOR MIND MAP GENERATION:
 2. Each node should have a 'topic' (short, 1-3 words), 'importance' (1-5), 'category', and 'icon'.
 3. Categories: 'Concept', 'Example', 'Detail', 'Definition', 'Method', 'Benefit', 'Risk', 'Trend'.
 4. Icons: Use Lucide icon names like 'Zap', 'BookOpen', 'Target', 'Layers', 'Cpu', 'Globe', 'Activity', 'TrendingUp', 'CheckCircle', 'AlertCircle'.
+
+CRITICAL FOR FLASHCARDS:
+1. Generate up to 10 high-quality flashcards under the field 'flashcards'.
+2. Each flashcard must have a 'front' (a short question or concept prompt), 'back' (a clear and concise answer), 'topic' (the related topic), and 'difficulty' ('basic', 'intermediate', or 'advanced').
+3. Keep each card focused on one idea, make fronts short/clear and backs concise/objective. Avoid vague questions or overly long answers.
+4. If the content is short, generate fewer flashcards. Avoid duplicates.
 
 GENERAL CRITICAL:
 1. Content must be in ${targetLangName}.
@@ -901,9 +1812,22 @@ ${normalizedText}`;
                   required: ["topic", "children"]
                 },
                 tutor_questions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                limitations: { type: Type.ARRAY, items: { type: Type.STRING } }
+                limitations: { type: Type.ARRAY, items: { type: Type.STRING } },
+                flashcards: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      front: { type: Type.STRING },
+                      back: { type: Type.STRING },
+                      topic: { type: Type.STRING },
+                      difficulty: { type: Type.STRING, description: "basic | intermediate | advanced" }
+                    },
+                    required: ["front", "back", "topic", "difficulty"]
+                  }
+                }
               },
-              required: ["title", "summary", "key_points", "quiz", "mind_map", "tutor_questions", "limitations"]
+              required: ["title", "summary", "key_points", "quiz", "mind_map", "tutor_questions", "limitations", "flashcards"]
             }
           }
         });
@@ -930,7 +1854,7 @@ ${normalizedText}`;
       }
 
       // Ensure title is set and clean
-      const docTitle = analysisData.title || file.originalname.replace(/\.[^/.]+$/, "");
+      const docTitle = analysisData.title || titleSuggestion || file.originalname.replace(/\.[^/.]+$/, "");
 
       // Mind map normalization
       if (analysisData.mind_map) {
@@ -958,6 +1882,10 @@ ${normalizedText}`;
         normalizeNode(mm);
       }
 
+      if (!analysisData.flashcards || !Array.isArray(analysisData.flashcards)) {
+        analysisData.flashcards = [];
+      }
+
       // Return the response in a structured form matching frontend expected shape
       res.json({
         video: {
@@ -978,6 +1906,7 @@ ${normalizedText}`;
         key_points: analysisData.key_points,
         quiz: analysisData.quiz,
         mind_map: analysisData.mind_map,
+        flashcards: analysisData.flashcards,
         tutor_questions: analysisData.tutor_questions,
         limitations: analysisData.limitations || [],
         transcript: normalizedText, // Treat extracted text as the transcript
@@ -986,14 +1915,18 @@ ${normalizedText}`;
         sourceMetadata: {
           pageCount: pageCount,
           extractedCharacters: extractedCharacters,
-          extractionMethod: documentType === 'pdf' ? "pdf-text" : "txt-text"
+          extractionMethod: documentType === 'image' ? 'gemini-vision' : (documentType === 'pdf' ? "pdf-text" : (documentType === 'docx' ? "docx-text" : "txt-text")),
+          detectedContentType: documentType === 'image' ? detectedContentType : undefined,
+          confidence: documentType === 'image' ? confidence : undefined
         }
       });
 
     } catch (error: any) {
       console.error("[Backend] Error processing document:", error);
       res.status(500).json({
-        error: lang === 'pt' ? "Falha ao processar o documento com Gemini." : lang === 'es' ? "Fallo al procesar el documento con Gemini." : "Failed to process the document with Gemini.",
+        error: lang === 'pt' ? "Não foi possível gerar a análise agora. Tente novamente."
+               : lang === 'es' ? "No pudimos generar el análisis ahora. Inténtalo de nuevo."
+               : "We couldn't generate the analysis right now. Try again.",
         details: error.message
       });
     }

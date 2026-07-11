@@ -342,8 +342,9 @@ function getBilledAnnuallyText(total: string, lang: string) {
 }
 
 export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
-  const { user } = useAuth();
+  const { user, userPlan, stripeSubscriptionId } = useAuth();
   const [isAnnual, setIsAnnual] = useState(true);
+  const [isLoading, setIsLoading] = useState<string | null>(null);
 
   const langKey = (lang && ['pt', 'en', 'es'].includes(lang)) ? (lang as 'pt' | 'en' | 'es') : 'en';
   const local = LOCAL_PRICING_LANG[langKey];
@@ -419,44 +420,71 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
     }
 
     try {
-      const userRef = doc(db, 'users', user.uid);
-      
-      let vLimit = 0;
-      let mAnalyses = 50;
-      let maxVideoLen = 60;
-      
-      if (planId === 'explorer') {
-        vLimit = 30;
-        mAnalyses = 150;
-        maxVideoLen = 60;
-      } else if (planId === 'pro') {
-        vLimit = 300;
-        mAnalyses = 300;
-        maxVideoLen = 999999;
+      setIsLoading(planId);
+
+      // Check if user has an active Stripe subscription to perform an upgrade instead of a new checkout
+      const isUpgrade = stripeSubscriptionId && stripeSubscriptionId.length > 0 && userPlan && userPlan !== 'free';
+
+      if (isUpgrade) {
+        console.log(`[Stripe Upgrade] Upgrading user ${user.uid} from ${userPlan} to ${planId}`);
+        const response = await fetch('/api/stripe/update-subscription', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.uid,
+            newPlan: planId
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Failed to update subscription');
+        }
+
+        const successMsg = lang === 'pt'
+          ? `Parabéns! Seu plano foi atualizado para ${planId.toUpperCase()} com sucesso.`
+          : lang === 'es'
+            ? `¡Felicitaciones! Su plan se ha actualizado a ${planId.toUpperCase()} con éxito.`
+            : `Congratulations! Your plan has been successfully updated to ${planId.toUpperCase()}.`;
+        
+        alert(successMsg);
+        return;
       }
 
-      await updateDoc(userRef, {
-        plan: planId,
-        billingCycle: isAnnual ? 'annual' : 'monthly',
-        voiceTutor: {
-          monthlyIncludedMinutes: vLimit,
-          monthlyUsedMinutes: 0,
-          addonAvailableMinutes: 0,
-          addonUsedMinutes: 0,
-          addonExpiresAt: null,
-          currentPeriodStart: serverTimestamp(),
-          currentPeriodEnd: serverTimestamp()
+      console.log(`[Stripe Checkout] Initiating checkout for user: ${user.email}, plan: ${planId}`);
+      
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        limits: {
-          monthlyVoiceTutorMinutes: vLimit,
-          monthlyAnalyses: mAnalyses,
-          maxVideoDurationMinutes: maxVideoLen === 999999 ? null : maxVideoLen
-        },
-        updatedAt: serverTimestamp()
+        body: JSON.stringify({
+          plan: planId,
+          userEmail: user.email,
+          userId: user.uid,
+          successUrl: `${window.location.origin}/dashboard?checkout=success`,
+          cancelUrl: `${window.location.origin}/dashboard?checkout=cancel`
+        }),
       });
-      alert(`${local.planUpdated} ${planId.toUpperCase()}!`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to initiate checkout session');
+      }
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL received from server');
+      }
+    } catch (error: any) {
+      console.error('[Stripe Checkout/Upgrade] Error:', error);
+      alert(error.message || 'Error processing transaction');
+    } finally {
+      setIsLoading(null);
     }
   };
 
@@ -738,17 +766,20 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en' }: Props) => {
                 {/* Primary plan CTA */}
                 <button 
                   type="button"
+                  disabled={isLoading !== null}
                   onClick={() => handleSubscribe(plan.id)}
                   className={`w-full py-3.5 mt-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 group relative overflow-hidden shadow active:scale-95 ${
-                    isMostPopular 
-                      ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/10' 
-                      : isDarkMode
-                        ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
-                        : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200'
+                    isLoading === plan.id
+                      ? 'bg-orange-600/50 cursor-not-allowed text-white/50 border-orange-600/50'
+                      : isMostPopular 
+                        ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/10' 
+                        : isDarkMode
+                          ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                          : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200'
                   }`}
                 >
                   <span className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-out" />
-                  {plan.cta}
+                  {isLoading === plan.id ? '...' : plan.cta}
                 </button>
               </motion.div>
             );

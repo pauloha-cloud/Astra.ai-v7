@@ -25,7 +25,26 @@ export interface AnalysisResult {
   } | string[];
   tutor_questions: string[];
   limitations: string[];
+  flashcards?: {
+    front: string;
+    back: string;
+    topic: string;
+    difficulty: 'basic' | 'intermediate' | 'advanced';
+  }[];
   transcript?: string;
+  sourceType?: string;
+  documentType?: string;
+  fileName?: string;
+  fileSize?: number;
+  generatedLanguage?: string;
+  tutorContext?: string;
+  sourceMetadata?: {
+    pageCount?: number;
+    extractedCharacters?: number;
+    extractionMethod?: string;
+    detectedContentType?: string;
+    confidence?: string;
+  };
 }
 
 // Deprecated: Analysis now happens on the backend to secure API keys

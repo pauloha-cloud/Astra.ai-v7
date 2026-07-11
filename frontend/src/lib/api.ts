@@ -12,6 +12,27 @@ export const api = axios.create({
   },
 });
 
+// Response interceptor to detect HTML responses (such as the platform's security/cookie check page)
+// and throw a clean error so that the frontend doesn't treat HTML strings as valid JSON responses.
+api.interceptors.response.use(
+  (response) => {
+    if (
+      response.data &&
+      typeof response.data === 'string' &&
+      (response.data.toLowerCase().includes('<!doctype html') || response.data.toLowerCase().includes('<html'))
+    ) {
+      const error = new Error('HTML response received instead of JSON. Please refresh or authenticate.');
+      (error as any).isHtmlResponse = true;
+      (error as any).htmlContent = response.data;
+      return Promise.reject(error);
+    }
+    return response;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export const checkHealth = async () => {
   try {
     const response = await api.get('/health');
