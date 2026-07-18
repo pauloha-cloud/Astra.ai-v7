@@ -93,6 +93,11 @@ service cloud.firestore {
         && (incoming().get('stripePriceId', '') == existing().get('stripePriceId', ''))
         && isValidUser(incoming());
 
+      // Sub-collection rule for billing details
+      match /billing/{billingId} {
+        allow get: if isOwner(userId);
+      }
+
       // Sub-collection rule for preferences following Master Gate pattern (check parent)
       match /preferences/{preferenceId} {
         allow get: if isOwner(userId);
