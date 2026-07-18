@@ -343,7 +343,7 @@ function getBilledAnnuallyText(total: string, lang: string) {
 }
 
 export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props) => {
-  const { user, userPlan, stripeSubscriptionId } = useAuth();
+  const { user, userPlan, stripeSubscriptionId, subscriptionStatus } = useAuth();
   const [isAnnual, setIsAnnual] = useState(true);
   const [isLoading, setIsLoading] = useState<string | null>(null);
 
@@ -429,19 +429,21 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
     }
 
     const mappedPlanId = planId === 'starter' ? 'start' : planId;
-    const PLAN_TIERS: Record<string, number> = {
-      free: 0,
-      start: 1,
-      starter: 1,
-      explorer: 2,
-      pro: 3
-    };
-    const currentTier = PLAN_TIERS[(userPlan || 'free').toLowerCase()];
-    const cardTier = PLAN_TIERS[mappedPlanId.toLowerCase()];
-    const hasStripeSub = stripeSubscriptionId && stripeSubscriptionId.length > 0;
+    const currentPlan = (userPlan || 'free').toLowerCase();
+    const selectedPlan = mappedPlanId.toLowerCase();
+    const hasActiveSubscription = subscriptionStatus === "active" && stripeSubscriptionId && stripeSubscriptionId.length > 0;
 
-    // Redirect to billing portal if user has active sub and clicks active or lower card
-    if (hasStripeSub && cardTier <= currentTier) {
+    console.log("[Billing] Current plan:", currentPlan);
+    console.log("[Billing] Target plan:", selectedPlan);
+    console.log("[Billing] Has active subscription:", hasActiveSubscription);
+
+    if (currentPlan === selectedPlan) {
+      console.log("[Billing] Clicked current active plan. Doing nothing.");
+      return;
+    }
+
+    if (hasActiveSubscription) {
+      console.log("[Billing] Opening Customer Portal");
       try {
         setIsLoading(planId);
         const response = await fetch('/api/stripe/create-portal-session', {
@@ -460,6 +462,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
         const data = await response.json();
         if (data.url) {
           window.location.href = data.url;
+          return;
         } else {
           throw new Error('No portal URL received');
         }
@@ -480,39 +483,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
 
     try {
       setIsLoading(planId);
-
-      // Check if user has an active Stripe subscription to perform an upgrade instead of a new checkout
-      const isUpgrade = stripeSubscriptionId && stripeSubscriptionId.length > 0 && userPlan && userPlan !== 'free';
-
-      if (isUpgrade) {
-        console.log(`[Stripe Upgrade] Upgrading user ${user.uid} from ${userPlan} to ${mappedPlanId}`);
-        const response = await fetch('/api/stripe/update-subscription', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: user.uid,
-            newPlan: mappedPlanId
-          }),
-        });
-
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || 'Failed to update subscription');
-        }
-
-        const successMsg = lang === 'pt'
-          ? `Parabéns! Seu plano foi atualizado para ${mappedPlanId.toUpperCase()} com sucesso.`
-          : lang === 'es'
-            ? `¡Felicitaciones! Su plan se ha actualizado a ${mappedPlanId.toUpperCase()} con éxito.`
-            : `Congratulations! Your plan has been successfully updated to ${mappedPlanId.toUpperCase()}.`;
-        
-        notify(successMsg);
-        return;
-      }
-
-      console.log(`[Stripe Checkout] Initiating checkout for user: ${user.email}, plan: ${mappedPlanId}`);
+      console.log(`[Stripe Checkout] Initiating checkout for user: ${user.email}, plan: ${selectedPlan}`);
       
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
@@ -520,7 +491,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          plan: mappedPlanId,
+          plan: selectedPlan,
           userEmail: user.email,
           userId: user.uid,
           successUrl: `${window.location.origin}/dashboard?checkout=success`,
@@ -540,7 +511,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
         throw new Error('No checkout URL received from server');
       }
     } catch (error: any) {
-      console.error('[Stripe Checkout/Upgrade] Error:', error);
+      console.error('[Stripe Checkout] Error:', error);
       notify(error.message || 'Error processing transaction');
     } finally {
       setIsLoading(null);

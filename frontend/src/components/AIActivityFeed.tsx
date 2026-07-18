@@ -1,4 +1,5 @@
-import { motion } from 'motion/react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, 
   Network, 
@@ -7,9 +8,10 @@ import {
   Brain, 
   Sparkles,
   Search,
-  Clock
+  Clock,
+  Play,
+  X
 } from 'lucide-react';
-import { useMemo } from 'react';
 
 interface ActivityItem {
   title: string;
@@ -19,6 +21,7 @@ interface ActivityItem {
 
 interface AIActivityFeedProps {
   isDarkMode: boolean;
+  lang?: string;
   t: {
     title: string;
     subtitle: string;
@@ -116,8 +119,39 @@ const ActivityItemComponent = ({
   );
 };
 
-export const AIActivityFeed = ({ isDarkMode, t }: AIActivityFeedProps) => {
+const playAriaLabels: Record<string, string> = {
+  pt: "Assistir vídeo demonstrativo do Astra",
+  en: "Watch Astra demo video",
+  es: "Ver video demostrativo de Astra"
+};
+
+const iframeTitles: Record<string, string> = {
+  pt: "Vídeo demonstrativo do Astra Learning",
+  en: "Astra Learning demo video",
+  es: "Video demostrativo de Astra Learning"
+};
+
+export const AIActivityFeed = ({ isDarkMode, t, lang }: AIActivityFeedProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [thumbError, setThumbError] = useState(false);
+  const currentLang = (lang as 'pt' | 'en' | 'es') || 'pt';
+
+  const playLabel = playAriaLabels[currentLang] || playAriaLabels.pt;
+  const videoTitle = iframeTitles[currentLang] || iframeTitles.pt;
+
   const timestamps = [t.now, t.ago2, t.ago5, t.recent, t.recent, t.recent];
+
+  // Esc key closure handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   return (
     <section className="py-24 relative overflow-hidden">
@@ -128,7 +162,7 @@ export const AIActivityFeed = ({ isDarkMode, t }: AIActivityFeedProps) => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -162,6 +196,71 @@ export const AIActivityFeed = ({ isDarkMode, t }: AIActivityFeedProps) => {
           </motion.p>
         </div>
 
+        {/* Video Block Area */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="max-w-4xl mx-auto mb-16"
+        >
+          <div
+            onClick={() => setIsOpen(true)}
+            className={`group relative aspect-video w-full overflow-hidden rounded-3xl border cursor-pointer transition-all duration-500 shadow-xl ${
+              isDarkMode 
+                ? 'border-white/10 bg-black/40 hover:border-orange-500/40 hover:shadow-orange-500/5 shadow-black/40' 
+                : 'border-slate-200/80 bg-white hover:border-orange-500/30 hover:shadow-orange-500/5 shadow-slate-200/50'
+            }`}
+          >
+            {/* Glowing ambient background on hover */}
+            <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-10 ${
+              isDarkMode 
+                ? 'bg-gradient-to-t from-orange-500/5 to-transparent' 
+                : 'bg-gradient-to-t from-orange-500/2 to-transparent'
+            }`} />
+
+            {/* Thumbnail Image */}
+            <img
+              src={thumbError ? "https://img.youtube.com/vi/rND6AqYkOEA/hqdefault.jpg" : "https://img.youtube.com/vi/rND6AqYkOEA/maxresdefault.jpg"}
+              alt="Astra Learning Video Thumbnail"
+              onError={() => setThumbError(true)}
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+            />
+
+            {/* Overlay to dim thumbnail */}
+            <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-colors duration-500" />
+
+            {/* Play Button Container */}
+            <div className="absolute inset-0 flex items-center justify-center z-20">
+              <div className="relative">
+                {/* Outer pulsing ring */}
+                <div className="absolute -inset-4 rounded-full bg-orange-600/35 animate-ping opacity-60 pointer-events-none" />
+                {/* Second pulsing ring */}
+                <div className="absolute -inset-2 rounded-full bg-orange-600/20 animate-pulse pointer-events-none" />
+                
+                {/* Play Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsOpen(true);
+                  }}
+                  aria-label={playLabel}
+                  className="relative w-16 h-16 sm:w-20 sm:h-20 bg-orange-600 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-orange-500 active:scale-95 transition-all duration-300 animate-fade-in"
+                >
+                  <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />
+                </button>
+              </div>
+            </div>
+
+            {/* Video duration or preview badge in corner */}
+            <div className="absolute bottom-4 right-4 z-20 px-2.5 py-1 rounded-lg text-[10px] font-mono tracking-widest bg-black/60 backdrop-blur-md text-white border border-white/10 uppercase font-bold">
+              01:15
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Workflow Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {t.items.map((item, index) => (
             <ActivityItemComponent 
@@ -174,6 +273,51 @@ export const AIActivityFeed = ({ isDarkMode, t }: AIActivityFeedProps) => {
           ))}
         </div>
       </div>
+
+      {/* Modal Video Player */}
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop with fade-in and click-to-close */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="absolute inset-0 bg-black/85 backdrop-blur-sm"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-5xl aspect-video rounded-2xl sm:rounded-3xl border border-white/10 bg-[#0c0c0e] overflow-hidden shadow-2xl shadow-black/80 z-10"
+            >
+              {/* Close Button Inside the Top-Right Corner */}
+              <button
+                onClick={() => setIsOpen(false)}
+                className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white p-2.5 rounded-full border border-white/15 hover:border-white/30 transition-all z-50 hover:scale-105 active:scale-95"
+                title={lang === 'pt' ? "Fechar" : lang === 'es' ? "Cerrar" : "Close"}
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* YouTube Iframe Player (Mounted only when modal is open) */}
+              <iframe
+                src="https://www.youtube-nocookie.com/embed/rND6AqYkOEA?autoplay=1&rel=0"
+                title={videoTitle}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="w-full h-full"
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </section>
   );
 };

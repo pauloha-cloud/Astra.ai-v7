@@ -350,6 +350,17 @@ function getStripe(): Stripe {
   return cachedStripeClient;
 }
 
+function stripeUnixToDate(value: unknown): Date | null {
+  if (typeof value !== "number") return null;
+  if (!Number.isInteger(value)) return null;
+  if (value <= 0) return null;
+
+  const date = new Date(value * 1000);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date;
+}
+
 let cachedFirebaseDb: any = null;
 function getFirebaseDb(): any {
   if (cachedFirebaseDb) return cachedFirebaseDb;
@@ -359,6 +370,7 @@ function getFirebaseDb(): any {
       throw new Error(`Firebase configuration file not found at ${firebaseConfigPath}`);
     }
     const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+    console.log("[Firebase Admin] firestoreDatabaseId:", firebaseConfig.firestoreDatabaseId);
     const firebaseApp = initializeFirebaseApp(firebaseConfig);
     cachedFirebaseDb = getFirebaseFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
     return cachedFirebaseDb;
@@ -377,6 +389,7 @@ function getFirebaseAdminDb(): any {
       throw new Error(`Firebase configuration file not found at ${firebaseConfigPath}`);
     }
     const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+    console.log("[Firebase Admin] firestoreDatabaseId:", firebaseConfig.firestoreDatabaseId);
     const apps = getAdminApps();
     let adminApp;
     if (apps.length === 0) {
@@ -580,100 +593,140 @@ async function findUserByStripeIdsAndUpdate(
   }
 }
 
-async function cancelUserSubscriptionByStripeId(stripeSubscriptionId: string, stripeCustomerId?: string) {
-  if (!stripeSubscriptionId) return;
+function mapPriceIdToPlan(priceId: string | undefined): string {
+  if (!priceId) return "free";
+  
+  const cleanPriceId = priceId.trim();
+  
+  // Configured Price IDs
+  const starterPrice = process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23";
+  const explorerPrice = process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT";
+  const proPrice = process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi";
+
+  if (cleanPriceId === starterPrice || cleanPriceId === "price_1TrPxJ671Ksfyi4xJBh7oW23") {
+    return "starter";
+  }
+  if (cleanPriceId === explorerPrice || cleanPriceId === "price_1TrQ07671Ksfyi4xrGx4dexT") {
+    return "explorer";
+  }
+  if (cleanPriceId === proPrice || cleanPriceId === "price_1TrQ2y671Ksfyi4xe1v0USXi") {
+    return "pro";
+  }
+  
+  return "free";
+}
+
+async function saveStripeCustomerMapping(stripeCustomerId: string, userId: string, email?: string) {
+  if (!stripeCustomerId || !userId) return;
+  const db = getFirebaseAdminDb();
   try {
-    const freeLimits = getPlanLimits("free");
-    const updateData = {
-      plan: "free",
-      subscriptionStatus: "canceled",
-      ...freeLimits
-    };
-    const updated = await findUserByStripeIdsAndUpdate(stripeSubscriptionId, stripeCustomerId, updateData);
-    if (updated) {
-      console.log(`[Stripe Webhook] Successfully canceled subscription ${stripeSubscriptionId}`);
-    } else {
-      console.warn(`[Stripe Webhook] No user found with subscription ID ${stripeSubscriptionId} to cancel`);
-    }
-  } catch (error) {
-    console.error(`[Stripe Webhook] Error canceling user subscription ${stripeSubscriptionId}:`, error);
+    const docRef = db.collection("stripeCustomers").doc(stripeCustomerId);
+    await docRef.set({
+      userId,
+      email: email || "",
+      updatedAt: AdminFieldValue.serverTimestamp()
+    }, { merge: true });
+    console.log(`[Stripe Webhook] Saved mapping: stripeCustomers/${stripeCustomerId} -> userId: ${userId}`);
+  } catch (err) {
+    console.error(`[Stripe Webhook] Error saving customer mapping for ${stripeCustomerId}:`, err);
   }
 }
 
-async function handlePaymentFailedByStripeId(stripeSubscriptionId: string, stripeCustomerId?: string) {
-  if (!stripeSubscriptionId) return;
+async function getUserIdByStripeCustomerId(stripeCustomerId: string): Promise<string | null> {
+  if (!stripeCustomerId) return null;
+  const db = getFirebaseAdminDb();
   try {
-    const updateData = {
-      subscriptionStatus: "payment_failed"
-    };
-    const updated = await findUserByStripeIdsAndUpdate(stripeSubscriptionId, stripeCustomerId, updateData);
-    if (updated) {
-      console.log(`[Stripe Webhook] Marked subscription ${stripeSubscriptionId} as payment_failed`);
-    } else {
-      console.warn(`[Stripe Webhook] No user found with subscription ID ${stripeSubscriptionId} to mark as payment_failed`);
-    }
-  } catch (error) {
-    console.error(`[Stripe Webhook] Error marking payment failure for subscription ${stripeSubscriptionId}:`, error);
-  }
-}
-
-async function handleSubscriptionUpdated(subscription: any) {
-  if (!subscription || !subscription.id) return;
-  try {
-    const stripeSubscriptionId = subscription.id;
-    const status = subscription.status;
-    const priceId = subscription.items.data[0]?.price.id;
-
-    let resolvedPlan = subscription.metadata?.plan;
-    if (!resolvedPlan && priceId) {
-      if (priceId === process.env.STRIPE_STARTER_PRICE_ID) resolvedPlan = "start";
-      else if (priceId === process.env.STRIPE_EXPLORER_PRICE_ID) resolvedPlan = "explorer";
-      else if (priceId === process.env.STRIPE_PRO_PRICE_ID) resolvedPlan = "pro";
-    }
-    if (resolvedPlan === "starter") {
-      resolvedPlan = "start";
-    }
-
-    const billingInterval = subscription.items.data[0]?.price.recurring?.interval || "month";
-    const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
-    const cancelAtPeriodEnd = subscription.cancel_at_period_end || false;
-
-    const updateData: any = {
-      subscriptionStatus: status,
-      stripePriceId: priceId,
-      billingInterval,
-      currentPeriodEnd,
-      cancelAtPeriodEnd
-    };
-
-    if (resolvedPlan) {
-      updateData.plan = resolvedPlan;
-      const limits = getPlanLimits(resolvedPlan);
-      Object.assign(updateData, limits);
-    }
-
-    const success = await findUserByStripeIdsAndUpdate(stripeSubscriptionId, subscription.customer as string, updateData);
-    if (!success) {
-      const userId = subscription.metadata?.userId;
-      let email = subscription.metadata?.userEmail;
-      if (!email && subscription.customer) {
-        try {
-          const stripe = getStripe();
-          const customer = await stripe.customers.retrieve(subscription.customer as string);
-          if (customer && !(customer as any).deleted) {
-            email = (customer as any).email || undefined;
-          }
-        } catch (err) {}
+    // 1. Try direct map from stripeCustomers
+    const docRef = db.collection("stripeCustomers").doc(stripeCustomerId);
+    const snap = await docRef.get();
+    if (snap.exists) {
+      const data = snap.data();
+      if (data && data.userId) {
+        console.log(`[Stripe Webhook] Found userId ${data.userId} in stripeCustomers mapping for customerId: ${stripeCustomerId}`);
+        return data.userId;
       }
-      await findUserAndSubscriptionUpdate(userId, email, {
-        ...updateData,
-        stripeSubscriptionId,
-        stripeCustomerId: subscription.customer as string
-      });
     }
-  } catch (error) {
-    console.error(`[Stripe Webhook] Error handling subscription updated for ${subscription.id}:`, error);
+
+    // 2. Fallback query on users collection
+    const querySnapshot = await db.collection("users").where("stripeCustomerId", "==", stripeCustomerId).get();
+    if (!querySnapshot.empty) {
+      const userId = querySnapshot.docs[0].id;
+      console.log(`[Stripe Webhook] Found userId ${userId} in users collection by stripeCustomerId query`);
+      return userId;
+    }
+  } catch (err) {
+    console.error(`[Stripe Webhook] Error retrieving userId for customerId ${stripeCustomerId}:`, err);
   }
+  return null;
+}
+
+async function getUserIdByStripeSubscriptionId(stripeSubscriptionId: string): Promise<string | null> {
+  if (!stripeSubscriptionId) return null;
+  const db = getFirebaseAdminDb();
+  try {
+    const querySnapshot = await db.collection("users").where("stripeSubscriptionId", "==", stripeSubscriptionId).get();
+    if (!querySnapshot.empty) {
+      const userId = querySnapshot.docs[0].id;
+      console.log(`[Stripe Webhook] Found userId ${userId} in users collection by stripeSubscriptionId query`);
+      return userId;
+    }
+  } catch (err) {
+    console.error(`[Stripe Webhook] Error retrieving userId for subscriptionId ${stripeSubscriptionId}:`, err);
+  }
+  return null;
+}
+
+async function updateUserSubscriptionData(userId: string, data: {
+  plan: string;
+  subscriptionStatus: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  stripePriceId?: string;
+  billingInterval?: string;
+  currentPeriodEnd?: Date | null;
+  cancelAtPeriodEnd?: boolean;
+}) {
+  const db = getFirebaseAdminDb();
+  
+  const plan = data.plan || "free";
+  const status = data.subscriptionStatus || "active";
+  
+  const limits = getPlanLimits(plan);
+  
+  // 1. Update users/{uid}/billing/current
+  const billingRef = db.collection("users").doc(userId).collection("billing").doc("current");
+  const billingData = {
+    plan,
+    status,
+    stripeCustomerId: data.stripeCustomerId || "",
+    stripeSubscriptionId: data.stripeSubscriptionId || "",
+    stripePriceId: data.stripePriceId || "",
+    currentPeriodEnd: data.currentPeriodEnd || null,
+    cancelAtPeriodEnd: data.cancelAtPeriodEnd || false,
+    updatedAt: AdminFieldValue.serverTimestamp()
+  };
+  
+  await billingRef.set(billingData, { merge: true });
+  console.log(`[Firestore Sync] Updated users/${userId}/billing/current with:`, billingData);
+  
+  // 2. Update users/{uid} main document
+  const userRef = db.collection("users").doc(userId);
+  const mainUserData = {
+    plan,
+    subscriptionStatus: status,
+    planStatus: status,
+    stripeCustomerId: data.stripeCustomerId || "",
+    stripeSubscriptionId: data.stripeSubscriptionId || "",
+    stripePriceId: data.stripePriceId || "",
+    billingInterval: data.billingInterval || "month",
+    cancelAtPeriodEnd: data.cancelAtPeriodEnd || false,
+    currentPeriodEnd: data.currentPeriodEnd || null,
+    ...limits,
+    updatedAt: AdminFieldValue.serverTimestamp()
+  };
+  
+  await userRef.set(mainUserData, { merge: true });
+  console.log(`[Firestore Sync] Updated users/${userId} with:`, mainUserData);
 }
 
 async function startServer() {
@@ -724,47 +777,33 @@ async function startServer() {
       switch (event.type) {
         case "checkout.session.completed": {
           const session = dataObject as Stripe.Checkout.Session;
-          console.log("[Stripe Webhook] Received checkout.session.completed event");
-          console.log("[Stripe Webhook] Checkout session details:", {
-            email: session.customer_email,
-            customer: session.customer,
-            subscription: session.subscription,
-            metadata: session.metadata,
-            client_reference_id: session.client_reference_id
-          });
-
-          const metadataUserId = session.metadata?.userId;
-          const clientReferenceId = session.client_reference_id;
-          const userId = metadataUserId || clientReferenceId || undefined;
-
-          const customerEmail = session.customer_details?.email || session.customer_email;
-          const metadataUserEmail = session.metadata?.userEmail;
-          const email = customerEmail || metadataUserEmail || undefined;
-
-          let plan = session.metadata?.plan;
-          if (plan === "starter") {
-            plan = "start";
-          }
           const stripeCustomerId = session.customer as string;
           const stripeSubscriptionId = session.subscription as string;
-
-          console.log("[Stripe Webhook] Webhook user lookup identifiers:", {
-            userId,
-            email,
-            plan,
-            customer: stripeCustomerId,
-            subscription: stripeSubscriptionId
+          
+          console.log(`[Stripe Webhook] Received event: checkout.session.completed`, {
+            customerId: stripeCustomerId,
+            subscriptionId: stripeSubscriptionId
           });
 
-          if (!plan) {
-            console.warn("[Stripe Webhook] Plan metadata is missing.");
+          const userId = session.metadata?.userId || session.client_reference_id || undefined;
+          const email = session.customer_details?.email || session.customer_email || session.metadata?.userEmail || undefined;
+
+          if (!userId) {
+            console.error("[Stripe Webhook] No userId found in checkout.session.completed metadata or client_reference_id");
             break;
           }
 
+          console.log(`[Stripe Webhook] Found userId: ${userId}`);
+
+          // Always save stripeCustomerId to userId mapping
+          if (stripeCustomerId) {
+            await saveStripeCustomerMapping(stripeCustomerId, userId, email);
+          }
+
+          let plan = session.metadata?.plan || "free";
           let stripePriceId: string | undefined = undefined;
-          let stripeProductId: string | undefined = undefined;
           let billingInterval = "month";
-          let currentPeriodEnd: any = null;
+          let currentPeriodEnd: Date | null = null;
           let cancelAtPeriodEnd = false;
 
           if (stripeSubscriptionId) {
@@ -774,138 +813,287 @@ async function startServer() {
               const item = sub.items.data[0];
               if (item) {
                 stripePriceId = item.price.id;
-                if (typeof item.price.product === "string") {
-                  stripeProductId = item.price.product;
-                } else if (item.price.product && typeof item.price.product === "object") {
-                  stripeProductId = (item.price.product as any).id;
-                }
                 billingInterval = item.price.recurring?.interval || "month";
               }
-              currentPeriodEnd = new Date(sub.current_period_end * 1000);
-              cancelAtPeriodEnd = sub.cancel_at_period_end;
+              currentPeriodEnd = stripeUnixToDate(sub.current_period_end);
+              cancelAtPeriodEnd = sub.cancel_at_period_end || false;
             } catch (err) {
               console.error("[Stripe Webhook] Error retrieving subscription details from Stripe:", err);
             }
           }
 
-          if (!stripePriceId) {
+          if (stripePriceId) {
+            plan = mapPriceIdToPlan(stripePriceId);
+          } else {
+            // fallback mapping if subscription retrieve failed
             const priceMap: Record<string, string | undefined> = {
-              start: process.env.STRIPE_STARTER_PRICE_ID,
-              starter: process.env.STRIPE_STARTER_PRICE_ID,
-              explorer: process.env.STRIPE_EXPLORER_PRICE_ID,
-              pro: process.env.STRIPE_PRO_PRICE_ID
+              start: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+              starter: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+              explorer: process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT",
+              pro: process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi"
             };
-            stripePriceId = priceMap[plan];
+            // reverse lookup to get priceId
+            const keys = Object.keys(priceMap);
+            for (const key of keys) {
+              if (key === plan) {
+                stripePriceId = priceMap[key];
+                break;
+              }
+            }
+            plan = mapPriceIdToPlan(stripePriceId);
           }
 
-          const limits = getPlanLimits(plan);
-          const subscriptionData = {
+          console.log(`[Stripe Webhook] Mapped plan: ${plan}, priceId: ${stripePriceId}`);
+
+          await updateUserSubscriptionData(userId, {
             plan,
+            subscriptionStatus: "active",
             stripeCustomerId,
             stripeSubscriptionId,
-            subscriptionStatus: "active",
             stripePriceId,
-            stripeProductId,
             billingInterval,
             currentPeriodEnd,
-            cancelAtPeriodEnd,
-            ...limits
-          };
+            cancelAtPeriodEnd
+          });
 
-          const success = await findUserAndSubscriptionUpdate(userId, email, subscriptionData);
-          if (!success) {
-            const errorMsg = `Failed to update user profile in Firestore from checkout.session.completed. User with ID ${userId || 'none'} and email ${email || 'none'} could not be found or processed.`;
-            console.error(`[Stripe Webhook] ERROR: ${errorMsg}`);
-            throw new Error(errorMsg);
-          }
-          break;
-        }
-
-        case "customer.subscription.deleted": {
-          const subscription = dataObject as Stripe.Subscription;
-          console.log(`[Stripe Webhook] Subscription deleted: ${subscription.id}`);
-          await cancelUserSubscriptionByStripeId(subscription.id, subscription.customer as string);
-          break;
-        }
-
-        case "invoice.payment_failed": {
-          const invoice = dataObject as any;
-          console.log(`[Stripe Webhook] Invoice payment failed for subscription: ${invoice.subscription}`);
-          if (invoice.subscription) {
-            await handlePaymentFailedByStripeId(invoice.subscription as string, invoice.customer as string);
-          }
+          console.log(`[Stripe Webhook] Firestore updated successfully for checkout.session.completed (userId: ${userId})`);
           break;
         }
 
         case "customer.subscription.created": {
-          const subscription = dataObject as Stripe.Subscription;
-          console.log(`[Stripe Webhook] Subscription created: ${subscription.id}`);
-          
+          const subscription = dataObject as any;
           const stripeSubscriptionId = subscription.id;
           const stripeCustomerId = subscription.customer as string;
           const status = subscription.status;
-
-          const plan = subscription.metadata?.plan || (subscription.items.data[0]?.price as any)?.metadata?.plan || undefined; 
           const priceId = subscription.items.data[0]?.price.id;
-          const productId = typeof subscription.items.data[0]?.price.product === "string" ? subscription.items.data[0]?.price.product : (subscription.items.data[0]?.price.product as any)?.id;
+          const billingInterval = subscription.items.data[0]?.price.recurring?.interval || "month";
+          const currentPeriodEnd = stripeUnixToDate(subscription.current_period_end);
+          const cancelAtPeriodEnd = subscription.cancel_at_period_end || false;
 
-          let resolvedPlan = plan;
-          if (!resolvedPlan && priceId) {
-            if (priceId === process.env.STRIPE_STARTER_PRICE_ID) resolvedPlan = "start";
-            else if (priceId === process.env.STRIPE_EXPLORER_PRICE_ID) resolvedPlan = "explorer";
-            else if (priceId === process.env.STRIPE_PRO_PRICE_ID) resolvedPlan = "pro";
+          const plan = mapPriceIdToPlan(priceId);
+
+          console.log(`[Stripe Webhook] Received event: customer.subscription.created`, {
+            customerId: stripeCustomerId,
+            subscriptionId: stripeSubscriptionId,
+            priceId,
+            plan_mapped: plan
+          });
+
+          const metadataUserId = subscription.metadata?.userId;
+          let userId = metadataUserId || await getUserIdByStripeCustomerId(stripeCustomerId);
+          if (!userId && stripeSubscriptionId) {
+            userId = await getUserIdByStripeSubscriptionId(stripeSubscriptionId);
           }
 
-          if (resolvedPlan === "starter") {
-            resolvedPlan = "start";
-          }
-
-          const userId = subscription.metadata?.userId;
-          let email = subscription.metadata?.userEmail;
-
-          if (!email && stripeCustomerId) {
-            try {
-              const stripe = getStripe();
-              const customer = await stripe.customers.retrieve(stripeCustomerId);
-              if (customer && !(customer as any).deleted) {
-                email = (customer as any).email || undefined;
-              }
-            } catch (err) {
-              console.error("[Stripe Webhook] Error retrieving customer for created subscription:", err);
-            }
-          }
-
-          const billingInterval = (subscription as any).items.data[0]?.price.recurring?.interval || "month";
-          const currentPeriodEnd = new Date((subscription as any).current_period_end * 1000);
-          const cancelAtPeriodEnd = (subscription as any).cancel_at_period_end || false;
-
-          if (resolvedPlan) {
-            const limits = getPlanLimits(resolvedPlan);
-            const subscriptionData = {
-              plan: resolvedPlan,
+          if (userId) {
+            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            await saveStripeCustomerMapping(stripeCustomerId, userId);
+            
+            await updateUserSubscriptionData(userId, {
+              plan,
+              subscriptionStatus: status,
               stripeCustomerId,
               stripeSubscriptionId,
-              subscriptionStatus: status || "active",
               stripePriceId: priceId,
-              stripeProductId: productId,
               billingInterval,
               currentPeriodEnd,
-              cancelAtPeriodEnd,
-              ...limits
-            };
-            await findUserAndSubscriptionUpdate(userId, email, subscriptionData);
+              cancelAtPeriodEnd
+            });
+            console.log(`[Stripe Webhook] Firestore updated successfully for customer.subscription.created (userId: ${userId})`);
+          } else {
+            console.warn(`[Stripe Webhook] No userId found for customer.subscription.created (customerId: ${stripeCustomerId})`);
           }
           break;
         }
 
         case "customer.subscription.updated": {
-          console.log(`[Stripe Webhook] Subscription updated: ${dataObject.id}`);
-          await handleSubscriptionUpdated(dataObject);
+          const subscription = dataObject as any;
+          const stripeSubscriptionId = subscription.id;
+          const stripeCustomerId = subscription.customer as string;
+          const status = subscription.status;
+          const priceId = subscription.items.data[0]?.price.id;
+          const billingInterval = subscription.items.data[0]?.price.recurring?.interval || "month";
+          const currentPeriodEnd = stripeUnixToDate(subscription.current_period_end);
+          const cancelAtPeriodEnd = subscription.cancel_at_period_end || false;
+
+          const plan = mapPriceIdToPlan(priceId);
+
+          console.log(`[Stripe Webhook] Received event: customer.subscription.updated`, {
+            customerId: stripeCustomerId,
+            subscriptionId: stripeSubscriptionId,
+            priceId,
+            plan_mapped: plan
+          });
+
+          let userId = await getUserIdByStripeCustomerId(stripeCustomerId);
+          if (!userId && stripeSubscriptionId) {
+            userId = await getUserIdByStripeSubscriptionId(stripeSubscriptionId);
+          }
+
+          if (userId) {
+            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            await updateUserSubscriptionData(userId, {
+              plan,
+              subscriptionStatus: cancelAtPeriodEnd ? "active" : status,
+              stripeCustomerId,
+              stripeSubscriptionId,
+              stripePriceId: priceId,
+              billingInterval,
+              currentPeriodEnd,
+              cancelAtPeriodEnd
+            });
+            console.log(`[Stripe Webhook] Firestore updated successfully for customer.subscription.updated (userId: ${userId})`);
+          } else {
+            console.warn(`[Stripe Webhook] No userId found for customer.subscription.updated (customerId: ${stripeCustomerId})`);
+          }
+          break;
+        }
+
+        case "customer.subscription.deleted": {
+          const subscription = dataObject as any;
+          const stripeSubscriptionId = subscription.id;
+          const stripeCustomerId = subscription.customer as string;
+
+          console.log(`[Stripe Webhook] Received event: customer.subscription.deleted`, {
+            customerId: stripeCustomerId,
+            subscriptionId: stripeSubscriptionId
+          });
+
+          let userId = await getUserIdByStripeCustomerId(stripeCustomerId);
+          if (!userId && stripeSubscriptionId) {
+            userId = await getUserIdByStripeSubscriptionId(stripeSubscriptionId);
+          }
+
+          if (userId) {
+            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            await updateUserSubscriptionData(userId, {
+              plan: "free",
+              subscriptionStatus: "canceled",
+              stripeCustomerId,
+              stripeSubscriptionId,
+              stripePriceId: "",
+              billingInterval: "month",
+              currentPeriodEnd: null,
+              cancelAtPeriodEnd: false
+            });
+            console.log(`[Stripe Webhook] Firestore updated successfully for customer.subscription.deleted (userId: ${userId})`);
+          } else {
+            console.warn(`[Stripe Webhook] No userId found for customer.subscription.deleted (customerId: ${stripeCustomerId})`);
+          }
           break;
         }
 
         case "invoice.payment_succeeded": {
-          console.log(`[Stripe Webhook] Invoice payment succeeded: ${dataObject.id}`);
+          const invoice = dataObject as any;
+          const stripeCustomerId = invoice.customer as string;
+          const stripeSubscriptionId = invoice.subscription as string;
+
+          console.log(`[Stripe Webhook] Received event: invoice.payment_succeeded`, {
+            customerId: stripeCustomerId,
+            subscriptionId: stripeSubscriptionId
+          });
+
+          let userId = await getUserIdByStripeCustomerId(stripeCustomerId);
+          if (!userId && stripeSubscriptionId) {
+            userId = await getUserIdByStripeSubscriptionId(stripeSubscriptionId);
+          }
+
+          if (userId) {
+            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            let currentPeriodEnd: Date | null = null;
+            let stripePriceId: string | undefined = undefined;
+            let billingInterval = "month";
+            let cancelAtPeriodEnd = false;
+            let plan = "free";
+
+            if (stripeSubscriptionId) {
+              try {
+                const stripe = getStripe();
+                const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId) as any;
+                const item = sub.items.data[0];
+                if (item) {
+                  stripePriceId = item.price.id;
+                  billingInterval = item.price.recurring?.interval || "month";
+                  plan = mapPriceIdToPlan(stripePriceId);
+                }
+                currentPeriodEnd = stripeUnixToDate(sub.current_period_end);
+                cancelAtPeriodEnd = sub.cancel_at_period_end || false;
+              } catch (err) {
+                console.error("[Stripe Webhook] Error fetching subscription details in payment_succeeded:", err);
+              }
+            }
+
+            await updateUserSubscriptionData(userId, {
+              plan,
+              subscriptionStatus: "active",
+              stripeCustomerId,
+              stripeSubscriptionId,
+              stripePriceId,
+              billingInterval,
+              currentPeriodEnd,
+              cancelAtPeriodEnd
+            });
+            console.log(`[Stripe Webhook] Firestore updated successfully for invoice.payment_succeeded (userId: ${userId})`);
+          } else {
+            console.warn(`[Stripe Webhook] No userId found for invoice.payment_succeeded (customerId: ${stripeCustomerId})`);
+          }
+          break;
+        }
+
+        case "invoice.payment_failed": {
+          const invoice = dataObject as any;
+          const stripeCustomerId = invoice.customer as string;
+          const stripeSubscriptionId = invoice.subscription as string;
+
+          console.log(`[Stripe Webhook] Received event: invoice.payment_failed`, {
+            customerId: stripeCustomerId,
+            subscriptionId: stripeSubscriptionId
+          });
+
+          let userId = await getUserIdByStripeCustomerId(stripeCustomerId);
+          if (!userId && stripeSubscriptionId) {
+            userId = await getUserIdByStripeSubscriptionId(stripeSubscriptionId);
+          }
+
+          if (userId) {
+            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            let currentPeriodEnd: Date | null = null;
+            let stripePriceId: string | undefined = undefined;
+            let billingInterval = "month";
+            let cancelAtPeriodEnd = false;
+            let plan = "free";
+
+            if (stripeSubscriptionId) {
+              try {
+                const stripe = getStripe();
+                const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId) as any;
+                const item = sub.items.data[0];
+                if (item) {
+                  stripePriceId = item.price.id;
+                  billingInterval = item.price.recurring?.interval || "month";
+                  plan = mapPriceIdToPlan(stripePriceId);
+                }
+                currentPeriodEnd = stripeUnixToDate(sub.current_period_end);
+                cancelAtPeriodEnd = sub.cancel_at_period_end || false;
+              } catch (err) {
+                console.error("[Stripe Webhook] Error fetching subscription details in payment_failed:", err);
+              }
+            }
+
+            await updateUserSubscriptionData(userId, {
+              plan,
+              subscriptionStatus: "past_due",
+              stripeCustomerId,
+              stripeSubscriptionId,
+              stripePriceId,
+              billingInterval,
+              currentPeriodEnd,
+              cancelAtPeriodEnd
+            });
+            console.log(`[Stripe Webhook] Firestore updated successfully for invoice.payment_failed (userId: ${userId})`);
+          } else {
+            console.warn(`[Stripe Webhook] No userId found for invoice.payment_failed (customerId: ${stripeCustomerId})`);
+          }
           break;
         }
 
@@ -1060,19 +1248,25 @@ async function startServer() {
 
       const limits = getPlanLimits(targetPlan);
       const billingInterval = updatedSubscription.items.data[0]?.price.recurring?.interval || "month";
-      const currentPeriodEnd = new Date(updatedSubscription.current_period_end * 1000);
+      const currentPeriodEnd = stripeUnixToDate(updatedSubscription.current_period_end);
       const cancelAtPeriodEnd = updatedSubscription.cancel_at_period_end || false;
 
-      const updateData = {
+      console.log("[Stripe Update] current_period_end raw:", updatedSubscription.current_period_end);
+      console.log("[Stripe Update] currentPeriodEnd parsed:", currentPeriodEnd);
+
+      const updateData: any = {
         plan: targetPlan,
         subscriptionStatus: updatedSubscription.status || "active",
         stripePriceId: priceId,
         billingInterval,
-        currentPeriodEnd,
         cancelAtPeriodEnd,
         ...limits,
         updatedAt: AdminFieldValue.serverTimestamp()
       };
+
+      if (currentPeriodEnd) {
+        updateData.currentPeriodEnd = currentPeriodEnd;
+      }
 
       await userRef.update(updateData);
 
@@ -1092,27 +1286,44 @@ async function startServer() {
         return res.status(400).json({ error: "Missing userId parameter." });
       }
 
-      const db = getFirebaseAdminDb();
-      const userRef = db.collection("users").doc(userId);
-      const userSnap = await userRef.get();
+      console.log("[Stripe Portal] Creating portal session for user:", userId);
 
-      if (!userSnap.exists) {
-        return res.status(404).json({ error: "User not found." });
+      const db = getFirebaseAdminDb();
+      let stripeCustomerId: string | undefined = undefined;
+
+      // Check users/{userId}/billing/current first
+      try {
+        const billingRef = db.collection("users").doc(userId).collection("billing").doc("current");
+        const billingSnap = await billingRef.get();
+        if (billingSnap.exists) {
+          stripeCustomerId = billingSnap.data()?.stripeCustomerId;
+        }
+      } catch (billingErr) {
+        console.error("[Stripe Portal] Error fetching stripeCustomerId from billing/current:", billingErr);
       }
 
-      const userData = userSnap.data() || {};
-      const stripeCustomerId = userData.stripeCustomerId;
+      // Fallback to the main user document
+      if (!stripeCustomerId) {
+        const userRef = db.collection("users").doc(userId);
+        const userSnap = await userRef.get();
+        if (userSnap.exists) {
+          const userData = userSnap.data() || {};
+          stripeCustomerId = userData.stripeCustomerId;
+        }
+      }
+
+      console.log("[Stripe Portal] Customer ID:", stripeCustomerId);
 
       if (!stripeCustomerId) {
-        return res.status(400).json({ error: "No billing profile found. Please subscribe to a plan first." });
+        return res.status(400).json({ error: "No Stripe customer found for this user." });
       }
 
       const stripe = getStripe();
-      const FRONTEND_URL = process.env.FRONTEND_URL || process.env.APP_URL || "http://localhost:3000";
+      const FRONTEND_URL = process.env.FRONTEND_URL || "https://astra-learning-ai-hml-668575929018.us-west2.run.app";
 
       const session = await stripe.billingPortal.sessions.create({
         customer: stripeCustomerId,
-        return_url: `${FRONTEND_URL}/settings`
+        return_url: `${FRONTEND_URL}/dashboard`
       });
 
       res.json({ url: session.url });

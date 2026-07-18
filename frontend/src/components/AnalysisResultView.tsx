@@ -45,6 +45,7 @@ interface Props {
   setActiveTab?: (tab: 'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript' | 'flashcards') => void;
   showInternalTabs?: boolean;
   preferences?: any;
+  showToast?: (msg: string) => void;
 }
 
 export const AnalysisResultView = ({ 
@@ -56,7 +57,8 @@ export const AnalysisResultView = ({
   activeTab: externalActiveTab,
   setActiveTab: externalSetActiveTab,
   showInternalTabs = true,
-  preferences
+  preferences,
+  showToast
 }: Props) => {
   const [internalActiveTab, setInternalActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript' | 'flashcards'>('summary');
   const activeTab = externalActiveTab || internalActiveTab;
@@ -84,6 +86,7 @@ export const AnalysisResultView = ({
   const [isFlipped, setIsFlipped] = useState(false);
   const [flippedGridCards, setFlippedGridCards] = useState<Record<number, boolean>>({});
   const [learnedCards, setLearnedCards] = useState<Record<number, boolean>>({});
+  const [showAnkiHelpModal, setShowAnkiHelpModal] = useState(false);
 
   const getSlugifiedTitle = (titleText: string) => {
     if (!titleText) return 'untitled';
@@ -106,69 +109,176 @@ export const AnalysisResultView = ({
   };
 
   const handleExportCSV = (flashcards: any[]) => {
-    if (!flashcards || flashcards.length === 0) return;
+    if (!flashcards || flashcards.length === 0) {
+      const emptyMsg = lang === 'pt'
+        ? 'Não há flashcards para exportar.'
+        : lang === 'es'
+          ? 'No hay flashcards para exportar.'
+          : 'There are no flashcards to export.';
+      showToast?.(emptyMsg);
+      return;
+    }
     
-    const escapeCSVField = (field: string | any) => {
-      if (field === null || field === undefined) return '""';
-      const stringVal = String(field);
-      const escaped = stringVal.replace(/"/g, '""');
-      return `"${escaped}"`;
-    };
+    try {
+      const validFlashcards = flashcards.filter((fc, index) => {
+        const hasFront = fc && fc.front && String(fc.front).trim().length > 0;
+        const hasBack = fc && fc.back && String(fc.back).trim().length > 0;
+        if (!hasFront || !hasBack) {
+          console.warn(`[Export CSV] Filtered out invalid flashcard at index ${index}:`, fc);
+          return false;
+        }
+        return true;
+      });
 
-    const headers = ["Front", "Back", "Topic", "Difficulty"];
-    const rows = flashcards.map(fc => [
-      escapeCSVField(fc.front || ''),
-      escapeCSVField(fc.back || ''),
-      escapeCSVField(fc.topic || ''),
-      escapeCSVField(fc.difficulty || '')
-    ]);
+      if (validFlashcards.length === 0) {
+        const emptyMsg = lang === 'pt'
+          ? 'Não há flashcards válidos para exportar.'
+          : lang === 'es'
+            ? 'No hay flashcards válidos para exportar.'
+            : 'There are no valid flashcards to export.';
+        showToast?.(emptyMsg);
+        return;
+      }
 
-    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\r\n');
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    
-    const rawTitle = data.video?.title || data.title || 'analysis';
-    const slug = getSlugifiedTitle(rawTitle);
-    const dateStr = getFormattedDate();
-    
-    a.href = url;
-    a.download = `astra-flashcards-${slug}-${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const escapeCSVField = (field: string | any) => {
+        if (field === null || field === undefined) return '""';
+        const cleaned = String(field)
+          .replace(/[\r\n]+/g, ' ')
+          .replace(/ +/g, ' ')
+          .trim();
+        const escaped = cleaned.replace(/"/g, '""');
+        return `"${escaped}"`;
+      };
+
+      const headers = ["Front", "Back", "Topic", "Difficulty"];
+      const rows = validFlashcards.map(fc => [
+        escapeCSVField(fc.front || ''),
+        escapeCSVField(fc.back || ''),
+        escapeCSVField(fc.topic || ''),
+        escapeCSVField(fc.difficulty || '')
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\r\n');
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      
+      const rawTitle = data.video?.title || data.title;
+      const dateStr = getFormattedDate();
+      let filename = '';
+      if (rawTitle) {
+        const slug = getSlugifiedTitle(rawTitle);
+        filename = `astra-flashcards-${slug}-${dateStr}.csv`;
+      } else {
+        filename = `astra-flashcards-${dateStr}.csv`;
+      }
+      
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const successMsg = lang === 'pt'
+        ? 'Flashcards exportados com sucesso.'
+        : lang === 'es'
+          ? 'Flashcards exportados correctamente.'
+          : 'Flashcards exported successfully.';
+      showToast?.(successMsg);
+    } catch (err) {
+      console.error('[Export CSV Error]', err);
+      const errorMsg = lang === 'pt'
+        ? 'Não foi possível exportar os flashcards.'
+        : lang === 'es'
+          ? 'No pudimos exportar los flashcards.'
+          : "We couldn't export the flashcards.";
+      showToast?.(errorMsg);
+    }
   };
 
   const handleExportTSV = (flashcards: any[]) => {
-    if (!flashcards || flashcards.length === 0) return;
+    if (!flashcards || flashcards.length === 0) {
+      const emptyMsg = lang === 'pt'
+        ? 'Não há flashcards para exportar.'
+        : lang === 'es'
+          ? 'No hay flashcards para exportar.'
+          : 'There are no flashcards to export.';
+      showToast?.(emptyMsg);
+      return;
+    }
 
-    const cleanTSVField = (field: string | any) => {
-      if (field === null || field === undefined) return '';
-      return String(field)
-        .replace(/\t/g, ' ')
-        .replace(/[\r\n]+/g, ' ');
-    };
+    try {
+      const validFlashcards = flashcards.filter((fc, index) => {
+        const hasFront = fc && fc.front && String(fc.front).trim().length > 0;
+        const hasBack = fc && fc.back && String(fc.back).trim().length > 0;
+        if (!hasFront || !hasBack) {
+          console.warn(`[Export TSV] Filtered out invalid flashcard at index ${index}:`, fc);
+          return false;
+        }
+        return true;
+      });
 
-    const headers = ["Front", "Back", "Topic", "Difficulty"];
-    const rows = flashcards.map(fc => [
-      cleanTSVField(fc.front || ''),
-      cleanTSVField(fc.back || ''),
-      cleanTSVField(fc.topic || ''),
-      cleanTSVField(fc.difficulty || '')
-    ]);
+      if (validFlashcards.length === 0) {
+        const emptyMsg = lang === 'pt'
+          ? 'Não há flashcards válidos para exportar.'
+          : lang === 'es'
+            ? 'No hay flashcards válidos para exportar.'
+            : 'There are no valid flashcards to export.';
+        showToast?.(emptyMsg);
+        return;
+      }
 
-    const tsvContent = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\r\n');
-    const blob = new Blob([tsvContent], { type: "text/tab-separated-values;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    
-    const rawTitle = data.video?.title || data.title || 'analysis';
-    const slug = getSlugifiedTitle(rawTitle);
-    const dateStr = getFormattedDate();
-    
-    a.href = url;
-    a.download = `astra-flashcards-${slug}-${dateStr}.tsv`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const cleanTSVField = (field: string | any) => {
+        if (field === null || field === undefined) return '';
+        return String(field)
+          .replace(/\t/g, ' ')
+          .replace(/[\r\n]+/g, ' ')
+          .replace(/ +/g, ' ')
+          .trim();
+      };
+
+      const headers = ["Front", "Back", "Topic", "Difficulty"];
+      const rows = validFlashcards.map(fc => [
+        cleanTSVField(fc.front || ''),
+        cleanTSVField(fc.back || ''),
+        cleanTSVField(fc.topic || ''),
+        cleanTSVField(fc.difficulty || '')
+      ]);
+
+      const tsvContent = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\r\n');
+      const blob = new Blob(["\uFEFF" + tsvContent], { type: "text/tab-separated-values;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      
+      const rawTitle = data.video?.title || data.title;
+      const dateStr = getFormattedDate();
+      let filename = '';
+      if (rawTitle) {
+        const slug = getSlugifiedTitle(rawTitle);
+        filename = `astra-flashcards-${slug}-${dateStr}.tsv`;
+      } else {
+        filename = `astra-flashcards-${dateStr}.tsv`;
+      }
+      
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const successMsg = lang === 'pt'
+        ? 'Flashcards exportados com sucesso.'
+        : lang === 'es'
+          ? 'Flashcards exportados correctamente.'
+          : 'Flashcards exported successfully.';
+      showToast?.(successMsg);
+    } catch (err) {
+      console.error('[Export TSV Error]', err);
+      const errorMsg = lang === 'pt'
+        ? 'Não foi possível exportar os flashcards.'
+        : lang === 'es'
+          ? 'No pudimos exportar los flashcards.'
+          : "We couldn't export the flashcards.";
+      showToast?.(errorMsg);
+    }
   };
 
   const parsePoint = (point: string) => {
@@ -431,6 +541,8 @@ export const AnalysisResultView = ({
     setQuizError(null);
     const savedCount = Number(localStorage.getItem('astra_pref_quiz_count')) || 5;
     setQuestionCount(savedCount);
+    setCurrentCardIndex(0);
+    setIsFlipped(false);
   }, [data.video?.videoId]);
 
   const calculateScore = () => {
@@ -1418,6 +1530,30 @@ export const AnalysisResultView = ({
                 const learnedCount = Object.keys(learnedCards).filter(k => learnedCards[Number(k)]).length;
                 const progressPercentage = Math.round((learnedCount / flashcards.length) * 100);
 
+                const labelFront = {
+                  pt: "FRENTE",
+                  en: "FRONT",
+                  es: "FRENTE"
+                }[lang as 'pt' | 'en' | 'es'] || "FRONT";
+
+                const labelBack = {
+                  pt: "VERSO / RESPOSTA",
+                  en: "BACK / ANSWER",
+                  es: "REVERSO / RESPUESTA"
+                }[lang as 'pt' | 'en' | 'es'] || "BACK / ANSWER";
+
+                const instructionFront = {
+                  pt: "Clique em Ver resposta para revelar o verso.",
+                  en: "Click Show answer to reveal the back.",
+                  es: "Haz clic en Ver respuesta para revelar el reverso."
+                }[lang as 'pt' | 'en' | 'es'] || "Click Show answer to reveal the back.";
+
+                const instructionBack = {
+                  pt: "Esta é a resposta do flashcard.",
+                  en: "This is the flashcard answer.",
+                  es: "Esta es la respuesta del flashcard."
+                }[lang as 'pt' | 'en' | 'es'] || "This is the flashcard answer.";
+
                 const handleNext = () => {
                   setIsFlipped(false);
                   setCurrentCardIndex((prev) => (prev + 1) % flashcards.length);
@@ -1475,27 +1611,31 @@ export const AnalysisResultView = ({
                         {/* Export Buttons */}
                         <div className="flex items-center gap-2">
                           <button
+                            onClick={() => handleExportTSV(flashcards)}
+                            title={lang === 'pt' ? 'TSV é recomendado para importação no Anki.' : lang === 'es' ? 'TSV es recomendado para importar en Anki.' : 'TSV is recommended for Anki import.'}
+                            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer relative overflow-hidden group ${
+                              isDarkMode
+                                ? 'bg-orange-500/10 border-orange-500/40 text-orange-400 hover:border-orange-500 hover:bg-orange-500/20'
+                                : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 hover:border-orange-300 shadow-sm'
+                            }`}
+                          >
+                            <Download size={13} className="text-orange-500 animate-bounce" style={{ animationDuration: '3s' }} />
+                            <span>{lang === 'pt' ? 'Exportar TSV' : lang === 'es' ? 'Exportar TSV' : 'Export TSV'}</span>
+                            <span className="text-[8px] uppercase px-1 py-0.2 bg-orange-500 text-white rounded font-extrabold scale-90 tracking-tight shrink-0">
+                              {lang === 'pt' ? 'Rec' : lang === 'es' ? 'Rec' : 'Rec'}
+                            </span>
+                          </button>
+
+                          <button
                             onClick={() => handleExportCSV(flashcards)}
                             className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
                               isDarkMode
-                                ? 'bg-zinc-900 border-white/5 hover:border-orange-500/50 hover:text-orange-400 text-zinc-300'
-                                : 'bg-white border-slate-200 hover:border-orange-500/50 hover:text-orange-600 text-slate-700 shadow-sm'
+                                ? 'bg-zinc-900 border-white/5 hover:border-[#ea580c]/50 hover:text-orange-400 text-zinc-300'
+                                : 'bg-white border-slate-200 hover:border-[#ea580c]/50 hover:text-[#ea580c] text-slate-700 shadow-sm'
                             }`}
                           >
                             <Download size={13} className="text-orange-500" />
                             <span>{lang === 'pt' ? 'Exportar CSV' : lang === 'es' ? 'Exportar CSV' : 'Export CSV'}</span>
-                          </button>
-                          
-                          <button
-                            onClick={() => handleExportTSV(flashcards)}
-                            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
-                              isDarkMode
-                                ? 'bg-zinc-900 border-white/5 hover:border-orange-500/50 hover:text-orange-400 text-zinc-300'
-                                : 'bg-white border-slate-200 hover:border-orange-500/50 hover:text-orange-600 text-slate-700 shadow-sm'
-                            }`}
-                          >
-                            <Download size={13} className="text-orange-500" />
-                            <span>{lang === 'pt' ? 'Exportar TSV' : lang === 'es' ? 'Exportar TSV' : 'Export TSV'}</span>
                           </button>
                         </div>
 
@@ -1536,20 +1676,31 @@ export const AnalysisResultView = ({
                         <div>
                           <p className={`font-semibold ${isDarkMode ? 'text-zinc-200' : 'text-slate-800'}`}>
                             {lang === 'pt' 
-                              ? 'Exporte em CSV ou TSV para importar seus flashcards no Anki.' 
+                              ? 'Exporte em TSV ou CSV para importar seus flashcards no Anki.' 
                               : lang === 'es' 
-                                ? 'Exporta en CSV o TSV para importar tus flashcards en Anki.' 
-                                : 'Export as CSV or TSV to import your flashcards into Anki.'}
+                                ? 'Exporta en TSV o CSV para importar tus flashcards en Anki.' 
+                                : 'Export as TSV or CSV to import your flashcards into Anki.'}
                           </p>
                           <p className={`text-[11px] mt-0.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
                             💡 {lang === 'pt' 
-                              ? 'TSV costuma funcionar melhor para importação simples no Anki.' 
+                              ? 'TSV é recomendado para importação no Anki.' 
                               : lang === 'es' 
-                                ? 'TSV suele funcionar mejor para importaciones simples en Anki.' 
-                                : 'TSV usually works best for simple Anki imports.'}
+                                ? 'TSV es recomendado para importar en Anki.' 
+                                : 'TSV is recommended for Anki import.'}
                           </p>
                         </div>
                       </div>
+
+                      <button
+                        onClick={() => setShowAnkiHelpModal(true)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shrink-0 ${
+                          isDarkMode
+                            ? 'bg-orange-600/10 border-orange-500/20 text-orange-400 hover:bg-orange-600/20 hover:scale-[1.02]'
+                            : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 shadow-sm hover:scale-[1.02]'
+                        }`}
+                      >
+                        {lang === 'pt' ? 'Como importar no Anki?' : lang === 'es' ? '¿Cómo importar en Anki?' : 'How to import into Anki?'}
+                      </button>
                     </div>
 
                     {/* Progress tracker */}
@@ -1572,149 +1723,159 @@ export const AnalysisResultView = ({
                     {/* Render Selected Mode */}
                     {viewMode === 'slider' ? (
                       <div className="flex flex-col items-center justify-center space-y-6 py-4">
-                        {/* 3D Flip Card Container */}
-                        <div className="w-full max-w-2xl [perspective:1000px] h-80 sm:h-96">
-                          <motion.div
-                            onClick={() => setIsFlipped(!isFlipped)}
-                            initial={false}
-                            animate={{ rotateY: isFlipped ? 180 : 0 }}
-                            transition={{ duration: 0.5, ease: "easeInOut" }}
-                            className="w-full h-full relative [transform-style:preserve-3d] cursor-pointer"
-                          >
-                            {/* FRONT SIDE */}
-                            <div className={`absolute inset-0 w-full h-full p-6 rounded-3xl border flex flex-col justify-between [backface-visibility:hidden] shadow-xl ${
-                              isDarkMode 
-                                ? 'bg-[#0f0f12] border-white/10 text-white' 
-                                : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
-                            }`}>
-                              {/* Topo layout */}
-                              <div className="flex justify-between items-center gap-2 border-b border-zinc-800/10 dark:border-white/5 pb-3">
-                                <div className="flex flex-col items-start gap-0.5">
-                                  <span className="text-[11px] font-bold text-orange-500 uppercase tracking-wider">
-                                    {lang === 'pt' ? `Card ${currentCardIndex + 1} de ${flashcards.length}` : lang === 'es' ? `Tarjeta ${currentCardIndex + 1} de ${flashcards.length}` : `Card ${currentCardIndex + 1} of ${flashcards.length}`}
-                                  </span>
-                                  <span className={`text-[11px] font-medium truncate max-w-[150px] sm:max-w-[200px] ${isDarkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
-                                    {currentCard.topic}
-                                  </span>
-                                </div>
-                                
-                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                  {getDifficultyBadge(currentCard.difficulty)}
-                                  <button
-                                    onClick={(e) => toggleLearned(currentCardIndex, e)}
-                                    className={`px-2 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[10px] font-bold ${
-                                      learnedCards[currentCardIndex]
-                                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
-                                        : isDarkMode 
+                        {/* Flip Card Container */}
+                        <div className="w-full max-w-2xl h-80 sm:h-96">
+                          <AnimatePresence mode="wait">
+                            {!isFlipped ? (
+                              <motion.div
+                                key="front"
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -5 }}
+                                transition={{ duration: 0.15 }}
+                                onClick={() => setIsFlipped(true)}
+                                className={`w-full h-full p-6 rounded-3xl border flex flex-col justify-between shadow-xl cursor-pointer ${
+                                  isDarkMode 
+                                    ? 'bg-[#0f0f12] border-white/10 text-white' 
+                                    : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                                }`}
+                              >
+                                {/* Topo layout */}
+                                <div className="flex justify-between items-center gap-2 border-b border-zinc-800/10 dark:border-white/5 pb-3">
+                                  <div className="flex flex-col items-start gap-0.5">
+                                    <span className="text-[11px] font-bold text-orange-500 uppercase tracking-wider">
+                                      {lang === 'pt' ? `Card ${currentCardIndex + 1} de ${flashcards.length}` : lang === 'es' ? `Tarjeta ${currentCardIndex + 1} de ${flashcards.length}` : `Card ${currentCardIndex + 1} of ${flashcards.length}`}
+                                    </span>
+                                    <span className={`text-[11px] font-medium truncate max-w-[150px] sm:max-w-[200px] ${isDarkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
+                                      {currentCard.topic}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                    {getDifficultyBadge(currentCard.difficulty)}
+                                    <button
+                                      onClick={(e) => toggleLearned(currentCardIndex, e)}
+                                      className={`px-2 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[10px] font-bold ${
+                                        learnedCards[currentCardIndex]
+                                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
+                                          : isDarkMode 
+                                            ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                      }`}
+                                      title={flashcardTexts.markReviewed}
+                                    >
+                                      <Check size={11} className={learnedCards[currentCardIndex] ? "stroke-[3px]" : ""} />
+                                      <span className="hidden sm:inline">{flashcardTexts.markReviewed}</span>
+                                    </button>
+                                    
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const textToCopy = `${flashcardTexts.questionLabel}:\n${currentCard.front}\n\n${flashcardTexts.answerLabel}:\n${currentCard.back || flashcardTexts.noAnswer}\n\n${flashcardTexts.topic}:\n${currentCard.topic}\n\n${flashcardTexts.difficulty}:\n${currentCard.difficulty}`;
+                                        navigator.clipboard.writeText(textToCopy);
+                                      }}
+                                      className={`p-1 rounded-lg border transition-all ${
+                                        isDarkMode 
                                           ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
                                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
-                                    }`}
-                                    title={flashcardTexts.markReviewed}
-                                  >
-                                    <Check size={11} className={learnedCards[currentCardIndex] ? "stroke-[3px]" : ""} />
-                                    <span className="hidden sm:inline">{flashcardTexts.markReviewed}</span>
-                                  </button>
+                                      }`}
+                                      title={lang === 'pt' ? 'Copiar Flashcard' : lang === 'es' ? 'Copiar Flashcard' : 'Copy Flashcard'}
+                                    >
+                                      <Copy size={11} />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Centro layout */}
+                                <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+                                  <span className="text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 font-bold mb-3">
+                                    {labelFront}
+                                  </span>
+                                  <h3 className="text-base sm:text-lg md:text-xl font-bold leading-relaxed max-w-lg">
+                                    {currentCard.front}
+                                  </h3>
+                                </div>
+
+                                <div className={`text-[10px] font-sans text-center tracking-wide transition-opacity duration-300 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                                  {instructionFront}
+                                </div>
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="back"
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -5 }}
+                                transition={{ duration: 0.15 }}
+                                onClick={() => setIsFlipped(false)}
+                                className={`w-full h-full p-6 rounded-3xl border flex flex-col justify-between shadow-xl cursor-pointer ${
+                                  isDarkMode 
+                                    ? 'bg-orange-950/20 border-orange-500/20 text-white' 
+                                    : 'bg-orange-50/50 border-orange-200/60 text-slate-800 shadow-slate-200/50'
+                                }`}
+                              >
+                                {/* Topo layout */}
+                                <div className="flex justify-between items-center gap-2 border-b border-zinc-800/10 dark:border-white/5 pb-3">
+                                  <div className="flex flex-col items-start gap-0.5">
+                                    <span className="text-[11px] font-bold text-orange-500 uppercase tracking-wider">
+                                      {lang === 'pt' ? `Card ${currentCardIndex + 1} de ${flashcards.length}` : lang === 'es' ? `Tarjeta ${currentCardIndex + 1} de ${flashcards.length}` : `Card ${currentCardIndex + 1} of ${flashcards.length}`}
+                                    </span>
+                                    <span className={`text-[11px] font-medium truncate max-w-[150px] sm:max-w-[200px] ${isDarkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
+                                      {currentCard.topic}
+                                    </span>
+                                  </div>
                                   
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const textToCopy = `${flashcardTexts.questionLabel}:\n${currentCard.front}\n\n${flashcardTexts.answerLabel}:\n${currentCard.back || flashcardTexts.noAnswer}\n\n${flashcardTexts.topic}:\n${currentCard.topic}\n\n${flashcardTexts.difficulty}:\n${currentCard.difficulty}`;
-                                      navigator.clipboard.writeText(textToCopy);
-                                    }}
-                                    className={`p-1 rounded-lg border transition-all ${
-                                      isDarkMode 
-                                        ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
-                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
-                                    }`}
-                                    title={lang === 'pt' ? 'Copiar Flashcard' : lang === 'es' ? 'Copiar Flashcard' : 'Copy Flashcard'}
-                                  >
-                                    <Copy size={11} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Centro layout */}
-                              <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
-                                <span className="text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 font-bold mb-3">
-                                  {flashcardTexts.front}
-                                </span>
-                                <h3 className="text-base sm:text-lg md:text-xl font-bold leading-relaxed max-w-lg">
-                                  {currentCard.front}
-                                </h3>
-                              </div>
-
-                              <div className={`text-[10px] font-mono text-center tracking-widest uppercase transition-opacity duration-300 ${isDarkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
-                                {flashcardTexts.flip}
-                              </div>
-                            </div>
-
-                            {/* BACK SIDE */}
-                            <div className={`absolute inset-0 w-full h-full p-6 rounded-3xl border flex flex-col justify-between [backface-visibility:hidden] [transform:rotateY(180deg)] shadow-xl ${
-                              isDarkMode 
-                                ? 'bg-orange-950/20 border-orange-500/20 text-white' 
-                                : 'bg-orange-50/50 border-orange-200/60 text-slate-800 shadow-slate-200/50'
-                            }`}>
-                              {/* Topo layout */}
-                              <div className="flex justify-between items-center gap-2 border-b border-zinc-800/10 dark:border-white/5 pb-3 [transform:rotateY(180deg)]">
-                                <div className="flex flex-col items-start gap-0.5">
-                                  <span className="text-[11px] font-bold text-orange-500 uppercase tracking-wider">
-                                    {lang === 'pt' ? `Card ${currentCardIndex + 1} de ${flashcards.length}` : lang === 'es' ? `Tarjeta ${currentCardIndex + 1} de ${flashcards.length}` : `Card ${currentCardIndex + 1} of ${flashcards.length}`}
-                                  </span>
-                                  <span className={`text-[11px] font-medium truncate max-w-[150px] sm:max-w-[200px] ${isDarkMode ? 'text-zinc-400' : 'text-slate-600'}`}>
-                                    {currentCard.topic}
-                                  </span>
-                                </div>
-                                
-                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                  {getDifficultyBadge(currentCard.difficulty)}
-                                  <button
-                                    onClick={(e) => toggleLearned(currentCardIndex, e)}
-                                    className={`px-2 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[10px] font-bold ${
-                                      learnedCards[currentCardIndex]
-                                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
-                                        : isDarkMode 
+                                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                    {getDifficultyBadge(currentCard.difficulty)}
+                                    <button
+                                      onClick={(e) => toggleLearned(currentCardIndex, e)}
+                                      className={`px-2 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[10px] font-bold ${
+                                        learnedCards[currentCardIndex]
+                                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
+                                          : isDarkMode 
+                                            ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
+                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
+                                      }`}
+                                      title={flashcardTexts.markReviewed}
+                                    >
+                                      <Check size={11} className={learnedCards[currentCardIndex] ? "stroke-[3px]" : ""} />
+                                      <span className="hidden sm:inline">{flashcardTexts.markReviewed}</span>
+                                    </button>
+                                    
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const textToCopy = `${flashcardTexts.questionLabel}:\n${currentCard.front}\n\n${flashcardTexts.answerLabel}:\n${currentCard.back || flashcardTexts.noAnswer}\n\n${flashcardTexts.topic}:\n${currentCard.topic}\n\n${flashcardTexts.difficulty}:\n${currentCard.difficulty}`;
+                                        navigator.clipboard.writeText(textToCopy);
+                                      }}
+                                      className={`p-1 rounded-lg border transition-all ${
+                                        isDarkMode 
                                           ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
                                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
-                                    }`}
-                                    title={flashcardTexts.markReviewed}
-                                  >
-                                    <Check size={11} className={learnedCards[currentCardIndex] ? "stroke-[3px]" : ""} />
-                                    <span className="hidden sm:inline">{flashcardTexts.markReviewed}</span>
-                                  </button>
-                                  
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const textToCopy = `${flashcardTexts.questionLabel}:\n${currentCard.front}\n\n${flashcardTexts.answerLabel}:\n${currentCard.back || flashcardTexts.noAnswer}\n\n${flashcardTexts.topic}:\n${currentCard.topic}\n\n${flashcardTexts.difficulty}:\n${currentCard.difficulty}`;
-                                      navigator.clipboard.writeText(textToCopy);
-                                    }}
-                                    className={`p-1 rounded-lg border transition-all ${
-                                      isDarkMode 
-                                        ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-white' 
-                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-800'
-                                    }`}
-                                    title={lang === 'pt' ? 'Copiar Flashcard' : lang === 'es' ? 'Copiar Flashcard' : 'Copy Flashcard'}
-                                  >
-                                    <Copy size={11} />
-                                  </button>
+                                      }`}
+                                      title={lang === 'pt' ? 'Copiar Flashcard' : lang === 'es' ? 'Copiar Flashcard' : 'Copy Flashcard'}
+                                    >
+                                      <Copy size={11} />
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
 
-                              {/* Centro layout */}
-                              <div className="flex-1 flex flex-col items-center justify-center text-center px-4 [transform:rotateY(180deg)]">
-                                <span className="text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold mb-3">
-                                  {flashcardTexts.back}
-                                </span>
-                                <p className="text-sm leading-relaxed max-w-lg font-medium">
-                                  {currentCard.back ? currentCard.back : <span className="text-zinc-500 italic">{flashcardTexts.noAnswer}</span>}
-                                </p>
-                              </div>
+                                {/* Centro layout */}
+                                <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+                                  <span className="text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 font-bold mb-3">
+                                    {labelBack}
+                                  </span>
+                                  <p className="text-sm leading-relaxed max-w-lg font-medium">
+                                    {currentCard.back ? currentCard.back : <span className="text-zinc-500 italic">{flashcardTexts.noAnswer}</span>}
+                                  </p>
+                                </div>
 
-                              <div className={`text-[10px] font-mono text-center tracking-widest uppercase [transform:rotateY(180deg)] ${isDarkMode ? 'text-orange-500/40' : 'text-orange-600/40'}`}>
-                                {flashcardTexts.flip}
-                              </div>
-                            </div>
-                          </motion.div>
+                                <div className={`text-[10px] font-sans text-center tracking-wide transition-opacity duration-300 ${isDarkMode ? 'text-orange-500/60' : 'text-orange-600/60'}`}>
+                                  {instructionBack}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
 
                         {/* Primary Flip Button */}
@@ -1723,7 +1884,7 @@ export const AnalysisResultView = ({
                           className="px-6 py-3 rounded-2xl text-sm font-extrabold bg-orange-600 hover:bg-orange-700 text-white shadow-lg hover:shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer mt-2"
                         >
                           <RefreshCw size={15} className={`transition-transform duration-500 ${isFlipped ? 'rotate-180' : ''}`} />
-                          <span>{flashcardTexts.flipButton}</span>
+                          <span>{isFlipped ? flashcardTexts.showQuestion : flashcardTexts.showAnswer}</span>
                         </button>
 
                         {/* Slider navigation controls */}
@@ -1929,6 +2090,130 @@ export const AnalysisResultView = ({
                   </div>
                 );
               })()}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showAnkiHelpModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowAnkiHelpModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.95, y: 20 }}
+                onClick={(e) => e.stopPropagation()}
+                className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl relative ${
+                  isDarkMode 
+                    ? 'bg-[#0f0f12] border-white/10 text-white' 
+                    : 'bg-white border-slate-200 text-slate-800'
+                }`}
+              >
+                <button
+                  onClick={() => setShowAnkiHelpModal(false)}
+                  className={`absolute top-4 right-4 p-1.5 rounded-xl transition-colors ${
+                    isDarkMode ? 'hover:bg-white/5 text-zinc-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <X size={18} />
+                </button>
+
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-orange-600/10 text-orange-500 rounded-xl">
+                    <HelpCircle size={24} />
+                  </div>
+                  <h3 className="text-lg font-bold">
+                    {lang === 'pt' ? 'Como importar no Anki?' : lang === 'es' ? '¿Cómo importar en Anki?' : 'How to import into Anki?'}
+                  </h3>
+                </div>
+
+                <div className={`space-y-3.5 text-sm ${isDarkMode ? 'text-zinc-300' : 'text-slate-600'}`}>
+                  {lang === 'pt' ? (
+                    <ul className="space-y-3 list-none">
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">1</span>
+                        <span>Exporte o arquivo <strong>TSV</strong> (recomendado).</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">2</span>
+                        <span>Abra o <strong>Anki</strong> no seu computador.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">3</span>
+                        <span>Vá no menu superior em <strong>Arquivo &gt; Importar</strong>.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">4</span>
+                        <span>Selecione o arquivo exportado da sua pasta de downloads.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">5</span>
+                        <span>Mapeie o campo <strong>Front</strong> para a Frente do cartão, e o campo <strong>Back</strong> para o Verso do cartão.</span>
+                      </li>
+                    </ul>
+                  ) : lang === 'es' ? (
+                    <ul className="space-y-3 list-none">
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">1</span>
+                        <span>Exporta el archivo <strong>TSV</strong> (recomendado).</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">2</span>
+                        <span>Abre <strong>Anki</strong> en tu ordenador.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">3</span>
+                        <span>Ve al menú superior <strong>Archivo &gt; Importar</strong>.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">4</span>
+                        <span>Selecciona el archivo exportado de tu carpeta de descargas.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">5</span>
+                        <span>Asigna el campo <strong>Front</strong> a Frente de la tarjeta, y el campo <strong>Back</strong> a Reverso.</span>
+                      </li>
+                    </ul>
+                  ) : (
+                    <ul className="space-y-3 list-none">
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">1</span>
+                        <span>Export the <strong>TSV</strong> file (recommended).</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">2</span>
+                        <span>Open <strong>Anki</strong> on your computer.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">3</span>
+                        <span>Go to the top menu <strong>File &gt; Import</strong>.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">4</span>
+                        <span>Select the exported file from your downloads folder.</span>
+                      </li>
+                      <li className="flex gap-2.5 items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-orange-600/10 text-orange-500 text-xs font-bold shrink-0 mt-0.5">5</span>
+                        <span>Map the <strong>Front</strong> field to Front of the card, and <strong>Back</strong> field to Back.</span>
+                      </li>
+                    </ul>
+                  )}
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setShowAnkiHelpModal(false)}
+                    className="px-5 py-2 rounded-xl bg-orange-600 text-white font-bold text-xs hover:bg-orange-500 hover:scale-[1.02] active:scale-100 transition-all cursor-pointer"
+                  >
+                    {lang === 'pt' ? 'Entendi' : lang === 'es' ? 'Entendido' : 'Got it'}
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

@@ -46,6 +46,7 @@ interface SettingsViewProps {
   onOpenTermsOfUse?: () => void;
   onOpenCookiePrefs?: () => void;
   showToast?: (message: string) => void;
+  onOpenUpgradeModal?: () => void;
 }
 
 export function SettingsView({
@@ -61,7 +62,8 @@ export function SettingsView({
   onOpenPrivacyPolicy,
   onOpenTermsOfUse,
   onOpenCookiePrefs,
-  showToast
+  showToast,
+  onOpenUpgradeModal
 }: SettingsViewProps) {
   const studyFormat = preferences.defaultStudyFormat;
   const explanationLevel = preferences.explanationLevel;
@@ -83,10 +85,19 @@ export function SettingsView({
     subscriptionStatus, 
     stripeSubscriptionId, 
     stripeCustomerId, 
+    stripePriceId,
     billingInterval, 
     currentPeriodEnd, 
-    cancelAtPeriodEnd 
+    cancelAtPeriodEnd,
+    limits
   } = useAuth();
+
+  const userProfile = { plan: userPlan, subscriptionStatus: subscriptionStatus };
+
+  useEffect(() => {
+    console.log("[Subscription Page] Current plan:", userProfile?.plan);
+    console.log("[Subscription Page] Subscription status:", userProfile?.subscriptionStatus);
+  }, [userPlan, subscriptionStatus]);
 
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
@@ -111,17 +122,50 @@ export function SettingsView({
         throw new Error('No url returned from server');
       }
     } catch (err: any) {
-      console.error('Portal redirect error:', err);
-      setPortalError(
-        currentLang === 'pt'
-          ? 'Erro ao carregar o portal de cobrança. Verifique se você possui uma assinatura ativa ou tente novamente mais tarde.'
-          : currentLang === 'es'
-            ? 'Error al cargar el portal de facturación. Verifique si tiene una suscripción activa o intente más tarde.'
-            : 'Error loading the billing portal. Verify you have an active subscription or try again later.'
-      );
+      console.error('[Settings Portal] Failed to open portal. Context info:', {
+        userId: user?.uid,
+        billingData: {
+          userPlan,
+          subscriptionStatus,
+          stripeSubscriptionId,
+          stripeCustomerId,
+          stripePriceId,
+          billingInterval,
+          currentPeriodEnd,
+          cancelAtPeriodEnd
+        },
+        error: err.message || err
+      });
+      
+      const errorMsg = currentLang === 'pt'
+        ? 'Não foi possível abrir o gerenciamento da assinatura.'
+        : currentLang === 'es'
+          ? 'No pudimos abrir la gestión de la suscripción.'
+          : "We couldn't open subscription management.";
+      
+      setPortalError(errorMsg);
+      if (showToast) {
+        showToast(errorMsg);
+      }
     } finally {
       setPortalLoading(false);
     }
+  };
+
+  const getFormattedDate = (timestamp: any) => {
+    if (!timestamp) return '—';
+    let date: Date;
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      date = timestamp.toDate();
+    } else if (timestamp.seconds) {
+      date = new Date(timestamp.seconds * 1000);
+    } else {
+      date = new Date(timestamp);
+    }
+    return date.toLocaleDateString(
+      currentLang === 'pt' ? 'pt-BR' : currentLang === 'es' ? 'es-ES' : 'en-US',
+      { day: 'numeric', month: 'short', year: 'numeric' }
+    );
   };
 
   // Modal states
@@ -810,15 +854,15 @@ export function SettingsView({
                     ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                     : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
               }`}>
-                {subscriptionStatus === 'active' 
-                  ? (currentLang === 'pt' ? 'Ativa' : currentLang === 'es' ? 'Activa' : 'Active')
-                  : subscriptionStatus === 'trialing'
-                    ? (currentLang === 'pt' ? 'Período de teste' : currentLang === 'es' ? 'Prueba' : 'Trialing')
-                    : subscriptionStatus === 'past_due'
-                      ? (currentLang === 'pt' ? 'Pagamento pendente' : currentLang === 'es' ? 'Pago pendiente' : 'Past due')
-                      : subscriptionStatus === 'canceled'
-                        ? (currentLang === 'pt' ? 'Cancelada' : currentLang === 'es' ? 'Cancelada' : 'Canceled')
-                        : (subscriptionStatus || 'Active').toUpperCase()}
+                {(() => {
+                  const statusKey = (subscriptionStatus || 'active').toLowerCase();
+                  if (statusKey === 'active') return currentLang === 'pt' ? 'Ativa' : currentLang === 'es' ? 'Activa' : 'Active';
+                  if (statusKey === 'canceled') return currentLang === 'pt' ? 'Cancelada' : currentLang === 'es' ? 'Cancelada' : 'Canceled';
+                  if (statusKey === 'past_due') return currentLang === 'pt' ? 'Pagamento pendente' : currentLang === 'es' ? 'Pago pendiente' : 'Past due';
+                  if (statusKey === 'trialing') return currentLang === 'pt' ? 'Em teste' : currentLang === 'es' ? 'Em teste' : 'Trialing';
+                  if (statusKey === 'incomplete') return currentLang === 'pt' ? 'Incompleta' : currentLang === 'es' ? 'Incompleta' : 'Incomplete';
+                  return (subscriptionStatus || 'Active').toUpperCase();
+                })()}
               </span>
             </div>
 
@@ -835,13 +879,13 @@ export function SettingsView({
                   {currentLang === 'pt' ? 'Plano Atual' : currentLang === 'es' ? 'Plan Actual' : 'Current Plan'}
                 </span>
                 <span className="text-lg font-black italic text-orange-500 uppercase tracking-wide">
-                  {userPlan === 'start' || userPlan === 'starter'
-                    ? 'Starter'
-                    : userPlan === 'explorer'
-                      ? 'Explorer'
-                      : userPlan === 'pro'
-                        ? 'Pro'
-                        : (currentLang === 'pt' || currentLang === 'es' ? 'Gratuito' : 'Free')}
+                  {(() => {
+                    const planKey = (userPlan || 'free').toLowerCase();
+                    if (planKey === 'start' || planKey === 'starter') return 'Starter';
+                    if (planKey === 'explorer') return 'Explorer';
+                    if (planKey === 'pro') return 'Pro';
+                    return currentLang === 'pt' || currentLang === 'es' ? 'Gratuito' : 'Free';
+                  })()}
                 </span>
               </div>
 
@@ -876,20 +920,7 @@ export function SettingsView({
                   {currentPeriodEnd ? (
                     <span className="flex items-center gap-1.5">
                       <Calendar size={14} className="text-orange-500" />
-                      {(() => {
-                        let date: Date;
-                        if (currentPeriodEnd.toDate && typeof currentPeriodEnd.toDate === 'function') {
-                          date = currentPeriodEnd.toDate();
-                        } else if (currentPeriodEnd.seconds) {
-                          date = new Date(currentPeriodEnd.seconds * 1000);
-                        } else {
-                          date = new Date(currentPeriodEnd);
-                        }
-                        return date.toLocaleDateString(
-                          currentLang === 'pt' ? 'pt-BR' : currentLang === 'es' ? 'es-ES' : 'en-US',
-                          { day: 'numeric', month: 'short', year: 'numeric' }
-                        );
-                      })()}
+                      {getFormattedDate(currentPeriodEnd)}
                     </span>
                   ) : (
                     '—'
@@ -899,35 +930,135 @@ export function SettingsView({
 
             </div>
 
+            {/* Plan Limits Section */}
+            <div className={`p-5 rounded-2xl border ${
+              isDarkMode ? 'bg-zinc-900/10 border-zinc-800/60' : 'bg-slate-50/50 border-slate-200/60'
+            }`}>
+              <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 ${
+                isDarkMode ? 'text-zinc-300' : 'text-slate-700'
+              }`}>
+                <ShieldCheck size={16} className="text-orange-500" />
+                {currentLang === 'pt' ? 'Limites do seu Plano' : currentLang === 'es' ? 'Límites de tu Plan' : 'Your Plan Limits'}
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold">
+                {/* 1. Análises */}
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle size={14} className="text-orange-500 mt-0.5 shrink-0" />
+                  <div>
+                    <span className={`block font-bold text-[10px] uppercase tracking-wider ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                      {currentLang === 'pt' ? 'Análises' : currentLang === 'es' ? 'Análisis' : 'Analyses'}
+                    </span>
+                    <span className={isDarkMode ? 'text-zinc-300' : 'text-slate-700'}>
+                      {(() => {
+                        const planKey = (userPlan || 'free').toLowerCase();
+                        if (planKey === 'start' || planKey === 'starter') {
+                          return currentLang === 'pt' ? 'Até 50 análises por mês' : currentLang === 'es' ? 'Hasta 50 análisis por mes' : 'Up to 50 analyses/mo';
+                        }
+                        if (planKey === 'explorer') {
+                          return currentLang === 'pt' ? 'Até 150 análises por mês' : currentLang === 'es' ? 'Hasta 150 análisis por mes' : 'Up to 150 analyses/mo';
+                        }
+                        if (planKey === 'pro') {
+                          return currentLang === 'pt' ? 'Até 300 análises por mês' : currentLang === 'es' ? 'Hasta 300 análisis por mes' : 'Up to 300 analyses/mo';
+                        }
+                        return currentLang === 'pt' ? 'Limite básico de uso' : currentLang === 'es' ? 'Límite básico de uso' : 'Basic usage limit';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Voice Tutor */}
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle size={14} className="text-orange-500 mt-0.5 shrink-0" />
+                  <div>
+                    <span className={`block font-bold text-[10px] uppercase tracking-wider ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                      Voice Tutor
+                    </span>
+                    <span className={isDarkMode ? 'text-zinc-300' : 'text-slate-700'}>
+                      {(() => {
+                        const planKey = (userPlan || 'free').toLowerCase();
+                        if (planKey === 'explorer') {
+                          return currentLang === 'pt' ? '30 minutos/mês' : currentLang === 'es' ? '30 minutos/mes' : '30 minutes/mo';
+                        }
+                        if (planKey === 'pro') {
+                          return currentLang === 'pt' ? '300 minutos/mês' : currentLang === 'es' ? '300 minutos/mes' : '300 minutes/mo';
+                        }
+                        return currentLang === 'pt' ? 'Sem Voice Tutor' : currentLang === 'es' ? 'Sin Voice Tutor' : 'No Voice Tutor';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Duração de Vídeo */}
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle size={14} className="text-orange-500 mt-0.5 shrink-0" />
+                  <div>
+                    <span className={`block font-bold text-[10px] uppercase tracking-wider ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>
+                      {currentLang === 'pt' ? 'Vídeos' : currentLang === 'es' ? 'Videos' : 'Videos'}
+                    </span>
+                    <span className={isDarkMode ? 'text-zinc-300' : 'text-slate-700'}>
+                      {(() => {
+                        const planKey = (userPlan || 'free').toLowerCase();
+                        if (planKey === 'pro') {
+                          return currentLang === 'pt' ? 'Sem limite' : currentLang === 'es' ? 'Sin límites' : 'Unlimited duration';
+                        }
+                        if (planKey === 'start' || planKey === 'starter' || planKey === 'explorer') {
+                          return currentLang === 'pt' ? 'Até 60 minutos' : currentLang === 'es' ? 'Hasta 60 minutos' : 'Up to 60 minutes';
+                        }
+                        return currentLang === 'pt' ? 'Até 15 minutos' : currentLang === 'es' ? 'Hasta 15 minutos' : 'Up to 15 minutes';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cancellation Warn Notice */}
+            {cancelAtPeriodEnd && (
+              <div className={`p-4 rounded-2xl border text-xs font-semibold flex items-center gap-2.5 ${
+                isDarkMode 
+                  ? 'bg-amber-500/5 border-amber-500/20 text-amber-400' 
+                  : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}>
+                <ShieldCheck size={16} className="text-amber-500 shrink-0" />
+                <span>
+                  {currentLang === 'pt' 
+                    ? `Sua assinatura será cancelada em ${getFormattedDate(currentPeriodEnd)}. Você continuará com acesso ao plano até essa data.` 
+                    : currentLang === 'es' 
+                      ? `Tu suscripción se cancelará el ${getFormattedDate(currentPeriodEnd)}. Mantendrás acceso a tu plan hasta esa fecha.` 
+                      : `Your subscription will be canceled on ${getFormattedDate(currentPeriodEnd)}. You will keep access to your plan until then.`}
+                </span>
+              </div>
+            )}
+
             {/* Buttons & Actions */}
             <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
               <button
-                onClick={() => setShowPlansModal(true)}
+                onClick={onOpenUpgradeModal || (() => setShowPlansModal(true))}
                 className="w-full sm:flex-1 py-3 px-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 text-center shadow-lg shadow-orange-600/15 active:scale-95 cursor-pointer"
               >
                 {currentLang === 'pt' ? 'Ver Planos' : currentLang === 'es' ? 'Ver Planes' : 'View Plans'}
               </button>
 
-              <button
-                onClick={handleOpenPortal}
-                disabled={portalLoading || !stripeCustomerId || userPlan === 'free'}
-                className={`w-full sm:flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 border cursor-pointer ${
-                  portalLoading 
-                    ? 'bg-zinc-800 border-zinc-700 text-zinc-500' 
-                    : !stripeCustomerId || userPlan === 'free'
-                      ? 'bg-zinc-900/30 border-zinc-800/80 text-zinc-600 cursor-not-allowed opacity-50'
+              {stripeSubscriptionId && subscriptionStatus === 'active' && (
+                <button
+                  onClick={handleOpenPortal}
+                  disabled={portalLoading}
+                  className={`w-full sm:flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 border cursor-pointer ${
+                    portalLoading 
+                      ? 'bg-zinc-800 border-zinc-700 text-zinc-500' 
                       : isDarkMode 
                         ? 'bg-zinc-900/50 hover:bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-orange-500/30' 
                         : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                {portalLoading ? (
-                  <Loader2 size={14} className="animate-spin text-orange-500" />
-                ) : (
-                  <CreditCard size={14} className="text-orange-500" />
-                )}
-                <span>{currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage Subscription'}</span>
-              </button>
+                  }`}
+                >
+                  {portalLoading ? (
+                    <Loader2 size={14} className="animate-spin text-orange-500" />
+                  ) : (
+                    <CreditCard size={14} className="text-orange-500" />
+                  )}
+                  <span>{currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage Subscription'}</span>
+                </button>
+              )}
             </div>
 
             {portalError && (

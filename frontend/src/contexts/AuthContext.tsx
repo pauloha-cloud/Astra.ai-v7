@@ -22,9 +22,15 @@ interface AuthContextType {
   subscriptionStatus: string;
   stripeSubscriptionId?: string;
   stripeCustomerId?: string;
+  stripePriceId?: string;
   billingInterval?: string;
   currentPeriodEnd?: any;
   cancelAtPeriodEnd?: boolean;
+  limits?: {
+    monthlyAnalyses?: number;
+    monthlyVoiceTutorMinutes?: number;
+    maxVideoDurationMinutes?: number;
+  };
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -43,47 +49,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('active');
   const [stripeSubscriptionId, setStripeSubscriptionId] = useState<string>('');
   const [stripeCustomerId, setStripeCustomerId] = useState<string>('');
+  const [stripePriceId, setStripePriceId] = useState<string>('');
   const [billingInterval, setBillingInterval] = useState<string>('month');
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<any>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState<boolean>(false);
+  const [limits, setLimits] = useState<any>(null);
 
   useEffect(() => {
     if (!user) {
       setUserPlan('free');
-      setSubscriptionStatus('active');
+      setSubscriptionStatus('no_plan');
       setStripeSubscriptionId('');
       setStripeCustomerId('');
+      setStripePriceId('');
       setBillingInterval('month');
       setCurrentPeriodEnd(null);
       setCancelAtPeriodEnd(false);
+      setLimits(null);
       return;
     }
 
+    let userDocData: any = null;
+    let billingDocData: any = null;
+
+    function updateState() {
+      const finalPlan = billingDocData?.plan || userDocData?.plan || 'free';
+      const finalStatus = billingDocData?.status || userDocData?.planStatus || userDocData?.subscriptionStatus || 'no_plan';
+      const finalStripeSubscriptionId = billingDocData?.stripeSubscriptionId || userDocData?.stripeSubscriptionId || '';
+      const finalStripeCustomerId = billingDocData?.stripeCustomerId || userDocData?.stripeCustomerId || '';
+      const finalStripePriceId = billingDocData?.stripePriceId || userDocData?.stripePriceId || '';
+      const finalBillingInterval = userDocData?.billingInterval || 'month';
+      const finalCurrentPeriodEnd = billingDocData?.currentPeriodEnd || userDocData?.currentPeriodEnd || null;
+      const finalCancelAtPeriodEnd = billingDocData?.cancelAtPeriodEnd ?? userDocData?.cancelAtPeriodEnd ?? false;
+      const finalLimits = userDocData?.limits || null;
+
+      setUserPlan(finalPlan);
+      setSubscriptionStatus(finalStatus);
+      setStripeSubscriptionId(finalStripeSubscriptionId);
+      setStripeCustomerId(finalStripeCustomerId);
+      setStripePriceId(finalStripePriceId);
+      setBillingInterval(finalBillingInterval);
+      setCurrentPeriodEnd(finalCurrentPeriodEnd);
+      setCancelAtPeriodEnd(finalCancelAtPeriodEnd);
+      setLimits(finalLimits);
+    }
+
     const userRef = doc(db, 'users', user.uid);
-    const unsubscribe = onSnapshot(userRef, (snapshot) => {
+    const unsubUser = onSnapshot(userRef, (snapshot) => {
       if (snapshot.exists()) {
-        const data = snapshot.data();
-        setUserPlan(data.plan || 'free');
-        setSubscriptionStatus(data.subscriptionStatus || 'active');
-        setStripeSubscriptionId(data.stripeSubscriptionId || '');
-        setStripeCustomerId(data.stripeCustomerId || '');
-        setBillingInterval(data.billingInterval || 'month');
-        setCurrentPeriodEnd(data.currentPeriodEnd || null);
-        setCancelAtPeriodEnd(data.cancelAtPeriodEnd || false);
+        userDocData = snapshot.data();
       } else {
-        setUserPlan('free');
-        setSubscriptionStatus('active');
-        setStripeSubscriptionId('');
-        setStripeCustomerId('');
-        setBillingInterval('month');
-        setCurrentPeriodEnd(null);
-        setCancelAtPeriodEnd(false);
+        userDocData = null;
       }
+      updateState();
     }, (error) => {
       console.error("Error listening to user document:", error);
     });
 
-    return () => unsubscribe();
+    const billingRef = doc(db, 'users', user.uid, 'billing', 'current');
+    const unsubBilling = onSnapshot(billingRef, (snapshot) => {
+      if (snapshot.exists()) {
+        billingDocData = snapshot.data();
+      } else {
+        billingDocData = null;
+      }
+      updateState();
+    }, (error) => {
+      console.error("Error listening to billing document:", error);
+    });
+
+    return () => {
+      unsubUser();
+      unsubBilling();
+    };
   }, [user]);
 
   const syncUserToFirestore = async (currentUser: User) => {
@@ -232,9 +270,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscriptionStatus,
       stripeSubscriptionId,
       stripeCustomerId,
+      stripePriceId,
       billingInterval,
       currentPeriodEnd,
       cancelAtPeriodEnd,
+      limits,
       signInWithGoogle, 
       signUpWithEmail, 
       signInWithEmail, 

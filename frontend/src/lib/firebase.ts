@@ -8,6 +8,7 @@ const app = initializeApp(firebaseConfig);
 console.log("Firebase projectId (from config):", firebaseConfig.projectId);
 console.log("Firebase authDomain (from config):", firebaseConfig.authDomain);
 console.log("Firebase databaseId (from config):", firebaseConfig.firestoreDatabaseId);
+console.log("Firebase databaseId:", firebaseConfig.firestoreDatabaseId);
 console.log("Firebase projectId (from env):", import.meta.env.VITE_FIREBASE_PROJECT_ID);
 console.log("Firebase authDomain (from env):", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
 

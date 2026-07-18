@@ -514,7 +514,7 @@ const TRANSLATIONS = {
     quizScoreMessage: "Ótimo esforço! Conhecimento é poder.",
     activityFeed: {
       title: "FLUXO INTELIGENTE EM TEMPO REAL",
-      subtitle: "Do vídeo ao plano de estudo: acompanhe as etapas que preparam o conteúdo para você.",
+      subtitle: "Veja como o Astra transforma suas fontes de estudo em resumo, tutor, quiz, mapa mental e flashcards.",
       now: "agora",
       recent: "recentemente",
       ago2: "há 2 min",
@@ -815,7 +815,7 @@ const TRANSLATIONS = {
     quizScoreMessage: "Great effort! Knowledge is power.",
     activityFeed: {
       title: "REAL-TIME LEARNING WORKFLOW",
-      subtitle: "From video input to study plan, see how Astra Learning AI prepares your content step by step.",
+      subtitle: "See how Astra turns your study sources into summaries, tutor support, quizzes, mind maps, and flashcards.",
       now: "now",
       recent: "recently",
       ago2: "2 min ago",
@@ -1117,7 +1117,7 @@ const TRANSLATIONS = {
     quizScoreMessage: "¡Gran esfuerzo! El conocimiento es poder.",
     activityFeed: {
       title: "FLUJO INTELIGENTE EN TIEMPO REAL",
-      subtitle: "Del video al plan de estudio: sigue cómo Astra Learning AI prepara el contenido paso a paso.",
+      subtitle: "Mira cómo Astra transforma tus fuentes de estudio en resúmenes, tutor, cuestionarios, mapas mentales y flashcards.",
       now: "ahora",
       recent: "recientemente",
       ago2: "hace 2 min",
@@ -1391,6 +1391,7 @@ export default function App() {
     userPlan,
     subscriptionStatus,
     stripeSubscriptionId,
+    stripeCustomerId,
     signInWithGoogle, 
     signUpWithEmail, 
     signInWithEmail, 
@@ -1430,35 +1431,173 @@ export default function App() {
   const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Handle Stripe Checkout redirects in URL parameters
+  // Handle Stripe redirects in URL parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const checkoutStatus = params.get('checkout');
-    if (checkoutStatus) {
-      if (checkoutStatus === 'success') {
-        const msg = currentLang === 'pt' 
-          ? 'Pagamento confirmado. Seu plano será atualizado em instantes.' 
-          : currentLang === 'es' 
-            ? 'Pago confirmado. Tu plan se actualizará en breve.' 
-            : 'Payment confirmed. Your plan will be updated shortly.';
-        showToast(msg);
-        // Switch view to dashboard to show user their active workspace
-        setView('dashboard');
-        setDashboardSubView('panel');
-      } else if (checkoutStatus === 'cancel') {
-        const msg = currentLang === 'pt' 
-          ? 'Upgrade cancelado. Você pode tentar novamente quando quiser.' 
-          : currentLang === 'es' 
-            ? 'Upgrade cancelado. Puedes intentarlo de nuevo cuando quieras.' 
-            : 'Upgrade canceled. You can try again anytime.';
-        showToast(msg);
-      }
+    const billingStatus = params.get('billing');
+    const portalStatus = params.get('portal');
+    
+    const isSuccess = checkoutStatus === 'success' || billingStatus === 'updated' || portalStatus === 'success';
+    const isCancel = checkoutStatus === 'cancel' || portalStatus === 'cancel';
+
+    if (isSuccess) {
+      const msg = currentLang === 'pt'
+        ? 'Plano atualizado com sucesso.'
+        : currentLang === 'es'
+          ? 'Plan actualizado correctamente.'
+          : 'Plan updated successfully.';
+      showToast(msg);
+      setView('dashboard');
+      setDashboardSubView('panel');
       
-      // Clean up URL query parameters without full page reload
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    } else if (isCancel) {
+      const msg = currentLang === 'pt'
+        ? 'Alteração de plano cancelada.'
+        : currentLang === 'es'
+          ? 'Cambio de plan cancelado.'
+          : 'Plan change canceled.';
+      showToast(msg);
+      
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    } else if (portalStatus === 'return') {
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);
     }
   }, [currentLang]);
+
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const renderPlanBadge = (plan: string, isDark: boolean, lang: 'pt' | 'en' | 'es') => {
+    const planKey = (plan || 'free').toLowerCase();
+    let label = 'Free';
+    if (planKey === 'pro') {
+      label = 'Pro';
+    } else if (planKey === 'explorer') {
+      label = 'Explorer';
+    } else if (planKey === 'starter' || planKey === 'start') {
+      label = 'Starter';
+    } else {
+      label = lang === 'pt' || lang === 'es' ? 'Gratuito' : 'Free';
+    }
+
+    let classes = "";
+    if (planKey === 'pro') {
+      classes = isDark
+        ? 'bg-gradient-to-r from-orange-600/20 to-amber-600/20 border-orange-500/40 text-orange-400 font-extrabold animate-pulse'
+        : 'bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-400/40 text-orange-600 font-extrabold shadow-sm';
+    } else if (planKey === 'explorer' || planKey === 'starter' || planKey === 'start') {
+      classes = isDark
+        ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+        : 'bg-orange-50 border-orange-100 text-orange-600 shadow-sm';
+    } else {
+      classes = isDark
+        ? 'bg-zinc-850 border-zinc-750 text-gray-400'
+        : 'bg-slate-100 border-slate-200 text-slate-500';
+    }
+
+    return (
+      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md border shrink-0 ${classes}`}>
+        {label}
+      </span>
+    );
+  };
+
+  const handleOpenPortal = async () => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    setPortalLoading(true);
+    try {
+      console.log("[Portal] Creating portal session for user:", user.uid);
+      const response = await fetch('/api/stripe/create-portal-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          userId: user.uid,
+          lang: currentLang
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to create portal session');
+      }
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No portal URL received');
+      }
+    } catch (err: any) {
+      console.error('[Portal] Failed to open portal. Context info:', {
+        userId: user.uid,
+        billingData: {
+          userPlan,
+          subscriptionStatus,
+          stripeSubscriptionId,
+          stripeCustomerId
+        },
+        error: err.message || err
+      });
+      const errorMsg = currentLang === 'pt'
+        ? 'Não foi possível abrir o gerenciamento da assinatura.'
+        : currentLang === 'es'
+          ? 'No pudimos abrir la gestión de la suscripción.'
+          : "We couldn't open subscription management.";
+      showToast(errorMsg);
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const handleUpgradeClick = async () => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    const planKey = (userPlan || 'free').toLowerCase();
+    const statusKey = (subscriptionStatus || 'active').toLowerCase();
+    const isActive = statusKey === 'active' || statusKey === 'trialing';
+
+    const isStarterOrExplorerActive = isActive && (planKey === 'starter' || planKey === 'start' || planKey === 'explorer');
+
+    if (isStarterOrExplorerActive || stripeSubscriptionId || stripeCustomerId) {
+      await handleOpenPortal();
+    } else {
+      setIsUpgradeModalOpen(true);
+    }
+  };
+
+  const getPlanTranslatedName = (plan: string, lang: 'pt' | 'en' | 'es') => {
+    const planKey = (plan || 'free').toLowerCase();
+    if (planKey === 'pro') return 'Pro';
+    if (planKey === 'explorer') return 'Explorer';
+    if (planKey === 'starter' || planKey === 'start') return 'Starter';
+    return lang === 'pt' || lang === 'es' ? 'Gratuito' : 'Free';
+  };
+
+  const getStatusTranslatedName = (status: string, lang: 'pt' | 'en' | 'es') => {
+    const statusKey = (status || 'no_plan').toLowerCase();
+    const statusTranslations: Record<string, Record<'pt' | 'en' | 'es', string>> = {
+      active: { pt: 'Ativo', en: 'Active', es: 'Activo' },
+      trialing: { pt: 'Período de teste', en: 'Trial', es: 'Prueba' },
+      past_due: { pt: 'Pagamento pendente', en: 'Payment pending', es: 'Pago pendiente' },
+      canceled: { pt: 'Cancelado', en: 'Canceled', es: 'Cancelado' },
+      incomplete: { pt: 'Incompleto', en: 'Incomplete', es: 'Incompleto' },
+      no_plan: { pt: 'Sem plano', en: 'No plan', es: 'Sin plan' }
+    };
+    return (statusTranslations[statusKey] || statusTranslations.no_plan)[lang];
+  };
 
   const handleCheckout = async (planId: string) => {
     if (!user) {
@@ -1470,46 +1609,52 @@ export default function App() {
       setCheckoutLoadingPlan(planId);
 
       const mappedPlanId = planId === 'starter' ? 'start' : planId;
+      const currentPlan = (userPlan || 'free').toLowerCase();
+      const selectedPlan = mappedPlanId.toLowerCase();
+      const hasActiveSubscription = subscriptionStatus === "active" && stripeSubscriptionId && stripeSubscriptionId.length > 0;
 
-      // Check if user has an active Stripe subscription to perform an upgrade instead of a new checkout
-      const isUpgrade = stripeSubscriptionId && stripeSubscriptionId.length > 0 && userPlan && userPlan !== 'free';
+      console.log("[Billing] Current plan:", currentPlan);
+      console.log("[Billing] Target plan:", selectedPlan);
+      console.log("[Billing] Has active subscription:", hasActiveSubscription);
 
-      if (isUpgrade) {
-        console.log(`[Stripe Upgrade] Upgrading user ${user.uid} from ${userPlan} to ${mappedPlanId}`);
-        const response = await fetch('/api/stripe/update-subscription', {
+      if (currentPlan === selectedPlan) {
+        console.log("[Billing] Clicked current active plan. Doing nothing.");
+        return;
+      }
+
+      if (hasActiveSubscription) {
+        console.log("[Billing] Opening Customer Portal");
+        const response = await fetch('/api/stripe/create-portal-session', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            userId: user.uid,
-            newPlan: mappedPlanId
-          }),
+          body: JSON.stringify({ userId: user.uid }),
         });
 
         if (!response.ok) {
           const errData = await response.json();
-          throw new Error(errData.error || 'Failed to update subscription');
+          throw new Error(errData.error || 'Failed to create portal session');
         }
 
-        const successMsg = currentLang === 'pt'
-          ? `Parabéns! Seu plano foi atualizado para ${mappedPlanId.toUpperCase()} com sucesso.`
-          : currentLang === 'es'
-            ? `¡Felicitaciones! Su plan se ha actualizado a ${mappedPlanId.toUpperCase()} con éxito.`
-            : `Congratulations! Your plan has been successfully updated to ${mappedPlanId.toUpperCase()}.`;
-        
-        showToast(successMsg);
-        return;
+        const data = await response.json();
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        } else {
+          throw new Error('No portal URL received');
+        }
       }
 
       // Normal subscription flow for free plans
+      console.log(`[Stripe Checkout] Initiating checkout for user: ${user.email}, plan: ${selectedPlan}`);
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          plan: mappedPlanId,
+          plan: selectedPlan,
           userEmail: user.email,
           userId: user.uid,
           successUrl: `${window.location.origin}/dashboard?checkout=success`,
@@ -1529,7 +1674,7 @@ export default function App() {
         throw new Error('No checkout URL received from server');
       }
     } catch (err: any) {
-      console.error('[Stripe Checkout/Upgrade] Error:', err);
+      console.error('[Stripe Checkout] Error:', err);
       const errorMsg = currentLang === 'pt' 
         ? 'Erro ao processar transação de assinatura.' 
         : currentLang === 'es' 
@@ -2408,28 +2553,39 @@ export default function App() {
                 </button>
 
                 {/* Plan Badge */}
-                <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg border shrink-0 ${
-                  isDarkMode 
-                    ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
-                    : 'bg-orange-50 border-orange-100 text-orange-600'
-                }`}>
-                  {userPlan === 'pro' ? 'Pro' : userPlan === 'explorer' ? 'Explorer' : (userPlan === 'starter' || userPlan === 'start') ? 'Starter' : (currentLang === 'pt' ? 'Gratuito' : currentLang === 'es' ? 'Gratuito' : 'Free')}
-                </span>
+                {renderPlanBadge(userPlan, isDarkMode, currentLang)}
 
                 {/* Upgrade Button */}
-                {userPlan !== 'pro' && (
-                  <button
-                    onClick={() => setIsUpgradeModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10 hover:shadow-orange-500/20 hover:brightness-110 active:scale-95 shrink-0"
-                  >
-                    <Zap size={13} className="fill-white animate-pulse" />
-                    <span>
-                      {(userPlan === 'starter' || userPlan === 'start' || userPlan === 'explorer')
-                        ? (currentLang === 'pt' ? 'Melhorar plano' : currentLang === 'es' ? 'Mejorar plan' : 'Upgrade plan')
-                        : (currentLang === 'pt' ? 'Upgrade' : currentLang === 'es' ? 'Upgrade' : 'Upgrade')}
-                    </span>
-                  </button>
-                )}
+                {(() => {
+                  const planKey = (userPlan || 'free').toLowerCase();
+                  const statusKey = (subscriptionStatus || 'no_plan').toLowerCase();
+                  const isActive = statusKey === 'active' || statusKey === 'trialing';
+
+                  // Ocultar se o usuário estiver no Pro ativo
+                  if (planKey === 'pro' && isActive) {
+                    return null;
+                  }
+
+                  // Se plan = "free" ou status não ativo, mostrar "Upgrade"
+                  const isNotActive = !isActive || statusKey === 'canceled' || statusKey === 'past_due' || statusKey === 'incomplete' || statusKey === 'no_plan';
+                  
+                  let buttonText = 'Upgrade';
+                  if (isNotActive || planKey === 'free') {
+                    buttonText = 'Upgrade';
+                  } else if ((planKey === 'starter' || planKey === 'start' || planKey === 'explorer') && isActive) {
+                    buttonText = currentLang === 'pt' ? 'Melhorar plano' : currentLang === 'es' ? 'Mejorar plan' : 'Upgrade plan';
+                  }
+
+                  return (
+                    <button
+                      onClick={handleUpgradeClick}
+                      className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10 hover:shadow-orange-500/20 hover:brightness-110 active:scale-95 shrink-0"
+                    >
+                      <Zap size={13} className="fill-white animate-pulse" />
+                      <span>{buttonText}</span>
+                    </button>
+                  );
+                })()}
 
                 {/* User menu container */}
                 <div className="relative" ref={userMenuRef}>
@@ -2473,6 +2629,48 @@ export default function App() {
                               {user.email}
                             </p>
                           </div>
+                        </div>
+
+                        {/* Seção de Plano Consolidada */}
+                        <div className={`p-3 rounded-xl border mb-3 flex flex-col gap-2.5 ${
+                          isDarkMode 
+                            ? 'bg-white/5 border-white/10' 
+                            : 'bg-slate-50 border-slate-200'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-400">
+                              {currentLang === 'pt' ? 'Plano atual:' : currentLang === 'es' ? 'Plan actual:' : 'Current plan:'}
+                            </span>
+                            <span className="text-xs font-bold text-orange-500">
+                              {getPlanTranslatedName(userPlan, currentLang)}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-400">
+                              {currentLang === 'pt' ? 'Status:' : currentLang === 'es' ? 'Estado:' : 'Status:'}
+                            </span>
+                            <span className="text-xs font-medium">
+                              {getStatusTranslatedName(subscriptionStatus, currentLang)}
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={async () => {
+                              setIsUserMenuOpen(false);
+                              if (stripeSubscriptionId || stripeCustomerId) {
+                                await handleOpenPortal();
+                              } else {
+                                setIsUpgradeModalOpen(true);
+                              }
+                            }}
+                            className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer shadow-sm hover:brightness-110 active:scale-98"
+                          >
+                            <CreditCard size={12} />
+                            <span>
+                              {currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage subscription'}
+                            </span>
+                          </button>
                         </div>
 
                         {/* Dropdown Options */}
@@ -3424,7 +3622,7 @@ export default function App() {
             </div>
           </section>
 
-          <AIActivityFeed isDarkMode={isDarkMode} t={t.activityFeed} />
+          <AIActivityFeed isDarkMode={isDarkMode} t={t.activityFeed} lang={currentLang} />
 
           {/* Features Grid */}
           <section id="features" className={`py-32 border-y ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-100 border-slate-200/70'}`}>
@@ -3666,6 +3864,7 @@ export default function App() {
                   onOpenTermsOfUse={() => setView('terms')}
                   onOpenCookiePrefs={() => setForceCookiePrefs(true)}
                   showToast={showToast}
+                  onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
                 />
               ) : dashboardSubView === 'history' ? (
                 <HistoryView 
@@ -4100,6 +4299,7 @@ export default function App() {
                       setActiveTab={setActiveTab}
                       showInternalTabs={false}
                       preferences={preferences}
+                      showToast={showToast}
                     />
                   </motion.div>
                 ) : (
