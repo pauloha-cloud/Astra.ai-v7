@@ -264,13 +264,15 @@ const TRANSLATIONS = {
     heroDesc: "Uma plataforma de aprendizado com IA que transforma vídeos em resumos, mapas mentais, quizzes, flashcards e experiências de estudo personalizadas.",
     pwrByPrecision: "ECOSSISTEMA INTEGRADO DE ESTUDOS.",
     aiSummaries: "Resumos com IA",
-    aiSummariesDesc: "Economize horas de estudo e absorva os pontos fundamentais em segundos.",
+    aiSummariesDesc: "Economize horas de vídeo capturando instantaneamente insights e pontos fundamentais.",
     mindMaps: "Mapas Mentais",
-    mindMapsDesc: "Visualize conexões semânticas fundamentais para dominar conceitos complexos.",
+    mindMapsDesc: "Mapeie conexões visuais para organizar tópicos complexos e aumentar a retenção.",
     studyTutor: "Tutor de Estudos",
-    studyTutorDesc: "Esclareça dúvidas complexas e receba explicações direcionadas da nossa IA.",
+    studyTutorDesc: "Obtenha explicações personalizadas e tire dúvidas em tempo real com nossa IA inteligente.",
     quizGen: "Geração de Quizzes",
-    quizGenDesc: "Avalie sua fixação de conteúdo com avaliações dinâmicas sob demanda.",
+    quizGenDesc: "Valide sua compreensão instantaneamente com avaliações geradas dinamicamente.",
+    flashcards: "Flashcards",
+    flashcardsDesc: "Memorize mais rápido com flashcards inteligentes gerados a partir do seu conteúdo de estudo.",
     welcome: "Bem-vindo de volta, Explorador",
     welcomeBack: "Bem-vindo de volta, {name}",
     readyAnalyze: "Pronto para analisar outra obra-prima?",
@@ -569,9 +571,11 @@ const TRANSLATIONS = {
     mindMaps: "Mind Maps",
     mindMapsDesc: "Map out key connections visually to organize complex topics and boost retention.",
     studyTutor: "Study Tutor",
-    studyTutorDesc: "Get tailored explanations and clarify doubts in real-time with our smart AI.",
+    studyTutorDesc: "Get tailored explanations and clarify doubts in real time with our smart AI.",
     quizGen: "Quiz Generation",
     quizGenDesc: "Validate your comprehension instantly with dynamically generated assessments.",
+    flashcards: "Flashcards",
+    flashcardsDesc: "Memorize faster with smart flashcards generated from your study content.",
     welcome: "Welcome back, Explorer",
     welcomeBack: "Welcome back, {name}",
     readyAnalyze: "Ready to analyze another masterpiece?",
@@ -866,13 +870,15 @@ const TRANSLATIONS = {
     heroDesc: "Una plataforma de aprendizaje con IA que transforma videos en resúmenes, mapas mentales, cuestionarios, flashcards y experiencias de estudio personalizadas.",
     pwrByPrecision: "ECOSISTEMA DE ESTUDIO INTELIGENTE.",
     aiSummaries: "Resúmenes con IA",
-    aiSummariesDesc: "Ahorra horas de estudio extrayendo los conceptos clave al instante.",
+    aiSummariesDesc: "Ahorra horas de reproducción capturando instantáneamente ideas y puntos clave esenciales.",
     mindMaps: "Mapas Mentales",
-    mindMapsDesc: "Visualiza la conexión entre temas para estructurar materias complejas.",
+    mindMapsDesc: "Dibuja conexiones visuales clave para organizar temas complejos y mejorar la retención.",
     studyTutor: "Tutor de Estudio",
-    studyTutorDesc: "Resuelve dudas difíciles y obtén explicaciones personalizadas con nuestra IA.",
+    studyTutorDesc: "Obtén explicaciones personalizadas y aclara dudas en tiempo real con nuestra IA inteligente.",
     quizGen: "Generación de Cuestionarios",
-    quizGenDesc: "Evalúa tu aprendizaje de inmediato con test creados de manera automática.",
+    quizGenDesc: "Valida tu comprensión al instante con evaluaciones generadas dinámicamente.",
+    flashcards: "Flashcards",
+    flashcardsDesc: "Memoriza más rápido con flashcards inteligentes creados a partir de tu contenido de estudio.",
     welcome: "Bienvenido de nuevo, Explorador",
     welcomeBack: "Bienvenido de vuelta, {name}",
     readyAnalyze: "¿Listo para analizar otra obra maestra?",
@@ -1385,6 +1391,40 @@ function getFirstName(user: any) {
   return null;
 }
 
+const getBrowserLanguage = (): Language => {
+  try {
+    const navLang = navigator.language || (navigator as any).userLanguage || '';
+    const primaryLang = navLang.split('-')[0].toLowerCase();
+    if (['pt', 'en', 'es'].includes(primaryLang)) {
+      return primaryLang as Language;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'pt';
+};
+
+const languageOptions = [
+  { code: 'pt', label: 'Português', labelNative: 'Português' },
+  { code: 'en', label: 'English', labelNative: 'English' },
+  { code: 'es', label: 'Español', labelNative: 'Español' }
+];
+
+const langMenuLabels = {
+  pt: {
+    header: "Idioma: Português",
+    ariaLabel: "Selecionar idioma"
+  },
+  en: {
+    header: "Language: English",
+    ariaLabel: "Select language"
+  },
+  es: {
+    header: "Idioma: Español",
+    ariaLabel: "Seleccionar idioma"
+  }
+};
+
 export default function App() {
   const { 
     user, 
@@ -1417,7 +1457,17 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [apiStatus, setApiStatus] = useState<string>(''); 
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [currentLang, setCurrentLang] = useState<Language>('pt');
+  const [currentLang, setCurrentLang] = useState<Language>(() => {
+    try {
+      const savedLocal = localStorage.getItem('astra_lang');
+      if (savedLocal && ['pt', 'en', 'es'].includes(savedLocal)) {
+        return savedLocal as Language;
+      }
+      return getBrowserLanguage();
+    } catch (e) {
+      return 'pt';
+    }
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     const saved = localStorage.getItem('astra_sidebar_collapsed');
@@ -1425,11 +1475,15 @@ export default function App() {
   });
   const [isFeaturesModalOpen, setIsFeaturesModalOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+  const [focusedLangIndex, setFocusedLangIndex] = useState(-1);
   const [isBillingModalOpen, setIsBillingModalOpen] = useState(false);
   const [showAuthRequiredModal, setShowAuthRequiredModal] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const langMenuRef = useRef<HTMLDivElement>(null);
+  const langButtonRef = useRef<HTMLButtonElement>(null);
 
   // Handle Stripe redirects in URL parameters
   useEffect(() => {
@@ -2070,11 +2124,70 @@ export default function App() {
     await saveUserPreferences(user?.uid, updated);
   };
 
+  const handleLanguageChange = async (lang: Language) => {
+    setCurrentLang(lang);
+    localStorage.setItem('astra_lang', lang);
+    if (user) {
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(userRef, { language: lang, lang: lang }, { merge: true });
+      } catch (err) {
+        console.warn('Failed to save language to user profile:', err);
+      }
+    }
+  };
+
+  const handleSelectLanguage = async (code: Language) => {
+    setIsLangMenuOpen(false);
+    await handleLanguageChange(code);
+    langButtonRef.current?.focus();
+  };
+
+  const handleLangKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isLangMenuOpen) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setIsLangMenuOpen(true);
+        const activeIdx = languageOptions.findIndex(o => o.code === currentLang);
+        setFocusedLangIndex(activeIdx >= 0 ? activeIdx : 0);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedLangIndex((prev) => (prev + 1) % languageOptions.length);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedLangIndex((prev) => (prev - 1 + languageOptions.length) % languageOptions.length);
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        if (focusedLangIndex >= 0 && focusedLangIndex < languageOptions.length) {
+          handleSelectLanguage(languageOptions[focusedLangIndex].code as Language);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setIsLangMenuOpen(false);
+        langButtonRef.current?.focus();
+        break;
+      case 'Tab':
+        setIsLangMenuOpen(false);
+        break;
+      default:
+        break;
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'summary' | 'quiz' | 'mindmap' | 'tutor' | 'transcript' | 'flashcards'>(() => {
     return loadLocalPreferences().defaultStudyFormat;
   });
 
-  // Fetch and apply user preferences from Firestore when user changes
+  // Fetch and apply user preferences and language from Firestore when user changes
   useEffect(() => {
     const fetchAndApplyPrefs = async () => {
       if (user) {
@@ -2084,6 +2197,18 @@ export default function App() {
           if (dbPrefs.defaultStudyFormat) {
             setActiveTab(dbPrefs.defaultStudyFormat);
           }
+
+          // Fetch language from user's main profile document
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const savedLang = userData.language || userData.lang;
+            if (savedLang && ['pt', 'en', 'es'].includes(savedLang)) {
+              setCurrentLang(savedLang as Language);
+              localStorage.setItem('astra_lang', savedLang);
+            }
+          }
         } catch (error) {
           console.warn('[Preferences] Error fetching user preferences:', error);
         }
@@ -2091,10 +2216,34 @@ export default function App() {
         const localPrefs = loadLocalPreferences();
         setPreferences(localPrefs);
         setActiveTab(localPrefs.defaultStudyFormat);
+
+        // When guest, use localStorage or browser language
+        const savedLocal = localStorage.getItem('astra_lang');
+        if (savedLocal && ['pt', 'en', 'es'].includes(savedLocal)) {
+          setCurrentLang(savedLocal as Language);
+        } else {
+          setCurrentLang(getBrowserLanguage());
+        }
       }
     };
     fetchAndApplyPrefs();
   }, [user]);
+
+  // Synchronize active language option focusing
+  useEffect(() => {
+    if (isLangMenuOpen) {
+      const activeIdx = languageOptions.findIndex(o => o.code === currentLang);
+      setFocusedLangIndex(activeIdx >= 0 ? activeIdx : 0);
+    } else {
+      setFocusedLangIndex(-1);
+    }
+  }, [isLangMenuOpen, currentLang]);
+
+  // Close language dropdown on view or subview change
+  useEffect(() => {
+    setIsLangMenuOpen(false);
+  }, [view, dashboardSubView]);
+
   const [history, setHistory] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -2123,11 +2272,15 @@ export default function App() {
       if (e.key === 'Escape') {
         setIsUserMenuOpen(false);
         setIsBillingModalOpen(false);
+        if (isLangMenuOpen) {
+          setIsLangMenuOpen(false);
+          langButtonRef.current?.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isLangMenuOpen]);
 
   useEffect(() => {
     if (window.location.pathname === '/billing/success' || window.location.pathname.startsWith('/billing/success')) {
@@ -2142,6 +2295,12 @@ export default function App() {
         !userMenuRef.current.contains(event.target as Node)
       ) {
         setIsUserMenuOpen(false);
+      }
+      if (
+        langMenuRef.current &&
+        !langMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsLangMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -2498,24 +2657,96 @@ export default function App() {
               </div>
             )}
             
-            {/* Language Selector */}
-            <div className={`flex items-center gap-1 p-1 rounded-full border shrink-0 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200/80'}`}>
-              <div className={`px-1.5 sm:px-2 hidden sm:block ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
-                <Languages size={14} />
-              </div>
-              {(['pt', 'en', 'es'] as Language[]).map((lang) => (
-                <button
-                  key={lang}
-                  onClick={() => setCurrentLang(lang)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all ${
-                    currentLang === lang 
-                      ? 'bg-orange-600 text-white shadow-sm' 
-                      : isDarkMode ? 'text-gray-500 hover:text-gray-300' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  {lang.toUpperCase()}
-                </button>
-              ))}
+            {/* Language Selector Dropdown */}
+            <div className="relative" ref={langMenuRef} onKeyDown={handleLangKeyDown}>
+              <button
+                ref={langButtonRef}
+                onClick={() => {
+                  setIsLangMenuOpen(!isLangMenuOpen);
+                  setIsUserMenuOpen(false); // Close user menu if open
+                }}
+                aria-label={langMenuLabels[currentLang].ariaLabel}
+                aria-expanded={isLangMenuOpen}
+                aria-haspopup="menu"
+                className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 justify-center ${
+                  isLangMenuOpen
+                    ? isDarkMode ? 'bg-orange-600/10 text-orange-500 border-orange-500/30' : 'bg-orange-500/10 text-orange-600 border-orange-500/20'
+                    : isDarkMode 
+                      ? 'hover:bg-white/5 text-gray-400 hover:text-white' 
+                      : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-750 hover:text-slate-950'
+                }`}
+              >
+                <Languages size={18} />
+                <span className="text-[10px] font-extrabold uppercase tracking-wider hidden sm:inline-block">
+                  {currentLang}
+                </span>
+              </button>
+
+              <AnimatePresence>
+                {isLangMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.94, y: 8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.94, y: 8 }}
+                    transition={{ 
+                      type: "spring",
+                      stiffness: 300,
+                      damping: 25,
+                      mass: 0.8
+                    }}
+                    role="menu"
+                    className={`absolute right-0 mt-2 w-56 rounded-2xl border p-3 shadow-xl z-50 text-left ${
+                      isDarkMode 
+                        ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                        : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                    }`}
+                  >
+                    {/* Header showing active language */}
+                    <div className="px-2.5 py-1.5 mb-2 text-xs font-semibold tracking-wider opacity-60 uppercase border-b border-white/5 dark:border-white/5 border-slate-100">
+                      {langMenuLabels[currentLang].header}
+                    </div>
+
+                    <div className="space-y-0.5">
+                      {languageOptions.map((option, index) => {
+                        const isSelected = currentLang === option.code;
+                        const isFocused = focusedLangIndex === index;
+                        return (
+                          <button
+                            key={option.code}
+                            role="menuitemradio"
+                            aria-checked={isSelected}
+                            onMouseEnter={() => setFocusedLangIndex(index)}
+                            onClick={() => handleSelectLanguage(option.code as Language)}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left ${
+                              isSelected
+                                ? isDarkMode
+                                  ? 'bg-orange-500/10 text-orange-500 font-bold'
+                                  : 'bg-orange-500/5 text-orange-600 font-bold'
+                                : isFocused
+                                  ? isDarkMode
+                                    ? 'bg-white/5 text-white'
+                                    : 'bg-slate-100 text-slate-900'
+                                  : isDarkMode
+                                    ? 'text-gray-400 hover:text-white'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span>{option.labelNative}</span>
+                              <span className="text-[9px] font-mono opacity-50 px-1 py-0.5 rounded border border-current scale-90">
+                                {option.code.toUpperCase()}
+                              </span>
+                            </div>
+                            {isSelected && (
+                              <Check size={14} className="text-orange-500 shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             <Button variant="ghost" onClick={toggleTheme} isDarkMode={isDarkMode} className={`px-2 sm:px-3 ${isDarkMode ? '' : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700'}`}>
@@ -2590,7 +2821,10 @@ export default function App() {
                 {/* User menu container */}
                 <div className="relative" ref={userMenuRef}>
                   <button 
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    onClick={() => {
+                      setIsUserMenuOpen(!isUserMenuOpen);
+                      setIsLangMenuOpen(false); // Close language menu if open
+                    }}
                     aria-label="User Menu"
                     aria-expanded={isUserMenuOpen}
                     aria-haspopup="menu"
@@ -2747,11 +2981,11 @@ export default function App() {
                 {/* Login */}
                 <button 
                   onClick={() => setShowLoginModal(true)} 
-                  className={`text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors cursor-pointer px-3 py-2 rounded-xl ${
-                    isDarkMode ? 'text-gray-300 hover:text-white' : 'text-slate-600 hover:text-slate-950'
+                  className={`text-sm font-medium transition-colors cursor-pointer ${
+                    isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'
                   }`}
                 >
-                  {currentLang === 'pt' ? 'Login' : currentLang === 'es' ? 'Iniciar sesión' : 'Login'}
+                  Login
                 </button>
                 {/* Começar agora */}
                 <Button 
@@ -3625,25 +3859,97 @@ export default function App() {
           <AIActivityFeed isDarkMode={isDarkMode} t={t.activityFeed} lang={currentLang} />
 
           {/* Features Grid */}
-          <section id="features" className={`py-32 border-y ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-100 border-slate-200/70'}`}>
-            <div className="max-w-7xl mx-auto px-6">
-              <h2 className="text-4xl font-bold mb-16 text-center italic">{t.pwrByPrecision}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <section id="features" className={`py-32 sm:py-36 border-y relative overflow-hidden transition-colors duration-500 ${
+            isDarkMode 
+              ? 'bg-gradient-to-b from-[#030303] via-neutral-950 to-[#030303] border-neutral-900/60' 
+              : 'bg-gradient-to-b from-slate-50/70 via-white to-slate-50/70 border-slate-200/50'
+          }`}>
+            {/* Subtle background glow effect */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-orange-500/[0.012] rounded-full blur-[120px] pointer-events-none" />
+
+            <div className="max-w-7xl mx-auto px-6 sm:px-8 relative z-10">
+              <div className="flex flex-col items-center mb-16 sm:mb-20 text-center">
+                <span className={`text-[10px] font-mono tracking-[0.25em] uppercase mb-4 px-3 py-1 rounded-full border ${
+                  isDarkMode 
+                    ? 'text-orange-400 bg-orange-500/5 border-orange-500/10' 
+                    : 'text-orange-600 bg-orange-500/[0.03] border-orange-200'
+                }`}>
+                  ✦ ECOSYSTEM ✦
+                </span>
+                <h2 className={`text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight ${
+                  isDarkMode ? 'text-white' : 'text-slate-900'
+                }`}>
+                  {t.pwrByPrecision}
+                </h2>
+                <div className="mt-5 w-12 h-1 bg-gradient-to-r from-orange-500 to-orange-600 rounded-full" />
+              </div>
+
+              <motion.div 
+                variants={{
+                  hidden: {},
+                  visible: {
+                    transition: {
+                      staggerChildren: 0.08
+                    }
+                  }
+                }}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: "-100px" }}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 lg:gap-8"
+              >
                 {[
                   { icon: BookOpen, title: t.aiSummaries, desc: t.aiSummariesDesc },
                   { icon: BrainCircuit, title: t.mindMaps, desc: t.mindMapsDesc },
                   { icon: MessageSquare, title: t.studyTutor, desc: t.studyTutorDesc },
-                  { icon: CheckCircle, title: t.quizGen, desc: t.quizGenDesc }
+                  { icon: CheckCircle, title: t.quizGen, desc: t.quizGenDesc },
+                  { icon: Layers, title: t.flashcards, desc: t.flashcardsDesc }
                 ].map((feat, i) => (
-                  <div key={i} className={`p-8 rounded-3xl border transition-all flex flex-col gap-4 ${isDarkMode ? 'bg-[#0d0d0d] border-white/5 hover:border-orange-600/50' : 'bg-white border-slate-200 hover:border-orange-200 hover:shadow-xl hover:shadow-slate-900/5'}`}>
-                    <div className="w-12 h-12 rounded-2xl bg-orange-600/10 flex items-center justify-center text-orange-500">
-                      <feat.icon size={24} />
+                  <motion.div 
+                    key={i} 
+                    variants={{
+                      hidden: { opacity: 0, y: 24 },
+                      visible: { 
+                        opacity: 1, 
+                        y: 0,
+                        transition: {
+                          type: "spring",
+                          stiffness: 100,
+                          damping: 16
+                        }
+                      }
+                    }}
+                    className={`group relative p-8 rounded-[24px] border transition-all duration-300 flex flex-col h-full text-left gap-5 ${
+                      isDarkMode 
+                        ? 'bg-[#0b0b0b] border-neutral-800/60 hover:border-orange-500/30 hover:shadow-[0_8px_30px_rgba(0,0,0,0.6)]' 
+                        : 'bg-white border-slate-200/80 hover:border-orange-200/80 hover:shadow-[0_12px_40px_rgba(0,0,0,0.03)]'
+                    } hover:-translate-y-1.5 cursor-pointer`}
+                  >
+                    {/* Corner gradient glow effect on hover */}
+                    <div className="absolute inset-0 rounded-[24px] bg-gradient-to-b from-orange-500/[0.015] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 shrink-0 ${
+                      isDarkMode 
+                        ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500/20 group-hover:text-orange-300' 
+                        : 'bg-orange-500/5 text-orange-500 group-hover:bg-orange-500/10 group-hover:text-orange-600'
+                    }`}>
+                      <feat.icon size={22} className="transition-transform duration-300 group-hover:scale-110" />
                     </div>
-                    <h3 className="text-xl font-bold">{feat.title}</h3>
-                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-500' : 'text-slate-600'}`}>{feat.desc}</p>
-                  </div>
+                    <div className="flex flex-col gap-2 flex-grow relative z-10">
+                      <h3 className={`text-lg font-semibold tracking-tight transition-colors duration-300 ${
+                        isDarkMode ? 'text-white group-hover:text-orange-400' : 'text-slate-900 group-hover:text-orange-600'
+                      }`}>
+                        {feat.title}
+                      </h3>
+                      <p className={`text-sm leading-relaxed transition-colors duration-300 ${
+                        isDarkMode ? 'text-neutral-400 group-hover:text-neutral-300' : 'text-slate-500 group-hover:text-slate-600'
+                      }`}>
+                        {feat.desc}
+                      </p>
+                    </div>
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             </div>
           </section>
 
