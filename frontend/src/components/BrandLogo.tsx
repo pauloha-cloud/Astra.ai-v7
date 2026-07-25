@@ -21,7 +21,7 @@ export const BrandLogo = ({
   };
 
   const textSizes = {
-    sm: 'text-base',
+    sm: 'text-sm sm:text-[15px]',
     md: 'text-2xl',
     lg: 'text-5xl',
   };
@@ -78,14 +78,14 @@ export const BrandLogo = ({
 
   // Display 'Astra Learning' text and '[AI]' badge below it, or close next to it.
   return (
-    <div className={`flex items-center gap-3 select-none ${className}`}>
+    <div className={`flex items-center gap-2 select-none min-w-0 ${className}`}>
       {renderIcon()}
       
-      <div className="flex flex-col items-start leading-none justify-center">
+      <div className="flex flex-col items-start leading-none justify-center min-w-0">
         {/* Top block: Astra (white/dark) + Learning (orange) */}
-        <div className={`font-bold tracking-tight ${textSizes[size]} leading-none`}>
+        <div className={`font-bold tracking-tight ${textSizes[size]} leading-none truncate w-full`}>
           <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Astra</span>
-          <span className="text-orange-600 ml-1.5">Learning</span>
+          <span className="text-orange-600 ml-1">Learning</span>
         </div>
         
         {/* Bottom block: [AI] badge aligned left/below */}

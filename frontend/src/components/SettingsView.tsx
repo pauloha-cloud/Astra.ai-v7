@@ -408,8 +408,14 @@ export function SettingsView({
     <div className="w-full max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
       {/* Title Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-black italic tracking-tight uppercase text-orange-600 drop-shadow-[0_0_15px_rgba(234,88,12,0.1)]">
-          {t.title}
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+          <span className={`inline-block bg-gradient-to-r ${
+            isDarkMode 
+              ? 'from-amber-300 via-orange-400 to-orange-500' 
+              : 'from-amber-400 via-orange-500 to-orange-600'
+          } bg-clip-text text-transparent`}>
+            {t.title}
+          </span>
         </h1>
         <p className={`text-sm sm:text-base font-medium ${isDarkMode ? 'text-gray-400' : 'text-slate-600'}`}>
           {t.subtitle}

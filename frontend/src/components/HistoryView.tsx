@@ -179,7 +179,13 @@ export function HistoryView({
             <div className="p-2 bg-orange-500/10 rounded-2xl text-orange-500 shadow-[0_0_15px_rgba(234,88,12,0.1)]">
               <History size={24} />
             </div>
-            <span>{lang.history}</span>
+            <span className={`inline-block bg-gradient-to-r ${
+              isDarkMode 
+                ? 'from-amber-300 via-orange-400 to-orange-500' 
+                : 'from-amber-400 via-orange-500 to-orange-600'
+            } bg-clip-text text-transparent`}>
+              {lang.history}
+            </span>
           </h1>
           <p className={`text-sm italic font-medium ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
             {lang.subtitle}

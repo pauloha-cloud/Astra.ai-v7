@@ -67,6 +67,7 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
 import { CookieConsent } from './components/CookieConsent';
 import { BillingSuccess } from './components/BillingSuccess';
+import { SidebarTooltip } from './components/SidebarTooltip';
 
 // User Preferences
 export interface UserPreferences {
@@ -274,8 +275,8 @@ const TRANSLATIONS = {
     flashcards: "Flashcards",
     flashcardsDesc: "Memorize mais rápido com flashcards inteligentes gerados a partir do seu conteúdo de estudo.",
     welcome: "Bem-vindo de volta, Explorador",
-    welcomeBack: "Bem-vindo de volta, {name}",
-    readyAnalyze: "Pronto para analisar outra obra-prima?",
+    welcomeBack: "Bem-vindo de volta, {name}!",
+    readyAnalyze: "Transforme um conteúdo em uma experiência completa de aprendizado.",
     videoUrl: "URL do Vídeo no YouTube",
     analyze: "Analisar",
     noHistory: "Sem Histórico Ainda",
@@ -296,9 +297,13 @@ const TRANSLATIONS = {
     removeSuccess: "Vídeo removido do histórico!",
     clearSuccess: "Histórico limpo!",
     settings: "Configurações",
-    newFeatures: "Novas Features",
+    newFeatures: "Novidades",
     soon: "Em breve",
-    newFeaturesTitle: "Novas Features",
+    openInNewTab: "Abrir em nova aba",
+    language: "Idioma",
+    theme: "Tema",
+    profile: "Perfil",
+    newFeaturesTitle: "Novidades",
     newFeaturesSub: "Recursos planejados para melhorar sua experiência com mapas mentais.",
     exit: "Sair",
     loginTitle: "BEM-VINDO AO ASTRA LEARNING AI",
@@ -554,6 +559,9 @@ const TRANSLATIONS = {
         }
       ]
     },
+    recentStudiesTitle: "Estudos recentes",
+    recentStudiesEmptyMsg: "Seus estudos aparecerão aqui",
+    recentStudiesEmptyDesc: "Adicione um vídeo, documento ou link para criar seu primeiro estudo.",
   },
   en: {
     features: "Features",
@@ -577,8 +585,8 @@ const TRANSLATIONS = {
     flashcards: "Flashcards",
     flashcardsDesc: "Memorize faster with smart flashcards generated from your study content.",
     welcome: "Welcome back, Explorer",
-    welcomeBack: "Welcome back, {name}",
-    readyAnalyze: "Ready to analyze another masterpiece?",
+    welcomeBack: "Welcome back, {name}!",
+    readyAnalyze: "Turn any content into a complete learning experience.",
     videoUrl: "YouTube Video URL",
     analyze: "Analyze",
     noHistory: "No History Yet",
@@ -599,9 +607,13 @@ const TRANSLATIONS = {
     removeSuccess: "Video removed from history!",
     clearSuccess: "History cleared!",
     settings: "Settings",
-    newFeatures: "New Features",
-    soon: "Soon",
-    newFeaturesTitle: "New Features",
+    newFeatures: "What's new",
+    soon: "Coming soon",
+    openInNewTab: "Open in new tab",
+    language: "Language",
+    theme: "Theme",
+    profile: "Profile",
+    newFeaturesTitle: "What's new",
     newFeaturesSub: "Planned features to enhance your mind mapping experience.",
     exit: "Exit",
     loginTitle: "WELCOME TO ASTRA LEARNING AI",
@@ -857,6 +869,9 @@ const TRANSLATIONS = {
         }
       ]
     },
+    recentStudiesTitle: "Recent studies",
+    recentStudiesEmptyMsg: "Your studies will appear here",
+    recentStudiesEmptyDesc: "Add a video, document, or link to create your first study.",
   },
   es: {
     features: "Funcionalidades",
@@ -880,8 +895,8 @@ const TRANSLATIONS = {
     flashcards: "Flashcards",
     flashcardsDesc: "Memoriza más rápido con flashcards inteligentes creados a partir de tu contenido de estudio.",
     welcome: "Bienvenido de nuevo, Explorador",
-    welcomeBack: "Bienvenido de vuelta, {name}",
-    readyAnalyze: "¿Listo para analizar otra obra maestra?",
+    welcomeBack: "¡Bienvenido de nuevo, {name}!",
+    readyAnalyze: "Transforma cualquier contenido en una experiencia completa de aprendizaje.",
     videoUrl: "URL del Vídeo de YouTube",
     analyze: "Analizar",
     noHistory: "Sin Historial Aún",
@@ -902,9 +917,13 @@ const TRANSLATIONS = {
     removeSuccess: "¡Video eliminado del historial!",
     clearSuccess: "¡Historial limpiado!",
     settings: "Ajustes",
-    newFeatures: "Nuevas Features",
-    soon: "Muy pronto",
-    newFeaturesTitle: "Nuevas Características",
+    newFeatures: "Novedades",
+    soon: "Próximamente",
+    openInNewTab: "Abrir en una pestaña nueva",
+    language: "Idioma",
+    theme: "Tema",
+    profile: "Perfil",
+    newFeaturesTitle: "Novedades",
     newFeaturesSub: "Funcionalidades planeadas para mejorar tu experiencia con mapas mentais.",
     exit: "Salir",
     loginTitle: "BIENVENIDO A ASTRA LEARNING AI",
@@ -1161,6 +1180,9 @@ const TRANSLATIONS = {
         }
       ]
     },
+    recentStudiesTitle: "Estudios recientes",
+    recentStudiesEmptyMsg: "Tus estudios aparecerán aquí",
+    recentStudiesEmptyDesc: "Añade un video, documento o enlace para crear tu primer estudio.",
   }
 };
 
@@ -1473,6 +1495,40 @@ export default function App() {
     const saved = localStorage.getItem('astra_sidebar_collapsed');
     return saved === 'true';
   });
+  const [showCollapseTooltip, setShowCollapseTooltip] = useState(false);
+  const [isCollapseTooltipSuppressed, setIsCollapseTooltipSuppressed] = useState(false);
+  const collapseTooltipTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Effect to manage mobile sidebar overlay: lock scroll, escape key, and auto-close on desktop resize
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+
+    // 1. Lock scroll on mobile
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // 2. Handle escape key
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // 3. Handle window resize to auto-close if moving to desktop
+    const handleResize = () => {
+      if (window.innerWidth >= 768) { // md breakpoint is 768px
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isSidebarOpen]);
   const [isFeaturesModalOpen, setIsFeaturesModalOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
@@ -1484,6 +1540,10 @@ export default function App() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
   const langButtonRef = useRef<HTMLButtonElement>(null);
+  const [isSidebarLangMenuOpen, setIsSidebarLangMenuOpen] = useState(false);
+  const sidebarLangMenuRef = useRef<HTMLDivElement>(null);
+  const sidebarLangButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarUserMenuRef = useRef<HTMLDivElement>(null);
 
   // Handle Stripe redirects in URL parameters
   useEffect(() => {
@@ -1560,6 +1620,300 @@ export default function App() {
     );
   };
 
+  const renderUserProfile = (isSidebar: boolean) => {
+    if (!user) return null;
+
+    if (!isSidebar) {
+      // Mobile header version
+      return (
+        <div className="relative md:hidden" ref={userMenuRef}>
+          <button 
+            onClick={() => {
+              setIsUserMenuOpen(!isUserMenuOpen);
+              setIsLangMenuOpen(false); // Close language menu if open
+            }}
+            aria-label="User Menu"
+            aria-expanded={isUserMenuOpen}
+            aria-haspopup="menu"
+            className={`flex items-center gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-full border transition-all hover:bg-orange-600/5 hover:border-orange-500/40 cursor-pointer ${
+              isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+            }`}
+          >
+            <img src={user.photoURL || ''} alt="" className="w-5 h-5 sm:w-6 sm:h-6 rounded-full shrink-0 object-cover" />
+            <span className="text-xs sm:text-sm font-semibold truncate max-w-[100px] sm:max-w-[150px] hidden sm:inline-block">
+              {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
+            </span>
+            <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 shrink-0 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          <AnimatePresence>
+            {isUserMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.15 }}
+                className={`absolute right-0 mt-2 w-72 rounded-2xl border p-4 shadow-xl z-50 text-left ${
+                  isDarkMode 
+                    ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                    : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                }`}
+              >
+                {/* User Info Header */}
+                <div className="flex items-center gap-3 pb-3 mb-3 border-b border-white/5 dark:border-white/5 border-slate-100">
+                  <img src={user.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold truncate">
+                      {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
+                    </h4>
+                    <p className="text-xs text-gray-400 truncate">
+                      {user.email}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Seção de Plano Consolidada */}
+                <div className={`p-3 rounded-xl border mb-3 flex flex-col gap-2.5 ${
+                  isDarkMode 
+                    ? 'bg-white/5 border-white/10' 
+                    : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">
+                      {currentLang === 'pt' ? 'Plano atual:' : currentLang === 'es' ? 'Plan actual:' : 'Current plan:'}
+                    </span>
+                    <span className="text-xs font-bold text-orange-500">
+                      {getPlanTranslatedName(userPlan, currentLang)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">
+                      {currentLang === 'pt' ? 'Status:' : currentLang === 'es' ? 'Estado:' : 'Status:'}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {getStatusTranslatedName(subscriptionStatus, currentLang)}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      setIsUserMenuOpen(false);
+                      if (stripeSubscriptionId || stripeCustomerId) {
+                        await handleOpenPortal();
+                      } else {
+                        setIsUpgradeModalOpen(true);
+                      }
+                    }}
+                    className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer shadow-sm hover:brightness-110 active:scale-98"
+                  >
+                    <CreditCard size={12} />
+                    <span>
+                      {currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage subscription'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Dropdown Options - Removed Dashboard and Settings */}
+                <div className="space-y-1">
+                  {/* Plano e assinatura */}
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsBillingModalOpen(true);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
+                      isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                    }`}
+                  >
+                    <CreditCard size={16} className="text-orange-500" />
+                    <span>
+                      {currentLang === 'pt' ? 'Plano e assinatura' : currentLang === 'es' ? 'Plan y facturación' : 'Plan and Billing'}
+                    </span>
+                  </button>
+
+                  {/* Sair */}
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      signOut();
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-left text-red-500 hover:bg-red-500/10 mt-2 border-t border-white/5 dark:border-white/5 border-slate-100 pt-3 cursor-pointer"
+                  >
+                    <LogOut size={16} />
+                    <span>
+                      {currentLang === 'pt' ? 'Sair' : currentLang === 'es' ? 'Cerrar sesión' : 'Sign Out'}
+                    </span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    }
+
+    // Sidebar version (desktop only)
+    return (
+      <div className="relative group/profile w-full shrink-0" ref={sidebarUserMenuRef}>
+        <SidebarTooltip
+          label={user.displayName || (currentLang === 'pt' ? 'Perfil' : currentLang === 'es' ? 'Perfil' : 'Profile')}
+          isCollapsed={isSidebarCollapsed}
+          isDarkMode={isDarkMode}
+        >
+          <button
+            onClick={() => {
+              setIsUserMenuOpen(!isUserMenuOpen);
+              setIsSidebarLangMenuOpen(false); // Close language menu if open
+            }}
+            aria-label={user.displayName || t.profile || 'Perfil'}
+            aria-expanded={isUserMenuOpen}
+            aria-haspopup="menu"
+            className={`w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+              isSidebarCollapsed 
+                ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                : 'gap-3 px-3 py-2.5 hover:bg-orange-600/5 hover:border-orange-500/40 border border-transparent'
+            } ${
+              isUserMenuOpen 
+                ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10' : 'bg-orange-50 border border-orange-100 text-orange-700'
+                : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+            }`}
+          >
+            <img 
+              src={user.photoURL || ''} 
+              alt="" 
+              className="w-8 h-8 rounded-full shrink-0 object-cover" 
+            />
+            
+            <div className={`flex flex-col text-left min-w-0 transition-all duration-300 ${
+              isSidebarCollapsed ? 'md:hidden' : 'opacity-100 flex-1 ml-3'
+            }`}>
+              <span className={`text-xs font-semibold truncate ${
+                isDarkMode ? 'text-gray-200 group-hover/profile:text-white' : 'text-slate-750 group-hover/profile:text-slate-950'
+              }`}>
+                {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
+              </span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                {user.email}
+              </span>
+            </div>
+
+            {!isSidebarCollapsed && (
+              <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 shrink-0 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+            )}
+          </button>
+        </SidebarTooltip>
+
+        <AnimatePresence>
+          {isUserMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
+              className={`absolute ${isSidebarCollapsed ? 'left-full ml-3 bottom-0 w-72' : 'left-0 right-0 bottom-full mb-3 w-full min-w-[240px]'} rounded-2xl border p-4 shadow-xl z-50 text-left ${
+                isDarkMode 
+                  ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                  : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+              }`}
+            >
+              {/* User Info Header */}
+              <div className="flex items-center gap-3 pb-3 mb-3 border-b border-white/5 dark:border-white/5 border-slate-100">
+                <img src={user.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-bold truncate">
+                    {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
+                  </h4>
+                  <p className="text-xs text-gray-400 truncate">
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+
+              {/* Seção de Plano Consolidada */}
+              <div className={`p-3 rounded-xl border mb-3 flex flex-col gap-2.5 ${
+                isDarkMode 
+                  ? 'bg-white/5 border-white/10' 
+                  : 'bg-slate-50 border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">
+                    {currentLang === 'pt' ? 'Plano atual:' : currentLang === 'es' ? 'Plan actual:' : 'Current plan:'}
+                  </span>
+                  <span className="text-xs font-bold text-orange-500">
+                    {getPlanTranslatedName(userPlan, currentLang)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">
+                    {currentLang === 'pt' ? 'Status:' : currentLang === 'es' ? 'Estado:' : 'Status:'}
+                  </span>
+                  <span className="text-xs font-medium">
+                    {getStatusTranslatedName(subscriptionStatus, currentLang)}
+                  </span>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    setIsUserMenuOpen(false);
+                    setIsSidebarOpen(false); // Close mobile drawer if open
+                    if (stripeSubscriptionId || stripeCustomerId) {
+                      await handleOpenPortal();
+                    } else {
+                      setIsUpgradeModalOpen(true);
+                    }
+                  }}
+                  className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer shadow-sm hover:brightness-110 active:scale-98"
+                >
+                  <CreditCard size={12} />
+                  <span>
+                    {currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage subscription'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Dropdown Options - Removed Dashboard and Settings */}
+              <div className="space-y-1">
+                {/* Plano e assinatura */}
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setIsBillingModalOpen(true);
+                    setIsSidebarOpen(false); // Close mobile drawer if open
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
+                    isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                  }`}
+                >
+                  <CreditCard size={16} className="text-orange-500" />
+                  <span>
+                    {currentLang === 'pt' ? 'Plano e assinatura' : currentLang === 'es' ? 'Plan y facturación' : 'Plan and Billing'}
+                  </span>
+                </button>
+
+                {/* Sair */}
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setIsSidebarOpen(false); // Close mobile drawer if open
+                    signOut();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-left text-red-500 hover:bg-red-500/10 mt-2 border-t border-white/5 dark:border-white/5 border-slate-100 pt-3 cursor-pointer"
+                >
+                  <LogOut size={16} />
+                  <span>
+                    {currentLang === 'pt' ? 'Sair' : currentLang === 'es' ? 'Cerrar sesión' : 'Sign Out'}
+                  </span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
   const handleOpenPortal = async () => {
     if (!user) {
       setShowLoginModal(true);
@@ -1618,6 +1972,8 @@ export default function App() {
       setShowLoginModal(true);
       return;
     }
+
+    setIsSidebarOpen(false); // Close mobile drawer if open
 
     const planKey = (userPlan || 'free').toLowerCase();
     const statusKey = (subscriptionStatus || 'active').toLowerCase();
@@ -2143,6 +2499,50 @@ export default function App() {
     langButtonRef.current?.focus();
   };
 
+  const handleSelectSidebarLanguage = async (code: Language) => {
+    setIsSidebarLangMenuOpen(false);
+    await handleLanguageChange(code);
+    sidebarLangButtonRef.current?.focus();
+  };
+
+  const handleSidebarLangKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isSidebarLangMenuOpen) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setIsSidebarLangMenuOpen(true);
+        const activeIdx = languageOptions.findIndex(o => o.code === currentLang);
+        setFocusedLangIndex(activeIdx >= 0 ? activeIdx : 0);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedLangIndex((prev) => (prev + 1) % languageOptions.length);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedLangIndex((prev) => (prev - 1 + languageOptions.length) % languageOptions.length);
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        if (focusedLangIndex >= 0 && focusedLangIndex < languageOptions.length) {
+          handleSelectSidebarLanguage(languageOptions[focusedLangIndex].code as Language);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setIsSidebarLangMenuOpen(false);
+        sidebarLangButtonRef.current?.focus();
+        break;
+      case 'Tab':
+        setIsSidebarLangMenuOpen(false);
+        break;
+    }
+  };
+
   const handleLangKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isLangMenuOpen) {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
@@ -2290,10 +2690,9 @@ export default function App() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        userMenuRef.current &&
-        !userMenuRef.current.contains(event.target as Node)
-      ) {
+      const clickedOutsideHeaderUser = !userMenuRef.current || !userMenuRef.current.contains(event.target as Node);
+      const clickedOutsideSidebarUser = !sidebarUserMenuRef.current || !sidebarUserMenuRef.current.contains(event.target as Node);
+      if (clickedOutsideHeaderUser && clickedOutsideSidebarUser) {
         setIsUserMenuOpen(false);
       }
       if (
@@ -2301,6 +2700,12 @@ export default function App() {
         !langMenuRef.current.contains(event.target as Node)
       ) {
         setIsLangMenuOpen(false);
+      }
+      if (
+        sidebarLangMenuRef.current &&
+        !sidebarLangMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsSidebarLangMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -2632,18 +3037,24 @@ export default function App() {
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-white dark' : 'bg-[#f6f7fb] text-slate-950 light'}`}>
       {/* Navigation */}
-      <nav className={`fixed top-0 w-full z-50 border-b backdrop-blur-md ${isDarkMode ? 'border-white/5' : 'bg-white/85 border-slate-200/70 shadow-sm shadow-slate-900/5'}`}>
+      <nav className={`${user && view === 'dashboard' ? 'md:hidden' : ''} fixed top-0 w-full z-50 border-b backdrop-blur-md ${isDarkMode ? 'border-white/5' : 'bg-white/85 border-slate-200/70 shadow-sm shadow-slate-900/5'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {view === 'dashboard' && (
               <button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className={`p-2 md:hidden transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-500 hover:text-slate-950'}`}
+                aria-expanded={isSidebarOpen}
+                aria-controls="sidebar-menu"
+                aria-label={isSidebarOpen 
+                  ? (currentLang === 'pt' ? 'Fechar menu lateral' : currentLang === 'es' ? 'Cerrar menú lateral' : 'Close sidebar') 
+                  : (currentLang === 'pt' ? 'Abrir menu lateral' : currentLang === 'es' ? 'Abrir menú lateral' : 'Open sidebar')
+                }
+                className={`p-2 md:hidden transition-colors rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-slate-500 hover:text-slate-950'}`}
               >
                 {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
               </button>
             )}
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('landing')}>
+            <div className={`flex items-center gap-2 cursor-pointer ${view === 'dashboard' ? 'md:hidden' : ''}`} onClick={() => setView('landing')}>
               <BrandLogo variant="horizontal" size="md" isDarkMode={isDarkMode} />
             </div>
           </div>
@@ -2658,7 +3069,7 @@ export default function App() {
             )}
             
             {/* Language Selector Dropdown */}
-            <div className="relative" ref={langMenuRef} onKeyDown={handleLangKeyDown}>
+            <div className={`relative ${user ? (view === 'dashboard' ? 'hidden' : 'md:hidden') : ''}`} ref={langMenuRef} onKeyDown={handleLangKeyDown}>
               <button
                 ref={langButtonRef}
                 onClick={() => {
@@ -2749,14 +3160,18 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            <Button variant="ghost" onClick={toggleTheme} isDarkMode={isDarkMode} className={`px-2 sm:px-3 ${isDarkMode ? '' : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700'}`}>
-              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-            </Button>
+            <div className={user ? (view === 'dashboard' ? 'hidden' : 'md:hidden') : ''}>
+              <Button variant="ghost" onClick={toggleTheme} isDarkMode={isDarkMode} className={`px-2 sm:px-3 ${isDarkMode ? '' : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700'}`}>
+                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+              </Button>
+            </div>
 
             <button
               onClick={() => window.open(window.location.href, '_blank')}
               title={currentLang === 'pt' ? "Abrir em nova aba" : currentLang === 'es' ? "Abrir en nueva pestaña" : "Open in new tab"}
               className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
+                view === 'dashboard' ? 'hidden md:flex' : ''
+              } ${
                 isDarkMode 
                   ? 'hover:bg-white/5 text-gray-400 hover:text-white' 
                   : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-750 hover:text-slate-950'
@@ -2766,215 +3181,66 @@ export default function App() {
             </button>
             
             {user ? (
-              <div className="flex items-center gap-2 sm:gap-4">
+              <div className="flex items-center gap-2 sm:gap-3">
                 {/* Dashboard button in header - desktop only */}
-                <button
-                  onClick={() => {
-                    setView('dashboard');
-                    setDashboardSubView('panel');
-                  }}
-                  className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    isDarkMode 
-                      ? 'text-gray-300 hover:text-white hover:bg-white/5' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 shadow-sm'
-                  }`}
-                >
-                  <LayoutDashboard size={16} className="text-orange-500" />
-                  <span>Dashboard</span>
-                </button>
-
-                {/* Plan Badge */}
-                {renderPlanBadge(userPlan, isDarkMode, currentLang)}
-
-                {/* Upgrade Button */}
-                {(() => {
-                  const planKey = (userPlan || 'free').toLowerCase();
-                  const statusKey = (subscriptionStatus || 'no_plan').toLowerCase();
-                  const isActive = statusKey === 'active' || statusKey === 'trialing';
-
-                  // Ocultar se o usuário estiver no Pro ativo
-                  if (planKey === 'pro' && isActive) {
-                    return null;
-                  }
-
-                  // Se plan = "free" ou status não ativo, mostrar "Upgrade"
-                  const isNotActive = !isActive || statusKey === 'canceled' || statusKey === 'past_due' || statusKey === 'incomplete' || statusKey === 'no_plan';
-                  
-                  let buttonText = 'Upgrade';
-                  if (isNotActive || planKey === 'free') {
-                    buttonText = 'Upgrade';
-                  } else if ((planKey === 'starter' || planKey === 'start' || planKey === 'explorer') && isActive) {
-                    buttonText = currentLang === 'pt' ? 'Melhorar plano' : currentLang === 'es' ? 'Mejorar plan' : 'Upgrade plan';
-                  }
-
-                  return (
-                    <button
-                      onClick={handleUpgradeClick}
-                      className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10 hover:shadow-orange-500/20 hover:brightness-110 active:scale-95 shrink-0"
-                    >
-                      <Zap size={13} className="fill-white animate-pulse" />
-                      <span>{buttonText}</span>
-                    </button>
-                  );
-                })()}
-
-                {/* User menu container */}
-                <div className="relative" ref={userMenuRef}>
-                  <button 
+                {view !== 'dashboard' && (
+                  <button
                     onClick={() => {
-                      setIsUserMenuOpen(!isUserMenuOpen);
-                      setIsLangMenuOpen(false); // Close language menu if open
+                      setView('dashboard');
+                      setDashboardSubView('panel');
                     }}
-                    aria-label="User Menu"
-                    aria-expanded={isUserMenuOpen}
-                    aria-haspopup="menu"
-                    className={`flex items-center gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-full border transition-all hover:bg-orange-600/5 hover:border-orange-500/40 cursor-pointer ${
-                      isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+                    className={`hidden sm:flex md:hidden items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                      isDarkMode 
+                        ? 'text-gray-300 hover:text-white hover:bg-white/5' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 shadow-sm'
                     }`}
                   >
-                    <img src={user.photoURL || ''} alt="" className="w-5 h-5 sm:w-6 sm:h-6 rounded-full shrink-0 object-cover" />
-                    <span className="text-xs sm:text-sm font-semibold truncate max-w-[100px] sm:max-w-[150px] hidden sm:inline-block">
-                      {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
-                    </span>
-                    <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 shrink-0 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                    <LayoutDashboard size={16} className="text-orange-500" />
+                    <span>Dashboard</span>
                   </button>
+                )}
 
-                  <AnimatePresence>
-                    {isUserMenuOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                        transition={{ duration: 0.15 }}
-                        className={`absolute right-0 mt-2 w-72 rounded-2xl border p-4 shadow-xl z-50 text-left ${
-                          isDarkMode 
-                            ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
-                            : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
-                        }`}
-                      >
-                        {/* User Info Header */}
-                        <div className="flex items-center gap-3 pb-3 mb-3 border-b border-white/5 dark:border-white/5 border-slate-100">
-                          <img src={user.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-bold truncate">
-                              {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
-                            </h4>
-                            <p className="text-xs text-gray-400 truncate">
-                              {user.email}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Seção de Plano Consolidada */}
-                        <div className={`p-3 rounded-xl border mb-3 flex flex-col gap-2.5 ${
-                          isDarkMode 
-                            ? 'bg-white/5 border-white/10' 
-                            : 'bg-slate-50 border-slate-200'
-                        }`}>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-400">
-                              {currentLang === 'pt' ? 'Plano atual:' : currentLang === 'es' ? 'Plan actual:' : 'Current plan:'}
-                            </span>
-                            <span className="text-xs font-bold text-orange-500">
-                              {getPlanTranslatedName(userPlan, currentLang)}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-400">
-                              {currentLang === 'pt' ? 'Status:' : currentLang === 'es' ? 'Estado:' : 'Status:'}
-                            </span>
-                            <span className="text-xs font-medium">
-                              {getStatusTranslatedName(subscriptionStatus, currentLang)}
-                            </span>
-                          </div>
-
-                          <button
-                            onClick={async () => {
-                              setIsUserMenuOpen(false);
-                              if (stripeSubscriptionId || stripeCustomerId) {
-                                await handleOpenPortal();
-                              } else {
-                                setIsUpgradeModalOpen(true);
-                              }
-                            }}
-                            className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer shadow-sm hover:brightness-110 active:scale-98"
-                          >
-                            <CreditCard size={12} />
-                            <span>
-                              {currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage subscription'}
-                            </span>
-                          </button>
-                        </div>
-
-                        {/* Dropdown Options */}
-                        <div className="space-y-1">
-                          {/* Dashboard */}
-                          <button
-                            onClick={() => {
-                              setView('dashboard');
-                              setDashboardSubView('panel');
-                              setIsUserMenuOpen(false);
-                            }}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
-                              isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
-                            }`}
-                          >
-                            <LayoutDashboard size={16} className="text-orange-500" />
-                            <span>Dashboard</span>
-                          </button>
-
-                          {/* Configurações */}
-                          <button
-                            onClick={() => {
-                              setView('dashboard');
-                              setDashboardSubView('settings');
-                              setIsUserMenuOpen(false);
-                            }}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
-                              isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
-                            }`}
-                          >
-                            <Settings size={16} className="text-orange-500" />
-                            <span>
-                              {currentLang === 'pt' ? 'Configurações' : currentLang === 'es' ? 'Configuración' : 'Settings'}
-                            </span>
-                          </button>
-
-                          {/* Plano e assinatura */}
-                          <button
-                            onClick={() => {
-                              setIsUserMenuOpen(false);
-                              setIsBillingModalOpen(true);
-                            }}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
-                              isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
-                            }`}
-                          >
-                            <CreditCard size={16} className="text-orange-500" />
-                            <span>
-                              {currentLang === 'pt' ? 'Plano e assinatura' : currentLang === 'es' ? 'Plan y facturación' : 'Plan and Billing'}
-                            </span>
-                          </button>
-
-                          {/* Sair */}
-                          <button
-                            onClick={() => {
-                              setIsUserMenuOpen(false);
-                              signOut();
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-left text-red-500 hover:bg-red-500/10 mt-2 border-t border-white/5 dark:border-white/5 border-slate-100 pt-3 cursor-pointer"
-                          >
-                            <LogOut size={16} />
-                            <span>
-                              {currentLang === 'pt' ? 'Sair' : currentLang === 'es' ? 'Cerrar sesión' : 'Sign Out'}
-                            </span>
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                {/* Plan Badge */}
+                <div className={`md:hidden flex items-center ${view === 'dashboard' ? 'hidden' : ''}`}>
+                  {renderPlanBadge(userPlan, isDarkMode, currentLang)}
                 </div>
+
+                {/* Upgrade Button */}
+                <div className={`md:hidden flex items-center ${view === 'dashboard' ? 'hidden' : ''}`}>
+                  {(() => {
+                    const planKey = (userPlan || 'free').toLowerCase();
+                    const statusKey = (subscriptionStatus || 'no_plan').toLowerCase();
+                    const isActive = statusKey === 'active' || statusKey === 'trialing';
+
+                    // Ocultar se o usuário estiver no Pro ativo
+                    if (planKey === 'pro' && isActive) {
+                      return null;
+                    }
+
+                    // Se plan = "free" ou status não ativo, mostrar "Upgrade"
+                    const isNotActive = !isActive || statusKey === 'canceled' || statusKey === 'past_due' || statusKey === 'incomplete' || statusKey === 'no_plan';
+                    
+                    let buttonText = 'Upgrade';
+                    if (isNotActive || planKey === 'free') {
+                      buttonText = 'Upgrade';
+                    } else if ((planKey === 'starter' || planKey === 'start' || planKey === 'explorer') && isActive) {
+                      buttonText = currentLang === 'pt' ? 'Melhorar plano' : currentLang === 'es' ? 'Mejorar plan' : 'Upgrade plan';
+                    }
+
+                    return (
+                      <button
+                        onClick={handleUpgradeClick}
+                        className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10 hover:shadow-orange-500/20 hover:brightness-110 active:scale-95 shrink-0"
+                      >
+                        <Zap size={13} className="fill-white animate-pulse" />
+                        <span>{buttonText}</span>
+                      </button>
+                    );
+                  })()}
+                </div>
+
+                {/* User menu container */}
+                {view !== 'dashboard' && renderUserProfile(false)}
               </div>
             ) : (
               <div className="flex items-center gap-2 sm:gap-4">
@@ -3961,7 +4227,7 @@ export default function App() {
         </main>
       ) : (
         /* Dashboard Interface */
-        <main className="pt-20 flex min-h-screen relative overflow-hidden">
+        <main className="pt-20 md:pt-0 flex w-full min-h-screen relative overflow-hidden">
           {/* Sidebar Overlay for Mobile */}
           <AnimatePresence>
             {isSidebarOpen && (
@@ -3976,184 +4242,498 @@ export default function App() {
           </AnimatePresence>
 
           {/* Sidebar */}
-          <aside className={`
-            fixed md:relative z-50 md:z-auto h-[calc(100vh-80px)] border-r space-y-2 transition-all duration-300 ease-in-out
-            ${isSidebarCollapsed ? 'w-64 md:w-20 p-5 md:p-4' : 'w-64 p-5 md:p-6'}
-            ${isDarkMode ? 'translate-x-0 bg-[#0a0a0a] border-white/5' : 'translate-x-0 bg-white/90 border-slate-200 shadow-sm'}
-            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          `}>
-            {/* Sidebar Title & Collapse Toggle Button */}
-            <div className="flex items-center justify-between gap-2 mb-4 mt-2">
+          <aside 
+            id="sidebar-menu"
+            className={`
+              fixed md:relative top-20 left-0 md:top-auto md:left-auto z-50 md:z-auto h-[calc(100vh-80px)] md:h-screen border-r transition-all duration-300 ease-in-out box-border flex flex-col justify-between overflow-x-hidden md:overflow-x-visible overflow-y-auto md:overflow-y-hidden shrink-0
+              ${isSidebarCollapsed ? 'w-[280px] max-w-[85vw] md:w-20 p-5 md:p-4' : 'w-[280px] max-w-[85vw] md:w-64 p-5 md:p-5'}
+              ${isDarkMode ? 'bg-[#0a0a0a] border-white/5' : 'bg-white/90 border-slate-200 shadow-sm'}
+              ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+            `}
+          >
+            <div className="flex-1 overflow-y-visible md:overflow-y-auto overflow-x-hidden space-y-2 flex flex-col pr-1 scrollbar-thin">
+            {/* Desktop Logo Header (Hidden on Mobile) */}
+            <div className={`hidden md:flex items-center mb-4 mt-1 w-full min-w-0 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+              <div 
+                className={`cursor-pointer min-w-0 ${isSidebarCollapsed ? 'flex justify-center w-full' : 'flex min-w-0 flex-1 items-center'}`} 
+                onClick={() => setView('landing')}
+                title="Astra Learning AI"
+              >
+                <BrandLogo 
+                  variant={isSidebarCollapsed ? 'compact' : 'horizontal'} 
+                  size="sm" 
+                  isDarkMode={isDarkMode}
+                  className="min-w-0"
+                />
+              </div>
+            </div>
+
+            {/* Subtle Divider for Desktop */}
+            <hr className={`hidden md:block my-2 border-dashed ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`} />
+
+            {/* Mobile Navigation Header (Hidden on Desktop) */}
+            <div className="flex md:hidden items-center justify-between gap-2 mb-4 mt-2">
+              <span className={`text-[10px] font-black uppercase tracking-widest transition-all duration-300 opacity-100 ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
+                {t.menu}
+              </span>
+            </div>
+
+            {/* Desktop Navigation Header with Collapse / Expand Toggle */}
+            <div className={`hidden md:flex items-center justify-between gap-2 mb-2 ${isSidebarCollapsed ? 'justify-center px-0' : 'px-1'}`}>
               <span className={`text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
-                isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden' : 'opacity-100'
+                isSidebarCollapsed ? 'hidden md:hidden' : 'block'
               } ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>
                 {t.menu}
               </span>
-              <button 
-                onClick={() => {
-                  const nextVal = !isSidebarCollapsed;
-                  setIsSidebarCollapsed(nextVal);
-                  localStorage.setItem('astra_sidebar_collapsed', String(nextVal));
-                }}
-                aria-label={isSidebarCollapsed 
-                  ? (currentLang === 'pt' ? 'Expandir menu lateral' : currentLang === 'es' ? 'Expandir menú lateral' : 'Expand sidebar') 
-                  : (currentLang === 'pt' ? 'Recolher menu lateral' : currentLang === 'es' ? 'Contraer menú lateral' : 'Collapse sidebar')
-                }
-                title={isSidebarCollapsed 
+
+              {/* Collapse / Expand Toggle Button (Desktop) */}
+              <SidebarTooltip
+                label={isSidebarCollapsed 
                   ? (currentLang === 'pt' ? 'Expandir' : currentLang === 'es' ? 'Expandir' : 'Expand') 
                   : (currentLang === 'pt' ? 'Recolher' : currentLang === 'es' ? 'Contraer' : 'Collapse')
                 }
-                className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
-                  isSidebarCollapsed ? 'w-full md:w-10' : 'w-10'
-                } ${
-                  isDarkMode 
-                    ? 'hover:bg-zinc-800 text-zinc-400 hover:text-white border-transparent hover:border-zinc-750' 
-                    : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900 border-transparent hover:border-slate-200'
-                }`}
+                isCollapsed={true}
+                isDarkMode={isDarkMode}
               >
-                {isSidebarCollapsed ? (
-                  <>
-                    <PanelLeftOpen size={18} className="hidden md:block" />
-                    <PanelLeftClose size={18} className="block md:hidden" />
-                  </>
-                ) : (
-                  <PanelLeftClose size={18} />
-                )}
-              </button>
+                <button 
+                  onClick={(e) => {
+                    if (e.detail !== 0) {
+                      e.currentTarget.blur();
+                    }
+
+                    const nextVal = !isSidebarCollapsed;
+                    setIsSidebarCollapsed(nextVal);
+                    localStorage.setItem('astra_sidebar_collapsed', String(nextVal));
+                  }}
+                  aria-label={isSidebarCollapsed 
+                    ? (currentLang === 'pt' ? 'Expandir menu lateral' : currentLang === 'es' ? 'Expandir menú lateral' : 'Expand sidebar') 
+                    : (currentLang === 'pt' ? 'Recolher menu lateral' : currentLang === 'es' ? 'Contraer menú lateral' : 'Collapse sidebar')
+                  }
+                  className={`relative w-7 h-7 p-1 rounded-lg transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                    isDarkMode 
+                      ? 'hover:bg-zinc-800 text-zinc-400 hover:text-white' 
+                      : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {isSidebarCollapsed ? (
+                    <PanelLeftOpen size={16} />
+                  ) : (
+                    <PanelLeftClose size={16} />
+                  )}
+                </button>
+              </SidebarTooltip>
             </div>
 
             {/* Dashboard Button */}
-            <button 
-              onClick={() => {
-                setDashboardSubView('panel');
-                setIsSidebarOpen(false);
-              }}
-              className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
-                isSidebarCollapsed 
-                  ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
-                  : 'gap-3 px-4 py-3'
-              } ${
-                dashboardSubView === 'panel' 
-                  ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
-                  : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
-              }`}
+            <SidebarTooltip
+              label={t.dashboard}
+              isCollapsed={isSidebarCollapsed}
+              isDarkMode={isDarkMode}
             >
-              <LayoutDashboard size={20} className="shrink-0" />
-              <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden whitespace-nowrap' : 'opacity-100'}`}>
-                {t.dashboard}
-              </span>
-
-              {isSidebarCollapsed && (
-                <div className={`hidden md:block absolute left-full ml-3 px-3 py-1.5 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-[60] shadow-lg border ${
-                  isDarkMode 
-                    ? 'bg-[#121215] text-white border-zinc-800' 
-                    : 'bg-white text-slate-950 border-slate-200 shadow-slate-900/10'
-                }`}>
+              <button 
+                onClick={() => {
+                  setDashboardSubView('panel');
+                  setIsSidebarOpen(false);
+                }}
+                aria-label={t.dashboard}
+                className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+                  isSidebarCollapsed 
+                    ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                    : 'gap-3 px-4 py-3'
+                } ${
+                  dashboardSubView === 'panel' 
+                    ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
+                    : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+                }`}
+              >
+                <LayoutDashboard size={20} className="shrink-0" />
+                <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'}`}>
                   {t.dashboard}
-                </div>
-              )}
-            </button>
+                </span>
+              </button>
+            </SidebarTooltip>
 
             {/* History Button */}
-            <button 
-              onClick={() => {
-                setDashboardSubView('history');
-                setIsSidebarOpen(false);
-              }}
-              className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
-                isSidebarCollapsed 
-                  ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
-                  : 'gap-3 px-4 py-3'
-              } ${
-                dashboardSubView === 'history' 
-                  ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
-                  : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
-              }`}
+            <SidebarTooltip
+              label={t.history}
+              isCollapsed={isSidebarCollapsed}
+              isDarkMode={isDarkMode}
             >
-              <History size={20} className="shrink-0" />
-              <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden whitespace-nowrap' : 'opacity-100'}`}>
-                {t.history}
-              </span>
-
-              {isSidebarCollapsed && (
-                <div className={`hidden md:block absolute left-full ml-3 px-3 py-1.5 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-[60] shadow-lg border ${
-                  isDarkMode 
-                    ? 'bg-[#121215] text-white border-zinc-800' 
-                    : 'bg-white text-slate-950 border-slate-200 shadow-slate-900/10'
-                }`}>
+              <button 
+                onClick={() => {
+                  setDashboardSubView('history');
+                  setIsSidebarOpen(false);
+                }}
+                aria-label={t.history}
+                className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+                  isSidebarCollapsed 
+                    ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                    : 'gap-3 px-4 py-3'
+                } ${
+                  dashboardSubView === 'history' 
+                    ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
+                    : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+                }`}
+              >
+                <History size={20} className="shrink-0" />
+                <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'}`}>
                   {t.history}
-                </div>
-              )}
-            </button>
+                </span>
+              </button>
+            </SidebarTooltip>
 
             {/* Settings Button */}
-            <button 
-              onClick={() => {
-                setDashboardSubView('settings');
-                setIsSidebarOpen(false);
-              }}
-              className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
-                isSidebarCollapsed 
-                  ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
-                  : 'gap-3 px-4 py-3'
-              } ${
-                dashboardSubView === 'settings'
-                  ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
-                  : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
-              }`}
+            <SidebarTooltip
+              label={t.settings}
+              isCollapsed={isSidebarCollapsed}
+              isDarkMode={isDarkMode}
             >
-              <Settings size={20} className="shrink-0" />
-              <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden whitespace-nowrap' : 'opacity-100'}`}>
-                {t.settings}
-              </span>
-
-              {isSidebarCollapsed && (
-                <div className={`hidden md:block absolute left-full ml-3 px-3 py-1.5 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-[60] shadow-lg border ${
-                  isDarkMode 
-                    ? 'bg-[#121215] text-white border-zinc-800' 
-                    : 'bg-white text-slate-950 border-slate-200 shadow-slate-900/10'
-                }`}>
+              <button 
+                onClick={() => {
+                  setDashboardSubView('settings');
+                  setIsSidebarOpen(false);
+                }}
+                aria-label={t.settings}
+                className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+                  isSidebarCollapsed 
+                    ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                    : 'gap-3 px-4 py-3'
+                } ${
+                  dashboardSubView === 'settings'
+                    ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
+                    : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+                }`}
+              >
+                <Settings size={20} className="shrink-0" />
+                <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'}`}>
                   {t.settings}
-                </div>
-              )}
-            </button>
+                </span>
+              </button>
+            </SidebarTooltip>
 
             {/* New Features Button */}
-            <button 
-              onClick={() => setIsFeaturesModalOpen(true)}
-              className={`relative group w-full flex items-center justify-between rounded-xl font-medium transition-all cursor-pointer ${
-                isSidebarCollapsed 
-                  ? 'px-4 py-3 md:justify-center md:px-0' 
-                  : 'px-4 py-3'
-              } ${
-                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
-              }`}
+            <SidebarTooltip
+              label={t.newFeatures}
+              isCollapsed={isSidebarCollapsed}
+              isDarkMode={isDarkMode}
             >
-              <div className={`flex items-center ${isSidebarCollapsed ? 'gap-3 md:gap-0' : 'gap-3'}`}>
-                <Sparkles size={20} className="text-orange-500 shrink-0" />
-                <span className={`text-left transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:overflow-hidden whitespace-nowrap' : 'opacity-100'}`}>
-                  {t.newFeatures}
-                </span>
-              </div>
-              <span className={`px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest bg-orange-600/10 text-orange-500 border border-orange-500/20 rounded-full shrink-0 transition-all duration-300 ${
-                isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:p-0 md:border-0 md:overflow-hidden' : 'opacity-100'
-              }`}>
-                {t.soon}
-              </span>
-
-              {isSidebarCollapsed && (
-                <div className={`hidden md:block absolute left-full ml-3 px-3 py-1.5 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-[60] shadow-lg border ${
-                  isDarkMode 
-                    ? 'bg-[#121215] text-white border-zinc-800' 
-                    : 'bg-white text-slate-950 border-slate-200 shadow-slate-900/10'
-                }`}>
-                  {t.newFeatures}
+              <button 
+                onClick={() => {
+                  setIsFeaturesModalOpen(true);
+                  setIsSidebarOpen(false);
+                }}
+                aria-label={t.newFeatures}
+                className={`relative group w-full flex items-center justify-between rounded-xl font-medium transition-all cursor-pointer ${
+                  isSidebarCollapsed 
+                    ? 'px-4 py-3 md:justify-center md:px-0' 
+                    : 'px-4 py-3'
+                } ${
+                  isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+                }`}
+              >
+                <div className={`flex items-center ${isSidebarCollapsed ? 'gap-3 md:gap-0' : 'gap-3'}`}>
+                  <Sparkles size={20} className="text-orange-500 shrink-0" />
+                  <span className={`text-left transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'}`}>
+                    {t.newFeatures}
+                  </span>
                 </div>
-              )}
-            </button>
+                <span className={`px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest bg-orange-600/10 text-orange-500 border border-orange-500/20 rounded-full shrink-0 transition-all duration-300 ${
+                  isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'
+                }`}>
+                  {t.soon}
+                </span>
+              </button>
+            </SidebarTooltip>
+
+            {/* Open in new tab (Utility action) */}
+            <div className={`pt-2 mt-2 border-t ${isDarkMode ? 'border-white/5' : 'border-slate-100'}`}>
+              <SidebarTooltip
+                label={t.openInNewTab || (currentLang === 'pt' ? "Abrir em nova aba" : currentLang === 'es' ? "Abrir en una pestaña nueva" : "Open in new tab")}
+                isCollapsed={isSidebarCollapsed}
+                isDarkMode={isDarkMode}
+              >
+                <button 
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  aria-label={t.openInNewTab || (currentLang === 'pt' ? "Abrir em nova aba" : currentLang === 'es' ? "Abrir en una pestaña nueva" : "Open in new tab")}
+                  className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+                    isSidebarCollapsed 
+                      ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                      : 'gap-3 px-4 py-3'
+                  } ${
+                    isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+                  }`}
+                >
+                  <ExternalLink size={20} className="shrink-0" />
+                  <span className={`text-left transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'}`}>
+                    {t.openInNewTab || (currentLang === 'pt' ? "Abrir em nova aba" : currentLang === 'es' ? "Abrir en una pestaña nova" : "Open in new tab")}
+                  </span>
+                </button>
+              </SidebarTooltip>
+            </div>
+            </div>
+
+            {/* Sidebar Footer */}
+            <div className={`flex mt-auto pt-4 border-t ${
+              isDarkMode ? 'border-white/5' : 'border-slate-100'
+            } flex flex-col gap-3 shrink-0 w-full ${
+              isSidebarCollapsed ? 'items-center' : ''
+            }`}>
+              {/* Upgrade Button */}
+              {(() => {
+                const planKey = (userPlan || 'free').toLowerCase();
+                const statusKey = (subscriptionStatus || 'no_plan').toLowerCase();
+                const isActive = statusKey === 'active' || statusKey === 'trialing';
+
+                if (planKey === 'pro' && isActive) {
+                  return null;
+                }
+
+                const isNotActive = !isActive || statusKey === 'canceled' || statusKey === 'past_due' || statusKey === 'incomplete' || statusKey === 'no_plan';
+                
+                let buttonText = 'Upgrade';
+                if (isNotActive || planKey === 'free') {
+                  buttonText = 'Upgrade';
+                } else if ((planKey === 'starter' || planKey === 'start' || planKey === 'explorer') && isActive) {
+                  buttonText = currentLang === 'pt' ? 'Melhorar plano' : currentLang === 'es' ? 'Mejorar plan' : 'Upgrade plan';
+                }
+
+                return (
+                  <SidebarTooltip
+                    label={buttonText}
+                    isCollapsed={isSidebarCollapsed}
+                    isDarkMode={isDarkMode}
+                  >
+                    <button
+                      onClick={handleUpgradeClick}
+                      title={buttonText}
+                      aria-label={buttonText}
+                      className="relative group flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10 hover:shadow-orange-500/20 hover:brightness-110 active:scale-95 shrink-0"
+                    >
+                      <Zap size={14} className="fill-white animate-pulse" />
+                      <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block'}`}>
+                        {buttonText}
+                      </span>
+                    </button>
+                  </SidebarTooltip>
+                );
+              })()}
+
+              {/* Bottom row: Plan Badge, Language, Theme */}
+              <div 
+                ref={sidebarLangMenuRef} 
+                onKeyDown={handleSidebarLangKeyDown}
+                className={`relative flex ${
+                  isSidebarCollapsed 
+                    ? 'flex-col items-center gap-3' 
+                    : 'items-center justify-between gap-2 w-full'
+                }`}
+              >
+                {/* Plan Badge (hidden when collapsed) */}
+                <div className={isSidebarCollapsed ? 'hidden' : 'block'}>
+                  {renderPlanBadge(userPlan, isDarkMode, currentLang)}
+                </div>
+
+                {/* Language & Theme Controls */}
+                <div className={`flex ${
+                  isSidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center gap-2'
+                }`}>
+                  {/* Language Selector */}
+                  <div className={isSidebarCollapsed ? 'relative group' : ''}>
+                    <SidebarTooltip
+                      label={t.language || (currentLang === 'pt' ? 'Idioma' : currentLang === 'es' ? 'Idioma' : 'Language')}
+                      isCollapsed={isSidebarCollapsed && !isSidebarLangMenuOpen}
+                      isDarkMode={isDarkMode}
+                    >
+                      <button
+                        ref={sidebarLangButtonRef}
+                        onClick={() => {
+                          setIsSidebarLangMenuOpen(!isSidebarLangMenuOpen);
+                          setIsUserMenuOpen(false); // Close user menu if open
+                        }}
+                        aria-label={langMenuLabels[currentLang].ariaLabel}
+                        aria-expanded={isSidebarLangMenuOpen}
+                        aria-haspopup="menu"
+                        className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 justify-center ${
+                          isSidebarLangMenuOpen
+                            ? isDarkMode ? 'bg-orange-600/10 text-orange-500 border-orange-500/30' : 'bg-orange-500/10 text-orange-600 border-orange-500/20'
+                            : isDarkMode 
+                              ? 'hover:bg-white/5 text-gray-400 hover:text-white' 
+                              : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-750 hover:text-slate-950'
+                        }`}
+                      >
+                        <Languages size={18} />
+                        <span className={`text-[10px] font-extrabold uppercase tracking-wider ${isSidebarCollapsed ? 'hidden' : 'inline-block'}`}>
+                          {currentLang}
+                        </span>
+                      </button>
+                    </SidebarTooltip>
+
+                    {/* Collapsed Sidebar Language Popover */}
+                    {isSidebarCollapsed && (
+                      <AnimatePresence>
+                        {isSidebarLangMenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.94, y: -8 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.94, y: -8 }}
+                            transition={{ 
+                              type: "spring",
+                              stiffness: 300,
+                              damping: 25,
+                              mass: 0.8
+                            }}
+                            role="menu"
+                            className={`absolute left-full ml-3 bottom-0 w-56 rounded-2xl border p-3 shadow-xl z-50 text-left ${
+                              isDarkMode 
+                                ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                                : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                            }`}
+                          >
+                            {/* Header showing active language */}
+                            <div className="px-2.5 py-1.5 mb-2 text-xs font-semibold tracking-wider opacity-60 uppercase border-b border-white/5 dark:border-white/5 border-slate-100">
+                              {langMenuLabels[currentLang].header}
+                            </div>
+
+                            <div className="space-y-0.5">
+                              {languageOptions.map((option, index) => {
+                                const isSelected = currentLang === option.code;
+                                const isFocused = focusedLangIndex === index;
+                                return (
+                                  <button
+                                    key={option.code}
+                                    role="menuitemradio"
+                                    aria-checked={isSelected}
+                                    onMouseEnter={() => setFocusedLangIndex(index)}
+                                    onClick={() => handleSelectSidebarLanguage(option.code as Language)}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left ${
+                                      isSelected
+                                        ? isDarkMode
+                                          ? 'bg-orange-500/10 text-orange-500 font-bold'
+                                          : 'bg-orange-500/5 text-orange-600 font-bold'
+                                        : isFocused
+                                          ? isDarkMode
+                                            ? 'bg-white/5 text-white'
+                                            : 'bg-slate-100 text-slate-900'
+                                          : isDarkMode
+                                            ? 'text-gray-400 hover:text-white'
+                                            : 'text-slate-600 hover:text-slate-900'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span>{option.labelNative}</span>
+                                      <span className="text-[9px] font-mono opacity-50 px-1 py-0.5 rounded border border-current scale-90">
+                                        {option.code.toUpperCase()}
+                                      </span>
+                                    </div>
+                                    {isSelected && (
+                                      <Check size={14} className="text-orange-500 shrink-0" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    )}
+                  </div>
+
+                  {/* Theme Toggle */}
+                  <SidebarTooltip
+                    label={t.theme || (isDarkMode ? "Ativar modo claro" : "Ativar modo escuro")}
+                    isCollapsed={isSidebarCollapsed}
+                    isDarkMode={isDarkMode}
+                  >
+                    <button
+                      onClick={toggleTheme}
+                      aria-label={t.theme || (isDarkMode ? "Ativar modo claro" : "Ativar modo escuro")}
+                      className={`relative group p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
+                        isDarkMode 
+                          ? 'hover:bg-white/5 text-gray-400 hover:text-white' 
+                          : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-750 hover:text-slate-950'
+                      }`}
+                    >
+                      {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+                    </button>
+                  </SidebarTooltip>
+                </div>
+
+                {/* Expanded Sidebar Language Popover */}
+                {!isSidebarCollapsed && (
+                  <AnimatePresence>
+                    {isSidebarLangMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.94, y: -8 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.94, y: -8 }}
+                        transition={{ 
+                          type: "spring",
+                          stiffness: 300,
+                          damping: 25,
+                          mass: 0.8
+                        }}
+                        role="menu"
+                        className={`absolute bottom-full left-0 right-0 mb-2.5 w-full rounded-2xl border p-3 shadow-xl z-50 text-left ${
+                          isDarkMode 
+                            ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                            : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                        }`}
+                      >
+                        {/* Header showing active language */}
+                        <div className="px-2.5 py-1.5 mb-2 text-xs font-semibold tracking-wider opacity-60 uppercase border-b border-white/5 dark:border-white/5 border-slate-100">
+                          {langMenuLabels[currentLang].header}
+                        </div>
+
+                        <div className="space-y-0.5">
+                          {languageOptions.map((option, index) => {
+                            const isSelected = currentLang === option.code;
+                            const isFocused = focusedLangIndex === index;
+                            return (
+                              <button
+                                key={option.code}
+                                role="menuitemradio"
+                                aria-checked={isSelected}
+                                onMouseEnter={() => setFocusedLangIndex(index)}
+                                onClick={() => handleSelectSidebarLanguage(option.code as Language)}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left ${
+                                  isSelected
+                                    ? isDarkMode
+                                      ? 'bg-orange-500/10 text-orange-500 font-bold'
+                                      : 'bg-orange-500/5 text-orange-600 font-bold'
+                                    : isFocused
+                                      ? isDarkMode
+                                        ? 'bg-white/5 text-white'
+                                        : 'bg-slate-100 text-slate-900'
+                                      : isDarkMode
+                                        ? 'text-gray-400 hover:text-white'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span>{option.labelNative}</span>
+                                  <span className="text-[9px] font-mono opacity-50 px-1 py-0.5 rounded border border-current scale-90">
+                                    {option.code.toUpperCase()}
+                                  </span>
+                                </div>
+                                {isSelected && (
+                                  <Check size={14} className="text-orange-500 shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                )}
+              </div>
+
+              {/* User Profile */}
+              {renderUserProfile(true)}
+            </div>
           </aside>
 
-          <section id="main-scrollable-section" className={`flex-1 p-4 sm:p-8 overflow-y-auto ${isDarkMode ? '' : 'bg-transparent'}`}>
+          <section id="main-scrollable-section" className={`flex-1 min-w-0 p-4 sm:p-8 overflow-y-auto overflow-x-hidden ${isDarkMode ? '' : 'bg-transparent'}`}>
             <div className="max-w-[1440px] mx-auto w-full space-y-8">
               {dashboardSubView === 'settings' ? (
                 <SettingsView 
@@ -4199,31 +4779,46 @@ export default function App() {
                     className="space-y-2"
                   >
                     <h1 className="text-2xl sm:text-3xl font-bold">
-                      {t.welcomeBack.replace("{name}", displayName)}
+                      <span className={`inline-block bg-gradient-to-r ${
+                        isDarkMode 
+                          ? 'from-amber-300 via-orange-400 to-orange-500' 
+                          : 'from-amber-400 via-orange-500 to-orange-600'
+                      } bg-clip-text text-transparent`}>
+                        {t.welcomeBack.replace("{name}", displayName)}
+                      </span>
                     </h1>
                     <p className={`text-sm sm:text-base italic ${isDarkMode ? 'text-gray-500' : 'text-slate-500'}`}>{t.readyAnalyze}</p>
                   </motion.div>
 
                   {/* Compact Command Bar */}
-                  <div className={`border p-6 sm:p-8 rounded-3xl shadow-xl transition-all duration-300 ${
+                  <div className={`border pt-3 pb-5 px-5 sm:pt-4 sm:pb-6 sm:px-6 rounded-3xl shadow-xl transition-all duration-300 ${
                     isDarkMode 
                       ? 'bg-[#0B0C10] border-zinc-800/80 shadow-black/40' 
                       : 'bg-white border-slate-200 shadow-slate-100/50'
                   }`}>
-                    <div className="flex flex-col gap-6 w-full">
+                    <div className="flex flex-col gap-3.5 w-full">
                       
                       {/* Central Study Source Block */}
-                      <div className="text-center max-w-2xl mx-auto space-y-3 mb-2">
+                      <div className="text-center max-w-2xl mx-auto flex flex-col items-center">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 transition-all ${
+                          isDarkMode 
+                            ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20 shadow-[0_0_12px_rgba(249,115,22,0.1)]' 
+                            : 'bg-orange-50 text-orange-600 border border-orange-100 shadow-sm shadow-orange-500/5'
+                        }`}>
+                          <Sparkles size={24} />
+                        </div>
+                        <div className="space-y-1">
                         <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
                           {currentLang === 'pt' ? "Comece com uma fonte de estudo" :
                            currentLang === 'es' ? "Comienza con una fuente de estudio" :
                            "Start with a study source"}
                         </h2>
                         <p className={`text-xs sm:text-sm leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                          {currentLang === 'pt' ? "Cole uma URL do YouTube ou envie um documento para o Astra transformar o conteúdo em resumo, tutor, quiz e mapa mental." :
-                           currentLang === 'es' ? "Pega una URL de YouTube o sube un documento para que Astra transforme el contenido en resumen, tutor, cuestionario y mapa mental." :
-                           "Paste a YouTube URL or upload a document and let Astra turn the content into summary, tutor, quiz, and mind map."}
+                          {currentLang === 'pt' ? "Transforme vídeos, documentos e links em materiais personalizados." :
+                           currentLang === 'es' ? "Transforma videos, documentos y enlaces en materiales personalizados." :
+                           "Turn videos, documents, and links into personalized materials."}
                         </p>
+                        </div>
                       </div>
 
                       {/* Source Selector */}
@@ -4296,13 +4891,13 @@ export default function App() {
                       </div>
 
                       {/* Active Source UI Area */}
-                      <div className="w-full mt-2">
+                      <div className="w-full mt-0.5">
                         {/* YouTube Source UI */}
                         {selectedSourceType === 'youtube' && (
-                          <div className="flex flex-col sm:flex-row items-stretch gap-3 text-left">
-                            <div className="relative flex-1 flex flex-col gap-1.5 w-full">
-                              <div className="relative flex items-center">
-                                <div className="absolute left-4 shrink-0 flex items-center">
+                          <div className="flex flex-col gap-1.5 w-full">
+                            <div className="flex flex-col sm:flex-row items-center gap-3 text-left w-full">
+                              <div className="relative flex-1 w-full">
+                                <div className="absolute left-4 shrink-0 flex items-center h-full">
                                   <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.518 3.545 12 3.545 12 3.545s-7.518 0-9.388.508a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.87.508 9.388.508 9.388.508s7.518 0 9.388-.508a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837z" fill="#FF0000"/>
                                     <polygon points="9.545 15.568 15.818 12 9.545 8.432 9.545 15.568" fill="#FFFFFF"/>
@@ -4325,28 +4920,28 @@ export default function App() {
                                   }`}
                                 />
                               </div>
-                              <span className={`text-[11px] font-medium pl-2 ${isDarkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
-                                {currentLang === 'pt' ? "Exemplo: https://youtube.com/watch?v=..." :
-                                 currentLang === 'es' ? "Ejemplo: https://youtube.com/watch?v=..." :
-                                 "Example: https://youtube.com/watch?v=..."}
-                              </span>
+                              <Button 
+                                onClick={handleAnalyze} 
+                                disabled={isAnalyzing || !videoUrl} 
+                                className="w-full sm:w-auto justify-center h-12 px-6 text-sm font-extrabold rounded-xl shadow-md transition-all duration-300 shrink-0 cursor-pointer"
+                              >
+                                {isAnalyzing ? (
+                                  <span className="flex items-center gap-2">
+                                    <Loader2 size={16} className="animate-spin" /> {analysisStatus}
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1.5 group">
+                                    <span>{t.analyze}</span>
+                                    <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+                                  </span>
+                                )}
+                              </Button>
                             </div>
-                            <Button 
-                              onClick={handleAnalyze} 
-                              disabled={isAnalyzing || !videoUrl} 
-                              className="justify-center h-12 px-6 text-sm font-extrabold rounded-xl shadow-md transition-all duration-300 shrink-0 cursor-pointer"
-                            >
-                              {isAnalyzing ? (
-                                <span className="flex items-center gap-2">
-                                  <Loader2 size={16} className="animate-spin" /> {analysisStatus}
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1.5 group">
-                                  <span>{t.analyze}</span>
-                                  <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
-                                </span>
-                              )}
-                            </Button>
+                            <span className={`text-[11px] font-medium pl-2 ${isDarkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
+                              {currentLang === 'pt' ? "Exemplo: https://youtube.com/watch?v=..." :
+                               currentLang === 'es' ? "Ejemplo: https://youtube.com/watch?v=..." :
+                               "Example: https://youtube.com/watch?v=..."}
+                            </span>
                           </div>
                         )}
 
@@ -4368,7 +4963,7 @@ export default function App() {
                                   }
                                 }}
                                 onClick={() => document.getElementById('document-upload-input')?.click()}
-                                className={`border-2 border-dashed p-8 rounded-2xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group ${
+                                className={`border-2 border-dashed p-5 sm:p-6 rounded-2xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group ${
                                   isDragging
                                     ? 'border-orange-500 bg-orange-500/5'
                                     : isDarkMode
@@ -4387,14 +4982,14 @@ export default function App() {
                                     }
                                   }}
                                 />
-                                <div className={`p-3 rounded-full transition-colors ${
+                                <div className={`p-2 rounded-full transition-colors ${
                                   isDarkMode 
                                     ? 'bg-zinc-800 text-zinc-400 group-hover:bg-orange-500/10 group-hover:text-orange-500' 
                                     : 'bg-slate-100 text-slate-500 group-hover:bg-orange-50 group-hover:text-orange-600'
                                 }`}>
-                                  <FileUp size={24} className="animate-bounce" style={{ animationDuration: '3s' }} />
+                                  <FileUp size={20} className="animate-bounce" style={{ animationDuration: '3s' }} />
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-0.5">
                                   <p className="text-sm font-bold">
                                     {currentLang === 'pt' ? "Envie ou solte seu arquivo aqui" :
                                      currentLang === 'es' ? "Sube o suelta tu archivo aquí" :
@@ -4406,12 +5001,12 @@ export default function App() {
                                      "PDF, TXT, DOCX, or image"}
                                   </p>
                                 </div>
-                                <p className={`text-[10px] max-w-lg mt-2 ${isDarkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
+                                <p className={`text-[10px] max-w-lg mt-1 ${isDarkMode ? 'text-zinc-600' : 'text-slate-400'}`}>
                                   {currentLang === 'pt' ? "Arquivos enviados são processados temporariamente. O Astra salva apenas os resultados gerados." :
-                                   currentLang === 'es' ? "Los archivos enviados se procesan temporalmente. Astra guarda solo los resultados generados." :
+                                   currentLang === 'es' ? "Los arquivos enviados se procesan temporalmente. Astra guarda solo los resultados generados." :
                                    "Uploaded files are processed temporarily. Astra saves only the generated results."}
                                 </p>
-                                <button className="mt-2 text-xs font-bold text-orange-500 hover:text-orange-600 flex items-center gap-1">
+                                <button className="mt-1 text-xs font-bold text-orange-500 hover:text-orange-600 flex items-center gap-1">
                                   <span>{currentLang === 'pt' ? "Enviar arquivo" : currentLang === 'es' ? "Subir archivo" : "Upload file"}</span>
                                   <ArrowRight size={12} />
                                 </button>
@@ -4472,20 +5067,20 @@ export default function App() {
 
                         {/* Website Link Placeholder UI */}
                         {selectedSourceType === 'website' && (
-                          <div className={`p-6 sm:p-8 rounded-2xl border text-center flex flex-col items-center justify-center gap-3 transition-all ${
+                          <div className={`p-5 sm:p-6 rounded-2xl border text-center flex flex-col items-center justify-center gap-2 transition-all ${
                             isDarkMode 
                               ? 'bg-[#030304]/40 border-zinc-800/40' 
                               : 'bg-slate-50 border-slate-100'
                           }`}>
-                            <div className={`p-3.5 rounded-full ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
-                              <Globe size={28} />
+                            <div className={`p-2.5 rounded-full ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                              <Globe size={24} />
                             </div>
-                            <h3 className="text-sm sm:text-base font-bold">
+                            <h3 className="text-sm font-bold">
                               {currentLang === 'pt' ? "Fase 2: Link de Site" :
                                currentLang === 'es' ? "Fase 2: Enlace de Sitio" :
                                "Phase 2: Website Link"}
                             </h3>
-                            <p className={`text-xs sm:text-sm max-w-md ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                            <p className={`text-xs max-w-md ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
                               {currentLang === 'pt' ? "Link de site estará disponível em breve." :
                                currentLang === 'es' ? "Los enlaces de sitios estarán disponibles pronto." :
                                "Website links will be available soon."}
@@ -4495,20 +5090,20 @@ export default function App() {
 
                         {/* Google Drive Placeholder UI */}
                         {selectedSourceType === 'drive' && (
-                          <div className={`p-6 sm:p-8 rounded-2xl border text-center flex flex-col items-center justify-center gap-3 transition-all ${
+                          <div className={`p-5 sm:p-6 rounded-2xl border text-center flex flex-col items-center justify-center gap-2 transition-all ${
                             isDarkMode 
                               ? 'bg-[#030304]/40 border-zinc-800/40' 
                               : 'bg-slate-50 border-slate-100'
                           }`}>
-                            <div className={`p-3.5 rounded-full ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
-                              <FolderOpen size={28} />
+                            <div className={`p-2.5 rounded-full ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                              <FolderOpen size={24} />
                             </div>
-                            <h3 className="text-sm sm:text-base font-bold">
+                            <h3 className="text-sm font-bold">
                               {currentLang === 'pt' ? "Fase 3: Google Drive" :
                                currentLang === 'es' ? "Fase 3: Google Drive" :
                                "Phase 3: Google Drive"}
                             </h3>
-                            <p className={`text-xs sm:text-sm max-w-md ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
+                            <p className={`text-xs max-w-md ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>
                               {currentLang === 'pt' ? "Google Drive estará disponível em breve." :
                                currentLang === 'es' ? "Google Drive estará disponible pronto." :
                                "Google Drive will be available soon."}
@@ -4518,7 +5113,7 @@ export default function App() {
                       </div>
 
                   {/* Row 2: Features cards with standard elegant Astra UI */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
                     {([
                       { id: 'summary', label: t.summary, icon: FileText },
                       { id: 'tutor', label: t.tutor, icon: GraduationCap },
@@ -4534,11 +5129,11 @@ export default function App() {
                       
                       if (!hasResult) {
                         if (isDarkMode) {
-                          cardClass = "bg-[#0B0C10]/40 border-white/5 text-zinc-400 cursor-not-allowed opacity-60";
-                          iconColor = "text-zinc-500";
+                          cardClass = "bg-[#0B0C10]/40 border-white/5 text-zinc-300 cursor-not-allowed opacity-75";
+                          iconColor = "text-zinc-400";
                         } else {
-                          cardClass = "bg-slate-50/50 border-slate-200 text-slate-500 cursor-not-allowed opacity-60";
-                          iconColor = "text-slate-400";
+                          cardClass = "bg-slate-50/50 border-slate-200 text-slate-600 cursor-not-allowed opacity-75";
+                          iconColor = "text-slate-500";
                         }
                       } else if (isActive) {
                         if (isDarkMode) {
@@ -4576,16 +5171,20 @@ export default function App() {
                           }}
                           disabled={false}
                           aria-label={btn.label}
-                          className={`flex flex-col items-center justify-center text-center gap-3.5 p-5 rounded-2xl border text-xs sm:text-sm tracking-widest uppercase transition-all duration-300 relative group overflow-hidden select-none min-h-[96px] md:min-h-[105px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5F1F] ${cardClass}`}
+                          className={`flex flex-row items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border text-[11px] sm:text-xs tracking-wider uppercase transition-all duration-300 relative group overflow-hidden select-none min-h-[44px] sm:min-h-[48px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5F1F] ${cardClass} ${
+                            btn.id === 'flashcards' ? 'col-span-2 sm:col-span-1' : ''
+                          }`}
                         >
-                          <IconComponent size={24} className={`${iconColor} shrink-0 transition-all duration-300 ${hasResult ? 'group-hover:scale-110' : ''}`} />
-                          <span className="truncate w-full font-bold">{btn.label}</span>
+                          <IconComponent size={18} className={`${iconColor} shrink-0 transition-all duration-300 ${hasResult ? 'group-hover:scale-110' : ''}`} />
+                          <span className="truncate font-bold tracking-normal sm:tracking-wider">{btn.label}</span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
               </div>
+
+              {/* Re-enable recent studies when real study cards are implemented. */}
 
               {/* Analysis Result or Recent Activity */}
               <AnimatePresence mode="wait">
@@ -4608,87 +5207,7 @@ export default function App() {
                       showToast={showToast}
                     />
                   </motion.div>
-                ) : (
-                  <div className="space-y-8">
-                    {/* Pre-analysis empty state card */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`border-2 border-dashed p-10 sm:p-14 rounded-[2.5rem] flex flex-col items-center justify-center text-center space-y-6 transition-all duration-300 ${
-                        isDarkMode 
-                          ? 'bg-[#0c0c0e]/60 border-orange-500/20 text-zinc-300' 
-                          : 'bg-white border-orange-500/30 text-slate-700 shadow-sm shadow-slate-100/50'
-                      }`}
-                    >
-                      <div className="w-20 h-20 rounded-3xl bg-orange-500/10 flex items-center justify-center text-orange-500 shadow-[0_0_25px_rgba(234,88,12,0.15)] relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <Sparkles size={36} className="relative z-10 group-hover:scale-110 transition-transform duration-300" />
-                      </div>
-                      <div className="space-y-3 max-w-lg">
-                        <h3 className={`text-xl sm:text-2xl font-bold tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-slate-900'}`}>
-                          {currentLang === 'pt' ? 'Comece com uma fonte de estudo' : currentLang === 'es' ? 'Comienza con una fuente de estudio' : 'Start with a study source'}
-                        </h3>
-                        <p className={`text-sm sm:text-base leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>
-                          {currentLang === 'pt' ? 'Cole uma URL do YouTube ou envie um documento para transformar o conteúdo em resumo, tutor, quiz e mapa mental.' : 
-                           currentLang === 'es' ? 'Pega una URL de YouTube o sube un documento para transformar el contenido en resumen, tutor, cuestionario y mapa mental.' : 
-                           'Paste a YouTube URL or upload a document to turn the content into summary, tutor, quiz, and mind map.'}
-                        </p>
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 pt-2 w-full max-w-xs sm:max-w-xl justify-center">
-                        <motion.button 
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            setSelectedSourceType('youtube');
-                            setTimeout(() => {
-                              focusUrlInput();
-                            }, 50);
-                          }}
-                          className="w-full sm:w-auto px-5 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300"
-                        >
-                          <Youtube size={16} />
-                          <span>
-                            {currentLang === 'pt' ? 'Colar URL' : currentLang === 'es' ? 'Pegar URL' : 'Paste URL'}
-                          </span>
-                        </motion.button>
-
-                        <motion.button 
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            setSelectedSourceType('document');
-                            setTimeout(() => {
-                              document.getElementById('document-upload-input')?.click();
-                            }, 50);
-                          }}
-                          className="w-full sm:w-auto px-5 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all duration-300"
-                        >
-                          <FileUp size={16} />
-                          <span>
-                            {currentLang === 'pt' ? 'Enviar documento' : currentLang === 'es' ? 'Subir documento' : 'Upload document'}
-                          </span>
-                        </motion.button>
-                        
-                        <motion.button 
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => setDashboardSubView('history')}
-                          className={`w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 border ${
-                            isDarkMode 
-                              ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 text-zinc-300' 
-                              : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm'
-                          }`}
-                        >
-                          <History size={16} />
-                          <span>
-                            {currentLang === 'pt' ? 'Ver histórico' : currentLang === 'es' ? 'Ver historial' : 'View history'}
-                          </span>
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  </div>
-              )}
+                ) : null}
               </AnimatePresence>
                 </>
               )}
@@ -4737,7 +5256,15 @@ export default function App() {
                   <Sparkles size={24} className="animate-pulse" />
                 </div>
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-black">{t.newFeaturesTitle}</h2>
+                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                    <span className={`inline-block bg-gradient-to-r ${
+                      isDarkMode 
+                        ? 'from-amber-300 via-orange-400 to-orange-500' 
+                        : 'from-amber-400 via-orange-500 to-orange-600'
+                    } bg-clip-text text-transparent`}>
+                      {t.newFeaturesTitle}
+                    </span>
+                  </h2>
                   <p className={`text-xs sm:text-sm mt-1 leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`}>
                     {t.newFeaturesSub}
                   </p>
@@ -5374,9 +5901,11 @@ export default function App() {
       </AnimatePresence>
 
       {/* Footer */}
-      <footer className={`py-12 border-t text-center text-sm transition-colors ${isDarkMode ? 'border-white/5 text-gray-600' : 'border-slate-200 text-slate-500'}`}>
-        <p>© 2026 Astra Learning AI — {t.builtWithPrecision}</p>
-      </footer>
+      {view !== 'dashboard' && (
+        <footer className={`py-12 border-t text-center text-sm transition-colors ${isDarkMode ? 'border-white/5 text-gray-600' : 'border-slate-200 text-slate-500'}`}>
+          <p>© 2026 Astra Learning AI — {t.builtWithPrecision}</p>
+        </footer>
+      )}
 
       {/* Premium Toast Notification */}
       <AnimatePresence>

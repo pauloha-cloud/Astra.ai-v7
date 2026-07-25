@@ -95,7 +95,7 @@ service cloud.firestore {
 
       // Sub-collection rule for billing details
       match /billing/{billingId} {
-        allow get: if isOwner(userId);
+        allow read: if isOwner(userId);
       }
 
       // Sub-collection rule for preferences following Master Gate pattern (check parent)
