@@ -692,6 +692,7 @@ export const AnalysisResultView = ({
                 t={t}
                 lang={lang}
                 explanationLevel={preferences?.explanationLevel || 'intermediate'}
+                isDarkMode={isDarkMode}
               />
             </motion.div>
           )}

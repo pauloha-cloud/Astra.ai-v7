@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Youtube, 
@@ -395,52 +396,57 @@ const TRANSLATIONS = {
     downloadTxt: "Baixar .txt",
     noTranscript: "Nenhuma transcrição disponível para este vídeo.",
     closeAnalysis: "Fechar Análise",
-    studyTutorLive: "Tutor de Estudos Ao Vivo",
-    onboardingTitle: "Bem-vindo ao Tutor Astra Learning AI",
-    onboardingDesc: "Um mentor de IA totalmente conversacional que entende cada detalhe deste vídeo.",
-    onboardingStep1Title: "Fale Naturalmente",
-    onboardingStep1Desc: "Sem necessidade de digitar. Basta falar com o Astra Learning AI como faria com um mentor humano.",
-    onboardingStep2Title: "Consciente do Contexto",
-    onboardingStep2Desc: "O Astra Learning AI analisou a transcrição completa e pode responder a perguntas complexas dinamicamente.",
-    onboardingStep3Title: "Feedback em Tempo Real",
-    onboardingStep3Desc: "O núcleo visual reage à sua voz e ao status da IA em tempo real.",
+    studyTutorLive: "Tutor de Estudos",
+    onboardingTitle: "Tutor de Estudos",
+    onboardingDesc: "Converse por voz com a Astra sobre o conteúdo deste estudo.",
+    onboardingStep1Title: "Respostas baseadas no material",
+    onboardingStep1Desc: "",
+    onboardingStep2Title: "Conversação por voz",
+    onboardingStep2Desc: "",
+    onboardingStep3Title: "Contexto mantido durante a sessão",
+    onboardingStep3Desc: "",
     getStarted: "Começar",
     onboardingStep4Title: "Limitações",
-    onboardingStep4Desc: "Como toda IA, o Astra Learning AI pode ocasionalmente cometer erros ou omitir detalhes técnicos muito específicos. Sempre verifique informações críticas.",
-    exampleQuestionsTitle: "Tente perguntar:",
-    exampleQuestion1: "Resuma os argumentos dos primeiros 5 minutos.",
-    exampleQuestion2: "Explique o conceito de [X] de forma simples.",
+    onboardingStep4Desc: "A Astra pode cometer erros. Confira informações importantes.",
+    exampleQuestionsTitle: "Experimente perguntar:",
+    exampleQuestion1: "Resuma os primeiros cinco minutos.",
+    exampleQuestion2: "Explique este conceito de outra forma.",
     exampleQuestion3: "Quais exemplos práticos foram citados?",
-    dontShowAgain: "Não mostrar isso novamente",
-    startLearning: "Começar Aprendizado",
-    neuralSession: "SESSÃO NEURAL",
-    initializingLink: "Inicialize o link para começar a aprendizagem conversacional.",
-    connectNeuralLink: "Conectar Link Neural",
-    auraActive: "Aura Ativa",
-    processing: "Processando...",
-    astraAnswering: "Astra Learning AI está respondendo",
-    listeningToYou: "Ouvindo você",
-    imListening: "Estou Ouvindo",
-    analyzingRequest: "Analisando seu pedido",
-    waitForExplanation: "Aguarde a explicação",
-    keepTalking: "Continue falando...",
-    takeawaysPlaceholder: '"Quais são as principais conclusões?"',
-    syncing: "Sincronizando...",
-    awaitingLink: "Aguardando Link",
-    sourceMaterial: "Material de Origem",
-    selfView: "Vista Própria",
+    dontShowAgain: "Não mostrar novamente",
+    startLearning: "Iniciar conversa",
+    neuralSession: "Tutor de Estudos",
+    initializingLink: "Converse com a Astra sobre o conteúdo deste estudo.",
+    connectNeuralLink: "Iniciar conversa por voz",
+    auraActive: "Conectado",
+    processing: "Pensando...",
+    astraAnswering: "A Astra está respondendo...",
+    listeningToYou: "Ouvindo...",
+    imListening: "Ouvindo...",
+    analyzingRequest: "Analisando...",
+    waitForExplanation: "Aguarde a resposta",
+    keepTalking: "Pode falar...",
+    takeawaysPlaceholder: "",
+    syncing: "Preparando a conversa...",
+    awaitingLink: "Pronto para conversar",
+    sourceMaterial: "Conteúdo do estudo",
+    selfView: "Sua câmera",
     controls: "Controles",
-    backToOverview: "Voltar para Visão Geral",
-    mute: "Mudo",
-    unmute: "Desativar Mudo",
-    camOn: "Ligar Cam",
-    camOff: "Desligar Cam",
-    readyToStart: "Pronto para iniciar a sessão",
-    initializingGemini: "Inicializando Gemini 3.1 Live...",
-    liveSessionActive: "Sessão Ao Vivo Ativa",
-    sessionError: "Erro na sessão. Por favor, reconecte.",
-    failedConnectMic: "Falha ao conectar. Verifique se o microfone está ativado.",
-    sessionEnded: "Sessão encerrada",
+    backToOverview: "Encerrar",
+    mute: "Silenciar",
+    unmute: "Ativar microfone",
+    camOn: "Câmera ativada",
+    camOff: "Câmera desativada",
+    readyToStart: "Pronto para conversar",
+    initializingGemini: "Preparando a conversa...",
+    liveSessionActive: "Conversa em andamento",
+    sessionError: "Não foi possível iniciar a conversa. Tente novamente.",
+    failedConnectMic: "Erro ao conectar microfone",
+    micPermissionError: "Não foi possível acessar o microfone. Verifique a permissão do navegador.",
+    camPermissionError: "Não foi possível acessar a câmera. Verifique a permissão do navegador.",
+    deviceNotFoundError: "Nenhum dispositivo compatível foi encontrado.",
+    disclaimerText: "A Astra pode cometer erros. Confira informações importantes.",
+    micPaused: "Microfone pausado",
+    sessionEnded: "Conversa encerrada",
     fallbackTranscript: "Astra Learning AI Fallback: Transcrição indisponível.",
     aiStatus: "Status da IA",
     transcriptReady: "TRANSCRIÇÃO: PRONTA",
@@ -705,52 +711,57 @@ const TRANSLATIONS = {
     downloadTxt: "Download .txt",
     noTranscript: "No transcript available for this video.",
     closeAnalysis: "Close Analysis",
-    studyTutorLive: "Study Tutor Live",
-    onboardingTitle: "Welcome to Astra Learning AI Tutor",
-    onboardingDesc: "A fully conversational AI mentor that understands every detail of this video.",
-    onboardingStep1Title: "Speak Naturally",
-    onboardingStep1Desc: "No typing required. Just talk to Astra Learning AI like you would with a human mentor.",
-    onboardingStep2Title: "Context Aware",
-    onboardingStep2Desc: "Astra Learning AI has analyzed the full transcript and can answer complex questions dynamically.",
-    onboardingStep3Title: "Real-time Feedback",
-    onboardingStep3Desc: "The visual core reacts to your voice and AI status in real-time.",
+    studyTutorLive: "Study Tutor",
+    onboardingTitle: "Study Tutor",
+    onboardingDesc: "Talk by voice with Astra about the content of this study.",
+    onboardingStep1Title: "Answers based on the source material",
+    onboardingStep1Desc: "",
+    onboardingStep2Title: "Voice conversation",
+    onboardingStep2Desc: "",
+    onboardingStep3Title: "Context preserved during the session",
+    onboardingStep3Desc: "",
     getStarted: "Get Started",
     onboardingStep4Title: "Limitations",
-    onboardingStep4Desc: "Like all AI, Astra Learning AI may occasionally make mistakes or miss highly specific technical details. Always verify critical information.",
+    onboardingStep4Desc: "Astra can make mistakes. Check important information.",
     exampleQuestionsTitle: "Try asking:",
-    exampleQuestion1: "Summarize the arguments from the first 5 mins.",
-    exampleQuestion2: "Explain the concept of [X] simply.",
+    exampleQuestion1: "Summarize the first five minutes.",
+    exampleQuestion2: "Explain this concept in another way.",
     exampleQuestion3: "What practical examples were mentioned?",
-    dontShowAgain: "Don't show this again",
-    startLearning: "Start Learning",
-    neuralSession: "NEURAL SESSION",
-    initializingLink: "Initialize link to start conversational learning.",
-    connectNeuralLink: "Connect Neural Link",
-    auraActive: "Aura Active",
-    processing: "Processing...",
-    astraAnswering: "Astra Learning AI is answering",
-    listeningToYou: "Listening to you",
-    imListening: "I'm Listening",
-    analyzingRequest: "Analyzing your request",
-    waitForExplanation: "Wait for the explanation",
-    keepTalking: "Keep talking...",
-    takeawaysPlaceholder: '"What are the main takeaways?"',
-    syncing: "Syncing...",
-    awaitingLink: "Awaiting Link",
-    sourceMaterial: "Source Material",
-    selfView: "Self View",
+    dontShowAgain: "Don't show again",
+    startLearning: "Start conversation",
+    neuralSession: "Study Tutor",
+    initializingLink: "Talk to Astra about the content of this study.",
+    connectNeuralLink: "Start voice conversation",
+    auraActive: "Connected",
+    processing: "Thinking...",
+    astraAnswering: "Astra is responding...",
+    listeningToYou: "Listening...",
+    imListening: "Listening...",
+    analyzingRequest: "Analyzing...",
+    waitForExplanation: "Wait for response",
+    keepTalking: "Speak naturally...",
+    takeawaysPlaceholder: "",
+    syncing: "Preparing the conversation...",
+    awaitingLink: "Ready to talk",
+    sourceMaterial: "Study content",
+    selfView: "Your camera",
     controls: "Controls",
-    backToOverview: "Back to Overview",
+    backToOverview: "End",
     mute: "Mute",
     unmute: "Unmute",
-    camOn: "Cam On",
-    camOff: "Cam Off",
-    readyToStart: "Ready to start session",
-    initializingGemini: "Initializing Gemini 3.1 Live...",
-    liveSessionActive: "Live Session Active",
-    sessionError: "Session error. Please reconnect.",
-    failedConnectMic: "Failed to connect. Ensure your microphone is enabled.",
-    sessionEnded: "Session ended",
+    camOn: "Camera on",
+    camOff: "Camera off",
+    readyToStart: "Ready to talk",
+    initializingGemini: "Preparing the conversation...",
+    liveSessionActive: "Conversation active",
+    sessionError: "The conversation could not be started. Try again.",
+    failedConnectMic: "Error connecting microphone",
+    micPermissionError: "Microphone access was not granted. Check your browser permissions.",
+    camPermissionError: "Camera access was not granted. Check your browser permissions.",
+    deviceNotFoundError: "No compatible device was found.",
+    disclaimerText: "Astra can make mistakes. Verify important information.",
+    micPaused: "Microphone paused",
+    sessionEnded: "Conversation ended",
     fallbackTranscript: "Astra Learning AI Fallback: Transcript unavailable.",
     aiStatus: "AI Status",
     transcriptReady: "TRANSCRIPT: READY",
@@ -1015,52 +1026,57 @@ const TRANSLATIONS = {
     downloadTxt: "Descargar .txt",
     noTranscript: "No hay transcripción disponible para este vídeo.",
     closeAnalysis: "Cerrar Análisis",
-    studyTutorLive: "Tutor de Estudio en Vivo",
-    onboardingTitle: "Bienvenido al Tutor Astra Learning AI",
-    onboardingDesc: "Un mentor de IA totalmente conversacional que entiende cada detalle de este video.",
-    onboardingStep1Title: "Habla con Naturalidad",
-    onboardingStep1Desc: "No es necesario escribir. Solo habla con Astra Learning AI como lo harías con un mentor humano.",
-    onboardingStep2Title: "Consciente del Contexto",
-    onboardingStep2Desc: "Astra Learning AI ha analizado la transcripción completa y puede responder preguntas complejas dinamicamente.",
-    onboardingStep3Title: "Retroalimentación en Tiempo Real",
-    onboardingStep3Desc: "El núcleo visual reacciona a tu voz y al estado de la IA en tiempo real.",
+    studyTutorLive: "Tutor de Estudios",
+    onboardingTitle: "Tutor de Estudios",
+    onboardingDesc: "Conversa por voz con Astra sobre el contenido de este estudio.",
+    onboardingStep1Title: "Respuestas basadas en el material",
+    onboardingStep1Desc: "",
+    onboardingStep2Title: "Conversación por voz",
+    onboardingStep2Desc: "",
+    onboardingStep3Title: "Contexto mantenido durante la sesión",
+    onboardingStep3Desc: "",
     getStarted: "Empezar",
     onboardingStep4Title: "Limitaciones",
-    onboardingStep4Desc: "Como toda IA, Astra Learning AI puede cometer errores ocasionalmente o pasar por alto detalles técnicos muy específicos. Siempre verifica la información crítica.",
+    onboardingStep4Desc: "Astra puede cometer errores. Verifica la información importante.",
     exampleQuestionsTitle: "Prueba preguntando:",
-    exampleQuestion1: "Resume los argumentos de los primeros 5 minutos.",
-    exampleQuestion2: "Explica el concepto de [X] de forma sencilla.",
+    exampleQuestion1: "Resume los primeros cinco minutos.",
+    exampleQuestion2: "Explica este concepto de otra forma.",
     exampleQuestion3: "¿Qué ejemplos prácticos se mencionaron?",
-    dontShowAgain: "No volver a mostrar",
-    startLearning: "Empezar Aprendizaje",
-    neuralSession: "SESIÓN NEURAL",
-    initializingLink: "Inicializa el enlace para comenzar el aprendizaje conversacional.",
-    connectNeuralLink: "Conectar Enlace Neural",
-    auraActive: "Aura Activa",
-    processing: "Procesando...",
-    astraAnswering: "Astra Learning AI está respondiendo",
-    listeningToYou: "Escuchándote",
-    imListening: "Estoy Escuchando",
-    analyzingRequest: "Analizando tu solicitud",
-    waitForExplanation: "Espera la explicación",
-    keepTalking: "Sigue hablando...",
-    takeawaysPlaceholder: '"¿Cuáles son las conclusiones principales?"',
-    syncing: "Sincronizando...",
-    awaitingLink: "Esperando Enlace",
-    sourceMaterial: "Material de Origen",
-    selfView: "Vista Propia",
+    dontShowAgain: "No mostrar de nuevo",
+    startLearning: "Iniciar conversación",
+    neuralSession: "Tutor de Estudios",
+    initializingLink: "Conversa con Astra sobre el contenido de este estudio.",
+    connectNeuralLink: "Iniciar conversación por voz",
+    auraActive: "Conectado",
+    processing: "Pensando...",
+    astraAnswering: "Astra está respondiendo...",
+    listeningToYou: "Escuchando...",
+    imListening: "Escuchando...",
+    analyzingRequest: "Analizando...",
+    waitForExplanation: "Espera la respuesta",
+    keepTalking: "Puedes hablar...",
+    takeawaysPlaceholder: "",
+    syncing: "Preparando la conversación...",
+    awaitingLink: "Listo para conversar",
+    sourceMaterial: "Contenido del estudio",
+    selfView: "Tu cámara",
     controls: "Controles",
-    backToOverview: "Volver a la Vista General",
+    backToOverview: "Finalizar",
     mute: "Silenciar",
-    unmute: "Activar Sonido",
-    camOn: "Cámara On",
-    camOff: "Cámara Off",
-    readyToStart: "Listo para iniciar sesión",
-    initializingGemini: "Inicializando Gemini 3.1 Live...",
-    liveSessionActive: "Sesión en Vivo Activa",
-    sessionError: "Error de sesión. Por favor, reconéctate.",
-    failedConnectMic: "Fallo al conectar. Asegúrate de que tu micrófono esté habilitado.",
-    sessionEnded: "Sesión finalizada",
+    unmute: "Activar micrófono",
+    camOn: "Cámara activada",
+    camOff: "Cámara desactivada",
+    readyToStart: "Listo para conversar",
+    initializingGemini: "Preparando la conversación...",
+    liveSessionActive: "Conversación en curso",
+    sessionError: "No se pudo iniciar la conversación. Inténtalo de nuevo.",
+    failedConnectMic: "Error al conectar micrófono",
+    micPermissionError: "No se pudo acceder al micrófono. Verifica los permisos del navegador.",
+    camPermissionError: "No se pudo acceder a la cámara. Verifica los permisos del navegador.",
+    deviceNotFoundError: "No se encontró ningún dispositivo compatible.",
+    disclaimerText: "Astra puede cometer errores. Comprueba la información importante.",
+    micPaused: "Micrófono pausado",
+    sessionEnded: "Conversación finalizada",
     fallbackTranscript: "Astra Learning AI Fallback: Transcripción no disponible.",
     aiStatus: "Estado de la IA",
     transcriptReady: "TRANSCRIPCIÓN: LISTA",
@@ -1476,7 +1492,26 @@ export default function App() {
   const [view, setView] = useState<ComponentState>('landing');
   const [dashboardSubView, setDashboardSubView] = useState<'panel' | 'history' | 'settings'>('panel');
   const [forceCookiePrefs, setForceCookiePrefs] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      const savedTheme = localStorage.getItem('astra_theme');
+      if (savedTheme === 'dark') return true;
+      if (savedTheme === 'light') return false;
+      // Default to light mode (false) on first access if no preference is saved
+      return false;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  // Sync theme changes to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('astra_theme', isDarkMode ? 'dark' : 'light');
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [isDarkMode]);
   const [apiStatus, setApiStatus] = useState<string>(''); 
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentLang, setCurrentLang] = useState<Language>(() => {
@@ -1543,7 +1578,37 @@ export default function App() {
   const [isSidebarLangMenuOpen, setIsSidebarLangMenuOpen] = useState(false);
   const sidebarLangMenuRef = useRef<HTMLDivElement>(null);
   const sidebarLangButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarLangPortalRef = useRef<HTMLDivElement>(null);
   const sidebarUserMenuRef = useRef<HTMLDivElement>(null);
+  const [sidebarLangPopoverCoords, setSidebarLangPopoverCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const updateSidebarLangPopoverPos = useCallback(() => {
+    if (sidebarLangButtonRef.current) {
+      const rect = sidebarLangButtonRef.current.getBoundingClientRect();
+      const popoverHeight = 185;
+      let top = rect.bottom - popoverHeight;
+      if (top < 16) top = 16;
+      if (top + popoverHeight > window.innerHeight - 16) {
+        top = Math.max(16, window.innerHeight - popoverHeight - 16);
+      }
+      setSidebarLangPopoverCoords({
+        top,
+        left: rect.right + 12,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isSidebarCollapsed && isSidebarLangMenuOpen) {
+      updateSidebarLangPopoverPos();
+      window.addEventListener('resize', updateSidebarLangPopoverPos);
+      window.addEventListener('scroll', updateSidebarLangPopoverPos, true);
+      return () => {
+        window.removeEventListener('resize', updateSidebarLangPopoverPos);
+        window.removeEventListener('scroll', updateSidebarLangPopoverPos, true);
+      };
+    }
+  }, [isSidebarCollapsed, isSidebarLangMenuOpen, updateSidebarLangPopoverPos]);
 
   // Handle Stripe redirects in URL parameters
   useEffect(() => {
@@ -2676,11 +2741,15 @@ export default function App() {
           setIsLangMenuOpen(false);
           langButtonRef.current?.focus();
         }
+        if (isSidebarLangMenuOpen) {
+          setIsSidebarLangMenuOpen(false);
+          sidebarLangButtonRef.current?.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLangMenuOpen]);
+  }, [isLangMenuOpen, isSidebarLangMenuOpen]);
 
   useEffect(() => {
     if (window.location.pathname === '/billing/success' || window.location.pathname.startsWith('/billing/success')) {
@@ -2703,7 +2772,8 @@ export default function App() {
       }
       if (
         sidebarLangMenuRef.current &&
-        !sidebarLangMenuRef.current.contains(event.target as Node)
+        !sidebarLangMenuRef.current.contains(event.target as Node) &&
+        !sidebarLangPortalRef.current?.contains(event.target as Node)
       ) {
         setIsSidebarLangMenuOpen(false);
       }
@@ -2907,6 +2977,22 @@ export default function App() {
       setView('dashboard');
     } else {
       setShowLoginModal(true);
+    }
+  };
+
+  const playDemoVideoRef = useRef<((e?: React.MouseEvent | React.KeyboardEvent) => void) | null>(null);
+
+  const handleWatchDemo = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    if (playDemoVideoRef.current) {
+      playDemoVideoRef.current(e);
+    } else {
+      const el = document.getElementById('demo-video-container');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
   };
 
@@ -4073,7 +4159,7 @@ export default function App() {
                     <Button onClick={handleStart} className="justify-center px-10 py-5 text-lg group shadow-xl shadow-orange-600/20 active:scale-95 transition-transform">
                       {t.startFree} <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
                     </Button>
-                    <Button variant="secondary" isDarkMode={isDarkMode} className={`justify-center px-10 py-5 text-lg group active:scale-95 transition-transform ${isDarkMode ? '' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm'}`}>
+                    <Button onClick={handleWatchDemo} variant="secondary" isDarkMode={isDarkMode} className={`justify-center px-10 py-5 text-lg group active:scale-95 transition-transform ${isDarkMode ? '' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm'}`}>
                       {t.watchDemo}
                     </Button>
                   </div>
@@ -4122,7 +4208,12 @@ export default function App() {
             </div>
           </section>
 
-          <AIActivityFeed isDarkMode={isDarkMode} t={t.activityFeed} lang={currentLang} />
+          <AIActivityFeed 
+            isDarkMode={isDarkMode} 
+            t={t.activityFeed} 
+            lang={currentLang}
+            onPlayDemoRef={(fn) => { playDemoVideoRef.current = fn; }}
+          />
 
           {/* Features Grid */}
           <section id="features" className={`py-32 sm:py-36 border-y relative overflow-hidden transition-colors duration-500 ${
@@ -4142,11 +4233,17 @@ export default function App() {
                 }`}>
                   ✦ ECOSYSTEM ✦
                 </span>
-                <h2 className={`text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight ${
-                  isDarkMode ? 'text-white' : 'text-slate-900'
-                }`}>
+                <motion.h2 
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.1 }}
+                  className={`text-3xl md:text-4xl font-bold italic tracking-tight mb-4 ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}
+                >
                   {t.pwrByPrecision}
-                </h2>
+                </motion.h2>
                 <div className="mt-5 w-12 h-1 bg-gradient-to-r from-orange-500 to-orange-600 rounded-full" />
               </div>
 
@@ -4245,7 +4342,7 @@ export default function App() {
           <aside 
             id="sidebar-menu"
             className={`
-              fixed md:relative top-20 left-0 md:top-auto md:left-auto z-50 md:z-auto h-[calc(100vh-80px)] md:h-screen border-r transition-all duration-300 ease-in-out box-border flex flex-col justify-between overflow-x-hidden md:overflow-x-visible overflow-y-auto md:overflow-y-hidden shrink-0
+              fixed md:relative top-20 left-0 md:top-auto md:left-auto z-50 md:z-30 h-[calc(100vh-80px)] md:h-screen border-r transition-all duration-300 ease-in-out box-border flex flex-col justify-between overflow-x-hidden md:overflow-x-visible overflow-y-auto md:overflow-y-hidden shrink-0
               ${isSidebarCollapsed ? 'w-[280px] max-w-[85vw] md:w-20 p-5 md:p-4' : 'w-[280px] max-w-[85vw] md:w-64 p-5 md:p-5'}
               ${isDarkMode ? 'bg-[#0a0a0a] border-white/5' : 'bg-white/90 border-slate-200 shadow-sm'}
               ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
@@ -4378,35 +4475,6 @@ export default function App() {
                 <History size={20} className="shrink-0" />
                 <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'}`}>
                   {t.history}
-                </span>
-              </button>
-            </SidebarTooltip>
-
-            {/* Settings Button */}
-            <SidebarTooltip
-              label={t.settings}
-              isCollapsed={isSidebarCollapsed}
-              isDarkMode={isDarkMode}
-            >
-              <button 
-                onClick={() => {
-                  setDashboardSubView('settings');
-                  setIsSidebarOpen(false);
-                }}
-                aria-label={t.settings}
-                className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
-                  isSidebarCollapsed 
-                    ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
-                    : 'gap-3 px-4 py-3'
-                } ${
-                  dashboardSubView === 'settings'
-                    ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
-                    : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
-                }`}
-              >
-                <Settings size={20} className="shrink-0" />
-                <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'}`}>
-                  {t.settings}
                 </span>
               </button>
             </SidebarTooltip>
@@ -4568,73 +4636,84 @@ export default function App() {
                       </button>
                     </SidebarTooltip>
 
-                    {/* Collapsed Sidebar Language Popover */}
-                    {isSidebarCollapsed && (
-                      <AnimatePresence>
-                        {isSidebarLangMenuOpen && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.94, y: -8 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.94, y: -8 }}
-                            transition={{ 
-                              type: "spring",
-                              stiffness: 300,
-                              damping: 25,
-                              mass: 0.8
-                            }}
-                            role="menu"
-                            className={`absolute left-full ml-3 bottom-0 w-56 rounded-2xl border p-3 shadow-xl z-50 text-left ${
-                              isDarkMode 
-                                ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
-                                : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
-                            }`}
-                          >
-                            {/* Header showing active language */}
-                            <div className="px-2.5 py-1.5 mb-2 text-xs font-semibold tracking-wider opacity-60 uppercase border-b border-white/5 dark:border-white/5 border-slate-100">
-                              {langMenuLabels[currentLang].header}
-                            </div>
+                    {/* Collapsed Sidebar Language Popover rendered via Portal */}
+                    {isSidebarCollapsed && isSidebarLangMenuOpen && createPortal(
+                      <div
+                        ref={sidebarLangPortalRef}
+                        style={{
+                          position: 'fixed',
+                          top: `${sidebarLangPopoverCoords.top}px`,
+                          left: `${sidebarLangPopoverCoords.left}px`,
+                        }}
+                        className="z-[9999]"
+                      >
+                        <AnimatePresence>
+                          {isSidebarLangMenuOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.94, x: -8 }}
+                              animate={{ opacity: 1, scale: 1, x: 0 }}
+                              exit={{ opacity: 0, scale: 0.94, x: -8 }}
+                              transition={{ 
+                                type: "spring",
+                                stiffness: 300,
+                                damping: 25,
+                                mass: 0.8
+                              }}
+                              role="menu"
+                              className={`w-56 rounded-2xl border p-3 shadow-xl text-left ${
+                                isDarkMode 
+                                  ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                                  : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                              }`}
+                            >
+                              {/* Header showing active language */}
+                              <div className="px-2.5 py-1.5 mb-2 text-xs font-semibold tracking-wider opacity-60 uppercase border-b border-white/5 dark:border-white/5 border-slate-100">
+                                {langMenuLabels[currentLang].header}
+                              </div>
 
-                            <div className="space-y-0.5">
-                              {languageOptions.map((option, index) => {
-                                const isSelected = currentLang === option.code;
-                                const isFocused = focusedLangIndex === index;
-                                return (
-                                  <button
-                                    key={option.code}
-                                    role="menuitemradio"
-                                    aria-checked={isSelected}
-                                    onMouseEnter={() => setFocusedLangIndex(index)}
-                                    onClick={() => handleSelectSidebarLanguage(option.code as Language)}
-                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left ${
-                                      isSelected
-                                        ? isDarkMode
-                                          ? 'bg-orange-500/10 text-orange-500 font-bold'
-                                          : 'bg-orange-500/5 text-orange-600 font-bold'
-                                        : isFocused
+                              <div className="space-y-0.5">
+                                {languageOptions.map((option, index) => {
+                                  const isSelected = currentLang === option.code;
+                                  const isFocused = focusedLangIndex === index;
+                                  return (
+                                    <button
+                                      key={option.code}
+                                      role="menuitemradio"
+                                      aria-checked={isSelected}
+                                      onMouseEnter={() => setFocusedLangIndex(index)}
+                                      onClick={() => handleSelectSidebarLanguage(option.code as Language)}
+                                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left ${
+                                        isSelected
                                           ? isDarkMode
-                                            ? 'bg-white/5 text-white'
-                                            : 'bg-slate-100 text-slate-900'
-                                          : isDarkMode
-                                            ? 'text-gray-400 hover:text-white'
-                                            : 'text-slate-600 hover:text-slate-900'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <span>{option.labelNative}</span>
-                                      <span className="text-[9px] font-mono opacity-50 px-1 py-0.5 rounded border border-current scale-90">
-                                        {option.code.toUpperCase()}
-                                      </span>
-                                    </div>
-                                    {isSelected && (
-                                      <Check size={14} className="text-orange-500 shrink-0" />
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                                            ? 'bg-orange-500/10 text-orange-500 font-bold'
+                                            : 'bg-orange-500/5 text-orange-600 font-bold'
+                                          : isFocused
+                                            ? isDarkMode
+                                              ? 'bg-white/5 text-white'
+                                              : 'bg-slate-100 text-slate-900'
+                                            : isDarkMode
+                                              ? 'text-gray-400 hover:text-white'
+                                              : 'text-slate-600 hover:text-slate-900'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span>{option.labelNative}</span>
+                                        <span className="text-[9px] font-mono opacity-50 px-1 py-0.5 rounded border border-current scale-90">
+                                          {option.code.toUpperCase()}
+                                        </span>
+                                      </div>
+                                      {isSelected && (
+                                        <Check size={14} className="text-orange-500 shrink-0" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>,
+                      document.body
                     )}
                   </div>
 
@@ -4727,6 +4806,35 @@ export default function App() {
                   </AnimatePresence>
                 )}
               </div>
+
+              {/* Settings Button */}
+              <SidebarTooltip
+                label={t.settings}
+                isCollapsed={isSidebarCollapsed}
+                isDarkMode={isDarkMode}
+              >
+                <button 
+                  onClick={() => {
+                    setDashboardSubView('settings');
+                    setIsSidebarOpen(false);
+                  }}
+                  aria-label={t.settings}
+                  className={`relative group w-full flex items-center rounded-xl font-medium transition-all cursor-pointer ${
+                    isSidebarCollapsed 
+                      ? 'gap-3 px-4 py-3 md:justify-center md:px-0 md:gap-0' 
+                      : 'gap-3 px-4 py-3'
+                  } ${
+                    dashboardSubView === 'settings'
+                      ? isDarkMode ? 'bg-orange-600/10 text-orange-500 font-bold border border-orange-500/10 shadow-md shadow-orange-600/5' : 'bg-orange-50 text-orange-700 border border-orange-100 shadow-sm font-bold'
+                      : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+                  }`}
+                >
+                  <Settings size={20} className="shrink-0" />
+                  <span className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:hidden' : 'inline-block opacity-100'}`}>
+                    {t.settings}
+                  </span>
+                </button>
+              </SidebarTooltip>
 
               {/* User Profile */}
               {renderUserProfile(true)}

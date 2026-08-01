@@ -14,7 +14,8 @@ import {
   Zap,
   AlertTriangle,
   HelpCircle,
-  Info
+  Info,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AudioStreamer, AudioPlayer } from '../lib/audio-utils';
@@ -27,9 +28,10 @@ interface Props {
   t: any;
   lang?: string;
   explanationLevel?: string;
+  isDarkMode?: boolean;
 }
 
-export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript, onClose, t, lang = 'en', explanationLevel = 'intermediate' }: Props) => {
+export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript, onClose, t, lang = 'en', explanationLevel = 'intermediate', isDarkMode = true }: Props) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -204,16 +206,25 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
 
       ws.onerror = (err) => {
         console.error("[Tutor Client] WebSocket Error:", err);
-        setStatus(t.sessionError);
+        setStatus(t.sessionError || "Não foi possível iniciar a conversa. Tente novamente.");
+        setErrorMessage(t.sessionError || "Não foi possível iniciar a conversa. Tente novamente.");
         stopSession();
       };
 
       sessionRef.current = ws;
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to start session:", error);
       setIsConnecting(false);
-      setStatus(t.failedConnectMic);
+      const isPermErr = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
+      const isNotFoundErr = error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError';
+      const msg = isPermErr 
+        ? (t.micPermissionError || "Não foi possível acessar o microfone. Verifique a permissão do navegador.") 
+        : isNotFoundErr 
+        ? (t.deviceNotFoundError || "Nenhum dispositivo compatível foi encontrado.") 
+        : (t.sessionError || "Não foi possível iniciar a conversa. Tente novamente.");
+      setErrorMessage(msg);
+      setStatus(t.sessionError || "Não foi possível iniciar a conversa.");
     }
   };
 
@@ -248,6 +259,21 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
     };
   }, []);
 
+  // Keyboard Escape listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showOnboarding) {
+          setShowOnboarding(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showOnboarding, onClose]);
+
   const toggleCamera = async () => {
     if (!isCameraOn) {
       try {
@@ -257,8 +283,16 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
           setIsCameraOn(true);
           startCameraStreaming();
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Camera error:", err);
+        const isPermErr = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+        const isNotFoundErr = err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError';
+        const msg = isPermErr 
+          ? (t.camPermissionError || "Não foi possível acessar a câmera. Verifique a permissão do navegador.") 
+          : isNotFoundErr 
+          ? (t.deviceNotFoundError || "Nenhum dispositivo compatível foi encontrado.") 
+          : (t.camPermissionError || "Não foi possível acessar a câmera. Verifique a permissão do navegador.");
+        setErrorMessage(msg);
       }
     } else {
       const stream = videoRef.current?.srcObject as MediaStream;
@@ -291,37 +325,75 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   const visualState = isAiSpeaking ? 'speaking' : isAiThinking ? 'thinking' : isUserSpeaking ? 'listening' : 'idle';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-hidden">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm overflow-y-auto transition-colors ${
+      isDarkMode ? 'bg-black/80' : 'bg-slate-900/40'
+    }`}>
       <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-[#0a0a0a] border border-white/10 rounded-3xl w-full max-w-4xl h-[calc(100dvh-2rem)] md:h-[80vh] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden shadow-2xl shadow-orange-600/10"
+        className={`rounded-2xl sm:rounded-3xl w-full max-w-4xl my-auto max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] md:h-[82vh] flex flex-col overflow-hidden shadow-2xl transition-colors ${
+          isDarkMode 
+            ? 'bg-[#0a0a0a] border border-white/10 shadow-orange-600/10' 
+            : 'bg-white border border-slate-200 shadow-slate-300/50'
+        }`}
       >
+        {/* ARIA-LIVE Status Announcement Region */}
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {isConnected ? (
+            isMuted ? (t.micPaused || "Microfone pausado") :
+            isAiThinking ? t.processing :
+            isAiSpeaking ? t.astraAnswering :
+            isUserSpeaking ? t.listeningToYou :
+            t.imListening
+          ) : (
+            status
+          )}
+        </div>
+
         {/* Header */}
-        <div className="p-6 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`w-3 h-3 rounded-full transition-colors duration-500 ${
+        <div className={`p-3.5 sm:p-5 border-b flex items-center justify-between transition-colors shrink-0 ${
+          isDarkMode ? 'border-white/5 bg-black/40' : 'border-slate-100 bg-slate-50/50'
+        }`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-2.5 h-2.5 rounded-full shrink-0 transition-colors duration-500 ${
               visualState === 'speaking' ? 'bg-orange-500 shadow-[0_0_10px_rgba(234,88,12,0.8)]' : 
               visualState === 'thinking' ? 'bg-orange-400 animate-pulse' :
               visualState === 'listening' ? 'bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.8)]' :
-              isConnected ? 'bg-green-500' : 'bg-gray-600'
+              isConnected ? 'bg-green-500' : (isDarkMode ? 'bg-gray-600' : 'bg-slate-300')
             }`} />
-            <div>
-              <h2 className="font-bold text-white tracking-tight">{t.studyTutorLive}</h2>
-              <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">{status}</p>
+            <div className="min-w-0">
+              <h2 className={`font-semibold text-sm sm:text-base tracking-tight truncate transition-colors ${
+                isDarkMode ? 'text-white' : 'text-slate-900'
+              }`}>{t.studyTutorLive}</h2>
+              <p className={`text-xs font-medium truncate transition-colors ${
+                isDarkMode ? 'text-gray-400' : 'text-slate-500'
+              }`}>{status}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-gray-400 transition-all hover:text-white">
-            <X size={24} />
+          <button 
+            onClick={onClose} 
+            aria-label={t.backToOverview || "Encerrar"}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 shrink-0 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+              isDarkMode 
+                ? 'border-white/10 hover:bg-white/10 text-gray-300 hover:text-white dark:focus-visible:ring-offset-black' 
+                : 'border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-slate-900 focus-visible:ring-offset-white'
+            }`}
+          >
+            <X size={16} />
+            <span className="hidden sm:inline">{t.backToOverview}</span>
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden min-h-0">
           {/* Main Interaction Area */}
-          <div className="flex-1 p-8 flex flex-col items-center justify-center relative overflow-hidden bg-[radial-gradient(circle_at_center,rgba(234,88,12,0.03)_0%,transparent_100%)]">
+          <div className={`flex-1 p-4 sm:p-6 md:p-8 flex flex-col items-center justify-center relative overflow-x-hidden overflow-y-auto transition-colors min-h-[350px] sm:min-h-[400px] ${
+            isDarkMode 
+              ? 'bg-[radial-gradient(circle_at_center,rgba(234,88,12,0.03)_0%,transparent_100%)]' 
+              : 'bg-[radial-gradient(circle_at_center,rgba(234,88,12,0.05)_0%,transparent_100%)] bg-slate-50/50'
+          }`}>
             {/* Dynamic Particle Swarm & Neural Grid */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
               {/* Reactive Background Glow */}
               <motion.div 
                 animate={{ 
@@ -366,15 +438,15 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                     delay: i * 0.1,
                   }}
                   className={`absolute w-1.5 h-1.5 rounded-full blur-[1px] ${
-                    i % 4 === 0 ? 'bg-orange-400' : i % 4 === 1 ? 'bg-orange-500' : i % 4 === 2 ? 'bg-white' : 'bg-blue-400'
+                    i % 4 === 0 ? 'bg-orange-400' : i % 4 === 1 ? 'bg-orange-500' : i % 4 === 2 ? (isDarkMode ? 'bg-white' : 'bg-orange-300') : 'bg-blue-400'
                   }`}
                 />
               ))}
             </div>
 
-            <div className="relative z-10 flex flex-col items-center gap-12">
+            <div className="relative z-10 flex flex-col items-center gap-6 sm:gap-10 md:gap-12 py-2">
               {/* AI Visualizer - The Astra Star Core */}
-              <div className="relative w-80 h-80 flex items-center justify-center">
+              <div className="relative w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center shrink-0">
                 <AnimatePresence>
                   {isConnected && (
                     <motion.div
@@ -445,13 +517,15 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                     boxShadow: visualState === 'listening' ? '0 0 50px rgba(96,165,250,0.3)' : '0 0 100px rgba(234,88,12,0.3)'
                   }}
                   transition={{ duration: 2, repeat: Infinity }}
-                  className={`w-56 h-56 rounded-full flex items-center justify-center relative z-20 transition-all duration-700 ${
+                  className={`w-44 h-44 sm:w-56 sm:h-56 rounded-full flex items-center justify-center relative z-20 transition-all duration-700 ${
                     isConnected 
-                      ? 'bg-black/60 border border-white/10' 
-                      : 'bg-white/5 border border-white/10'
+                      ? (isDarkMode ? 'bg-black/60 border border-white/10' : 'bg-white/90 border border-slate-200/80 shadow-xl shadow-orange-500/10') 
+                      : (isDarkMode ? 'bg-white/5 border border-white/10' : 'bg-slate-100 border border-slate-200')
                   }`}
                 >
-                  <div className="absolute inset-2 rounded-full border border-white/5 backdrop-blur-md" />
+                  <div className={`absolute inset-2 rounded-full border backdrop-blur-md ${
+                    isDarkMode ? 'border-white/5' : 'border-slate-200/60'
+                  }`} />
                   
                   <AnimatePresence mode="wait">
                     {isConnecting ? (
@@ -467,7 +541,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                         >
                           <Loader2 size={64} className="text-orange-500" />
                         </motion.div>
-                        <span className="text-[10px] font-black tracking-widest text-orange-500/50 uppercase">{t.syncing}</span>
+                        <span className="text-[10px] font-black tracking-widest text-orange-500/80 uppercase">{t.syncing}</span>
                       </motion.div>
                     ) : isConnected ? (
                       <motion.div 
@@ -492,9 +566,9 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                           }}
                         >
                           {visualState === 'listening' ? (
-                            <Mic size={80} className="text-blue-400 transition-colors duration-500" />
+                            <Mic size={80} className="text-blue-500 dark:text-blue-400 transition-colors duration-500" />
                           ) : (
-                            <Brain size={80} className={`${visualState === 'speaking' || visualState === 'thinking' ? 'text-orange-400' : 'text-orange-600'} transition-colors duration-500`} />
+                            <Brain size={80} className={`${visualState === 'speaking' || visualState === 'thinking' ? 'text-orange-500' : 'text-orange-600'} transition-colors duration-500`} />
                           )}
                         </motion.div>
 
@@ -540,7 +614,9 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                                repeat: Infinity,
                                delay: i * 0.2
                              }}
-                             className="absolute w-1 h-1 bg-white rounded-full blur-[1px]"
+                             className={`absolute w-1 h-1 rounded-full blur-[1px] ${
+                               isDarkMode ? 'bg-white' : 'bg-orange-400'
+                             }`}
                            />
                         ))}
                         
@@ -566,65 +642,79 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                         </AnimatePresence>
                       </motion.div>
                     ) : (
-                      <motion.div key="ready" initial={{ opacity: 0 }} animate={{ opacity: 0.3 }} className="flex flex-col items-center gap-4">
-                        <Brain size={80} className="text-gray-400" />
-                        <span className="text-[10px] font-black tracking-widest text-gray-500 uppercase">{t.awaitingLink}</span>
+                      <motion.div key="ready" initial={{ opacity: 0 }} animate={{ opacity: 0.4 }} className="flex flex-col items-center gap-4">
+                        <Brain size={80} className={isDarkMode ? 'text-gray-400' : 'text-slate-400'} />
+                        <span className={`text-[10px] font-black tracking-widest uppercase ${
+                          isDarkMode ? 'text-gray-500' : 'text-slate-500'
+                        }`}>{t.awaitingLink}</span>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </motion.div>
 
-                {/* Core Status Badge */}
+                {/* Status Indicator Badge */}
                 {isConnected && (
                   <motion.div 
-                    initial={{ y: 20, opacity: 0 }}
+                    initial={{ y: 10, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-30"
                   >
-                    <div className="px-6 py-2 bg-black border border-orange-500/30 rounded-full text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] shadow-[0_0_20px_rgba(234,88,12,0.2)] flex items-center gap-3">
+                    <div className={`px-4 py-1.5 border rounded-full text-xs font-semibold flex items-center gap-2 transition-colors ${
+                      isDarkMode 
+                        ? 'bg-black/80 border-orange-500/30 text-orange-400 shadow-md shadow-orange-950/50' 
+                        : 'bg-white/90 border-orange-500/30 text-orange-600 shadow-sm shadow-orange-500/10'
+                    }`}>
                       <motion.div 
-                        animate={{ opacity: [0.3, 1, 0.3] }}
-                        transition={{ duration: 2, repeat: Infinity }}
+                        animate={{ opacity: [0.4, 1, 0.4] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
                         className="w-2 h-2 bg-orange-500 rounded-full"
                       />
-                      ASTRA 3.1 LIVE
+                      <span>{t.liveSessionActive || "Conversa em andamento"}</span>
                     </div>
                   </motion.div>
                 )}
               </div>
 
-              <div className="text-center space-y-6 max-w-sm">
+              <div className="text-center space-y-4 max-w-sm mx-auto">
                 {!isConnected && !isConnecting ? (
                   <motion.div
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-8"
+                    className="space-y-6"
                   >
-                    <div className="space-y-3">
-                       <h3 className="text-3xl font-black italic tracking-tighter text-white">{t.neuralSession}</h3>
-                       <p className="text-xs text-gray-400 font-medium leading-relaxed uppercase tracking-widest opacity-60">{t.initializingLink}</p>
+                    <div className="space-y-2">
+                       <h3 className={`text-2xl font-bold tracking-tight transition-colors ${
+                         isDarkMode ? 'text-white' : 'text-slate-900'
+                       }`}>{t.readyToStart || "Pronto para conversar"}</h3>
+                       <p className={`text-xs sm:text-sm font-medium leading-relaxed transition-colors ${
+                         isDarkMode ? 'text-gray-400' : 'text-slate-600'
+                       }`}>{t.initializingLink}</p>
                     </div>
 
                     {errorMessage && (
-                      <div className="p-4 bg-red-950/45 border border-red-500/20 rounded-2xl flex items-start gap-3 text-left">
+                      <div className={`p-3.5 border rounded-2xl flex items-start gap-3 text-left transition-colors ${
+                        isDarkMode ? 'bg-red-950/45 border-red-500/20' : 'bg-red-50 border-red-200'
+                      }`}>
                         <AlertTriangle className="text-red-500 flex-shrink-0 mt-0.5" size={16} />
                         <div className="space-y-1">
-                          <p className="text-xs font-bold text-red-400 uppercase tracking-wider">Server Configuration Needed</p>
-                          <p className="text-[11px] text-red-200/90 leading-normal">
+                          <p className={`text-xs font-bold ${
+                            isDarkMode ? 'text-red-400' : 'text-red-700'
+                          }`}>{t.sessionError}</p>
+                          <p className={`text-[11px] leading-normal ${
+                            isDarkMode ? 'text-red-200/90' : 'text-red-800'
+                          }`}>
                             {errorMessage}
-                          </p>
-                          <p className="text-[10px] text-gray-400/60 leading-normal mt-1.5 font-medium">
-                            ℹ️ Check your <span className="font-mono text-gray-300 bg-white/5 px-1 rounded">GEMINI_API_KEY</span> inside the Secrets section in AI Studio.
                           </p>
                         </div>
                       </div>
                     )}
+
                     <button 
                       onClick={startSession}
-                      className="group relative px-16 py-6 bg-orange-600 text-white rounded-3xl font-black text-xl transition-all transform hover:-translate-y-2 active:translate-y-0 shadow-[0_20px_50px_rgba(234,88,12,0.3)] flex items-center gap-4 overflow-hidden"
+                      aria-label={t.connectNeuralLink || "Iniciar conversa por voz"}
+                      className="group relative px-8 py-3.5 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl font-bold text-sm sm:text-base transition-all transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-orange-600/25 flex items-center justify-center gap-3 mx-auto min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-black"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
-                      <Volume2 size={28} className="group-hover:rotate-12 transition-transform duration-300" /> 
+                      <Volume2 size={20} className="group-hover:scale-110 transition-transform duration-300" /> 
                       {t.connectNeuralLink}
                     </button>
                   </motion.div>
@@ -632,40 +722,53 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="space-y-4"
+                    className="space-y-2"
                   >
-                    <div className="inline-flex items-center gap-3 px-5 py-2 rounded-2xl bg-orange-600/10 border border-orange-600/30 text-[11px] font-black text-orange-400 uppercase tracking-[0.2em] shadow-lg shadow-orange-600/5">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-600/10 border border-orange-600/20 text-xs font-semibold text-orange-600 dark:text-orange-400">
                       <motion.div
-                        animate={{ scale: [1, 1.5, 1] }}
+                        animate={{ scale: [1, 1.4, 1] }}
                         transition={{ duration: 1.5, repeat: Infinity }}
-                      >
-                        <MessageCircle size={14} />
-                      </motion.div>
+                        className="w-1.5 h-1.5 bg-orange-500 rounded-full"
+                      />
                       {t.auraActive}
                     </div>
-                    <div className="space-y-1">
-                      <h3 className="text-2xl font-black text-white tracking-tight uppercase">
-                        {isAiThinking ? t.processing : isAiSpeaking ? t.astraAnswering : isUserSpeaking ? t.listeningToYou : t.imListening}
+                    <div>
+                      <h3 className={`text-xl font-bold tracking-tight transition-colors ${
+                        isDarkMode ? 'text-white' : 'text-slate-900'
+                      }`}>
+                        {isMuted ? (t.micPaused || "Microfone pausado") : isAiThinking ? t.processing : isAiSpeaking ? t.astraAnswering : isUserSpeaking ? t.listeningToYou : t.imListening}
                       </h3>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest opacity-40 italic">
-                        {isAiThinking ? t.analyzingRequest : isAiSpeaking ? t.waitForExplanation : isUserSpeaking ? t.keepTalking : t.takeawaysPlaceholder}
-                      </p>
                     </div>
                   </motion.div>
                 )}
               </div>
             </div>
 
+            {/* Disclaimer Footer */}
+            <div className="mt-4 text-center z-10">
+              <p className={`text-[11px] font-medium transition-colors ${
+                isDarkMode ? 'text-gray-500' : 'text-slate-400'
+              }`}>
+                {t.disclaimerText || "A Astra pode cometer erros. Confira informações importantes."}
+              </p>
+            </div>
+
             {/* Transcription Display */}
             {isConnected && (
-              <div className="absolute bottom-10 left-10 right-10 max-w-2xl mx-auto z-40">
+              <div className="absolute bottom-12 left-8 right-8 max-w-xl mx-auto z-40">
                 <div 
                   ref={transcriptionContainerRef}
-                  className="bg-black/80 backdrop-blur-3xl rounded-3xl border border-white/10 p-6 shadow-2xl flex flex-col gap-4 max-h-56 overflow-y-auto custom-scrollbar scroll-smooth"
+                  className={`backdrop-blur-2xl rounded-2xl border p-4 shadow-xl flex flex-col gap-3 max-h-48 overflow-y-auto custom-scrollbar scroll-smooth transition-colors ${
+                    isDarkMode 
+                      ? 'bg-black/80 border-white/10' 
+                      : 'bg-white/95 border-slate-200 shadow-slate-200/50'
+                  }`}
                 >
                   {transcription.length === 0 ? (
-                    <div className="h-full flex items-center justify-center py-4">
-                      <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest animate-pulse">
+                    <div className="h-full flex items-center justify-center py-2">
+                      <p className={`text-xs font-medium animate-pulse ${
+                        isDarkMode ? 'text-gray-500' : 'text-slate-400'
+                      }`}>
                         {t.auraActive}
                       </p>
                     </div>
@@ -678,23 +781,27 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                         return (
                           <motion.div 
                             key={`msg-${i}`}
-                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                            initial={{ opacity: 0, y: 15, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             transition={{ type: "spring", stiffness: 300, damping: 25 }}
                             className={`flex flex-col ${isAstra ? 'items-start' : 'items-end'}`}
                           >
-                            <div className={`max-w-[90%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                            <div className={`max-w-[90%] px-3.5 py-2 rounded-xl text-xs sm:text-sm leading-relaxed transition-colors ${
                               isAstra 
-                                ? 'bg-orange-600/10 border border-orange-500/20 text-orange-200' 
-                                : 'bg-white/5 border border-white/10 text-gray-200'
+                                ? (isDarkMode ? 'bg-orange-600/10 border border-orange-500/20 text-orange-200' : 'bg-orange-50 border border-orange-200 text-orange-950') 
+                                : (isDarkMode ? 'bg-white/5 border border-white/10 text-gray-200' : 'bg-slate-100 border border-slate-200 text-slate-800')
                             }`}>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-[9px] font-black uppercase tracking-widest ${isAstra ? 'text-orange-500' : 'text-gray-500'}`}>
-                                  {isAstra ? 'ASTRA LEARNING AI' : 'YOU'}
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className={`text-[10px] font-semibold tracking-wide ${
+                                  isAstra 
+                                    ? (isDarkMode ? 'text-orange-400' : 'text-orange-600') 
+                                    : (isDarkMode ? 'text-gray-400' : 'text-slate-500')
+                                }`}>
+                                  {isAstra ? 'Astra' : 'Você'}
                                 </span>
                                 {isAstra && isAiSpeaking && i === transcription.length - 1 && (
                                   <motion.div 
-                                    animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
+                                    animate={{ scale: [1, 1.4, 1], opacity: [0.5, 1, 0.5] }}
                                     transition={{ duration: 1, repeat: Infinity }}
                                     className="w-1 h-1 bg-orange-500 rounded-full"
                                   />
@@ -713,67 +820,116 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
           </div>
 
           {/* Side Panel: Video and Controls */}
-          <div className="w-full md:w-80 bg-black/40 border-l border-white/5 p-4 flex flex-col gap-4 md:overflow-hidden overflow-y-auto custom-scrollbar">
-            {/* YouTube Player */}
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">{t.sourceMaterial}</h4>
-              <div className="aspect-video bg-white/5 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
-                {videoId ? (
-                  <iframe
-                    src={`https://www.youtube.com/embed/${videoId}?autoplay=0&controls=1`}
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
+          <div className={`w-full md:w-80 border-t md:border-t-0 md:border-l p-4 sm:p-5 flex flex-col justify-between gap-4 sm:gap-5 shrink-0 md:overflow-y-auto custom-scrollbar transition-colors ${
+            isDarkMode 
+              ? 'bg-black/40 border-white/5' 
+              : 'bg-slate-50/80 border-slate-200'
+          }`}>
+            <div className="space-y-5">
+              {/* Study Content */}
+              <div className="space-y-2">
+                <h4 className={`text-xs font-bold transition-colors ${
+                  isDarkMode ? 'text-gray-400' : 'text-slate-600'
+                }`}>{t.sourceMaterial}</h4>
+                <div className={`aspect-video rounded-xl overflow-hidden border shadow-sm transition-colors ${
+                  isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-200/60 border-slate-200'
+                }`}>
+                  {videoId ? (
+                    <iframe
+                      src={`https://www.youtube.com/embed/${videoId}?autoplay=0&controls=1`}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex flex-col items-center justify-center p-3 text-center ${
+                      isDarkMode ? 'text-gray-500 bg-white/5' : 'text-slate-400 bg-slate-100'
+                    }`}>
+                      <Video size={24} className="mb-1 opacity-70" />
+                      <span className="text-xs font-medium">{t.sourceMaterial}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Camera */}
+              <div className="space-y-2">
+                <h4 className={`text-xs font-bold transition-colors ${
+                  isDarkMode ? 'text-gray-400' : 'text-slate-600'
+                }`}>{t.selfView}</h4>
+                {isCameraOn ? (
+                  <div className={`aspect-video rounded-xl overflow-hidden border relative shadow-sm transition-colors ${
+                    isDarkMode ? 'bg-black/40 border-white/10' : 'bg-slate-200/60 border-slate-200'
+                  }`}>
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                    <canvas ref={canvasRef} className="hidden" width="320" height="240" />
+                  </div>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-600 bg-white/5">
-                    <Video size={32} />
+                  <div className={`py-3.5 px-3 rounded-xl border flex items-center gap-2.5 transition-colors ${
+                    isDarkMode ? 'bg-white/5 border-white/5 text-gray-400' : 'bg-slate-100/80 border-slate-200 text-slate-500'
+                  }`}>
+                    <VideoOff size={16} className="opacity-70 flex-shrink-0" />
+                    <span className="text-xs font-medium">{t.camOff}</span>
+                    <canvas ref={canvasRef} className="hidden" width="320" height="240" />
                   </div>
                 )}
               </div>
-            </div>
 
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">{t.selfView}</h4>
-              <div className="aspect-video bg-white/5 rounded-2xl overflow-hidden border border-white/10 relative group bg-black/40">
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                {!isCameraOn && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600">
-                    <VideoOff size={24} />
-                    <span className="text-[8px] mt-2 font-mono">{t.camOff}</span>
-                  </div>
-                )}
-                <canvas ref={canvasRef} className="hidden" width="320" height="240" />
+              {/* Controls */}
+              <div className="space-y-2">
+                 <h4 className={`text-xs font-bold transition-colors ${
+                   isDarkMode ? 'text-gray-400' : 'text-slate-600'
+                 }`}>{t.controls}</h4>
+                 <div className="grid grid-cols-2 gap-2">
+                   <button 
+                    disabled={!isConnected}
+                    onClick={() => setIsMuted(!isMuted)}
+                    aria-label={isMuted ? (t.unmute || "Ativar microfone") : (t.mute || "Silenciar")}
+                    aria-pressed={!isMuted}
+                    aria-disabled={!isConnected}
+                    className={`p-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-medium min-h-[44px] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+                      isMuted 
+                        ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                        : (isDarkMode 
+                            ? 'bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 disabled:opacity-30 border border-white/5 dark:focus-visible:ring-offset-black' 
+                            : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 border border-slate-200 shadow-sm focus-visible:ring-offset-white')
+                    }`}
+                   >
+                     {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
+                     <span>{isMuted ? (t.unmute || "Ativar microfone") : (t.mute || "Silenciar")}</span>
+                   </button>
+                   <button 
+                    disabled={!isConnected}
+                    onClick={toggleCamera}
+                    aria-label={isCameraOn ? (t.camOff || "Desativar câmera") : (t.camOn || "Ativar câmera")}
+                    aria-pressed={isCameraOn}
+                    aria-disabled={!isConnected}
+                    className={`p-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-medium min-h-[44px] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+                      isCameraOn 
+                        ? 'bg-green-500/10 text-green-500 border border-green-500/20' 
+                        : (isDarkMode 
+                            ? 'bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 disabled:opacity-30 border border-white/5 dark:focus-visible:ring-offset-black' 
+                            : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 border border-slate-200 shadow-sm focus-visible:ring-offset-white')
+                    }`}
+                   >
+                     {isCameraOn ? <Video size={16} /> : <VideoOff size={16} />}
+                     <span>{isCameraOn ? (t.camOn || "Desativar câmera") : (t.camOff || "Câmera desativada")}</span>
+                   </button>
+                 </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-               <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">{t.controls}</h4>
-               <div className="grid grid-cols-2 gap-2">
-                 <button 
-                  disabled={!isConnected}
-                  onClick={() => setIsMuted(!isMuted)}
-                  className={`p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all ${isMuted ? 'bg-red-600/20 text-red-500' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 border border-white/5'}`}
-                 >
-                   {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
-                   <span className="text-[8px] font-bold uppercase">{isMuted ? t.unmute : t.mute}</span>
-                 </button>
-                 <button 
-                  disabled={!isConnected}
-                  onClick={toggleCamera}
-                  className={`p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all ${isCameraOn ? 'bg-green-600/20 text-green-500 shadow-lg shadow-green-600/10' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 border border-white/5'}`}
-                 >
-                   {isCameraOn ? <Video size={18} /> : <VideoOff size={18} />}
-                   <span className="text-[8px] font-bold uppercase">{isCameraOn ? t.camOn : t.camOff}</span>
-                 </button>
-               </div>
-            </div>
-
+            {/* End Session Button */}
             <button 
               onClick={onClose}
-              className="mt-4 w-full py-3 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-500 hover:text-white rounded-xl transition-all font-bold text-[10px] uppercase tracking-widest"
+              aria-label={t.backToOverview || "Encerrar"}
+              className={`w-full py-2.5 min-h-[44px] border rounded-xl transition-all font-medium text-xs flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+                isDarkMode 
+                  ? 'bg-white/5 hover:bg-red-500/10 hover:border-red-500/30 border-white/5 text-gray-300 hover:text-red-400 dark:focus-visible:ring-offset-black' 
+                  : 'bg-white hover:bg-red-50 border-slate-200 text-slate-700 hover:text-red-600 hover:border-red-200 shadow-sm focus-visible:ring-offset-white'
+              }`}
             >
-              {t.backToOverview}
+              <span>{t.backToOverview}</span>
             </button>
           </div>
         </div>
@@ -786,80 +942,114 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md overflow-hidden"
+            className={`absolute inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 backdrop-blur-md overflow-hidden transition-colors ${
+              isDarkMode ? 'bg-black/80' : 'bg-slate-900/40'
+            }`}
           >
             <motion.div 
-              initial={{ scale: 0.95, y: 20 }}
+              initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 20 }}
-              className="bg-[#0f0f0f] border border-white/10 rounded-[2rem] md:rounded-[2.5rem] w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar shadow-2xl relative"
+              exit={{ scale: 0.95, y: 15 }}
+              className={`border rounded-3xl sm:rounded-[2rem] w-full max-w-xl max-h-[calc(100dvh-2rem)] overflow-y-auto custom-scrollbar shadow-2xl relative transition-colors ${
+                isDarkMode 
+                  ? 'bg-[#0f0f0f] border-white/10 text-white' 
+                  : 'bg-white border-slate-200 text-slate-900'
+              }`}
             >
-              <div className="p-5 sm:p-6 md:p-8 space-y-6 md:space-y-8">
+              <div className="p-5 sm:p-6 space-y-4 sm:space-y-5">
                 {/* Header Side */}
-                <div className="flex flex-col items-center text-center gap-6">
-                  <div className="w-16 h-16 bg-orange-600/20 rounded-3xl flex items-center justify-center border border-orange-500/30 shadow-lg shadow-orange-600/20">
-                    <Brain size={32} className="text-orange-500" />
+                <div className="flex flex-col items-center text-center gap-3">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-md shadow-orange-600/15 ${
+                    isDarkMode ? 'bg-orange-600/20 border-orange-500/30' : 'bg-orange-50 border-orange-200'
+                  }`}>
+                    <Brain size={24} className="text-orange-500" />
                   </div>
-                  <div className="space-y-2">
-                    <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-white uppercase">{t.onboardingTitle}</h2>
-                    <p className="text-gray-400 text-base leading-relaxed">{t.onboardingDesc}</p>
+                  <div className="space-y-1">
+                    <h2 className={`text-xl sm:text-2xl font-black tracking-tight transition-colors ${
+                      isDarkMode ? 'text-white' : 'text-slate-900'
+                    }`}>{t.onboardingTitle}</h2>
+                    <p className={`text-xs sm:text-sm leading-relaxed transition-colors ${
+                      isDarkMode ? 'text-gray-400' : 'text-slate-600'
+                    }`}>{t.onboardingDesc}</p>
                   </div>
                 </div>
 
-                {/* Primary Features */}
-                <div className="grid gap-4">
+                {/* Benefits List (Compact 1 line per benefit) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
                   {[
-                    { icon: <Mic className="text-orange-500" />, title: t.onboardingStep1Title, desc: t.onboardingStep1Desc },
-                    { icon: <BrainCircuit className="text-orange-500" />, title: t.onboardingStep2Title, desc: t.onboardingStep2Desc },
-                    { icon: <Zap className="text-orange-500" />, title: t.onboardingStep3Title, desc: t.onboardingStep3Desc },
-                  ].map((step, idx) => (
-                    <div key={idx} className="flex gap-4 p-5 rounded-2xl bg-white/5 border border-white/10">
-                      <div className="flex-shrink-0 w-10 h-10 bg-orange-600/10 rounded-xl flex items-center justify-center border border-orange-500/20">
-                        {step.icon}
+                    { icon: <BookOpen size={16} className="text-orange-500 flex-shrink-0" />, title: t.onboardingStep1Title },
+                    { icon: <Mic size={16} className="text-orange-500 flex-shrink-0" />, title: t.onboardingStep2Title },
+                    { icon: <BrainCircuit size={16} className="text-orange-500 flex-shrink-0" />, title: t.onboardingStep3Title },
+                  ].map((benefit, idx) => (
+                    <div key={idx} className={`flex items-center gap-2 p-2.5 rounded-xl border transition-colors ${
+                      isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200/80'
+                    }`}>
+                      <div className={`p-1.5 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        isDarkMode ? 'bg-orange-600/10' : 'bg-orange-100/60'
+                      }`}>
+                        {benefit.icon}
                       </div>
-                      <div className="space-y-1">
-                        <h4 className="font-bold text-white text-sm">{step.title}</h4>
-                        <p className="text-xs text-gray-500 leading-relaxed">{step.desc}</p>
-                      </div>
+                      <span className={`text-xs font-semibold leading-tight transition-colors ${
+                        isDarkMode ? 'text-gray-200' : 'text-slate-800'
+                      }`}>{benefit.title}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* Example Questions Section */}
-                <div className="p-6 rounded-3xl bg-orange-600/5 border border-orange-500/20 space-y-4">
-                  <div className="flex items-center gap-2 text-orange-400 font-bold text-sm">
-                    <HelpCircle size={18} />
+                {/* Example Questions Section (Max 2 examples) */}
+                <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-1.5 transition-colors ${
+                  isDarkMode ? 'bg-orange-600/5 border-orange-500/20' : 'bg-orange-50/80 border-orange-200/80'
+                }`}>
+                  <div className="flex items-center gap-2 text-orange-500 font-bold text-xs">
+                    <HelpCircle size={15} />
                     <span>{t.exampleQuestionsTitle}</span>
                   </div>
-                  <div className="grid gap-2">
-                    {[t.exampleQuestion1, t.exampleQuestion2, t.exampleQuestion3].map((q, i) => (
-                      <div key={i} className="text-sm text-gray-400 italic">
+                  <div className="space-y-1">
+                    {[t.exampleQuestion1, t.exampleQuestion2].map((q, i) => (
+                      <p key={i} className={`text-xs italic leading-relaxed transition-colors ${
+                        isDarkMode ? 'text-gray-300' : 'text-slate-700'
+                      }`}>
                         &quot;{q}&quot;
-                      </div>
+                      </p>
                     ))}
                   </div>
                 </div>
 
-                {/* Limitations Alert */}
-                <div className="flex gap-4 p-5 rounded-2xl bg-white/[0.03] border border-white/5">
-                  <AlertTriangle size={20} className="text-yellow-500/60 flex-shrink-0" />
-                  <div className="space-y-1">
-                    <h4 className="text-[11px] font-black uppercase tracking-widest text-yellow-500/80">{t.onboardingStep4Title}</h4>
-                    <p className="text-[11px] text-gray-500 leading-normal">{t.onboardingStep4Desc}</p>
-                  </div>
+                {/* Discrete Limitations Alert */}
+                <div className={`flex items-center gap-2 px-1 py-0.5 text-xs transition-colors ${
+                  isDarkMode ? 'text-gray-400' : 'text-slate-500'
+                }`}>
+                  <AlertTriangle size={15} className="flex-shrink-0 text-amber-500/90" />
+                  <span className="leading-tight">{t.onboardingStep4Desc}</span>
                 </div>
 
                 {/* Footer Actions */}
-                <div className="space-y-6 pt-4 border-t border-white/5">
-                  <div 
-                    className="flex items-center gap-3 cursor-pointer group"
-                    onClick={() => setDontShowAgain(!dontShowAgain)}
+                <div className={`space-y-3.5 pt-3 border-t transition-colors ${
+                  isDarkMode ? 'border-white/5' : 'border-slate-100'
+                }`}>
+                  <label 
+                    htmlFor="dont-show-tutor-onboarding"
+                    className="flex items-center gap-3 cursor-pointer group select-none"
                   >
-                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${dontShowAgain ? 'bg-orange-600 border-orange-600' : 'border-white/20 bg-white/5 group-hover:border-white/40'}`}>
-                      {dontShowAgain && <div className="w-2 h-2 bg-white rounded-sm" />}
+                    <input 
+                      type="checkbox"
+                      id="dont-show-tutor-onboarding"
+                      name="dontShowAgain"
+                      checked={dontShowAgain}
+                      onChange={(e) => setDontShowAgain(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500 peer-focus-visible:ring-offset-2 ${
+                      dontShowAgain 
+                        ? 'bg-orange-600 border-orange-600' 
+                        : (isDarkMode ? 'border-white/20 bg-white/5 group-hover:border-white/40' : 'border-slate-300 bg-slate-50 group-hover:border-slate-400')
+                    }`}>
+                      {dontShowAgain && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
                     </div>
-                    <span className="text-xs text-gray-500 group-hover:text-gray-300 transition-colors uppercase font-black tracking-widest">{t.dontShowAgain}</span>
-                  </div>
+                    <span className={`text-xs transition-colors font-semibold ${
+                      isDarkMode ? 'text-gray-400 group-hover:text-gray-200' : 'text-slate-500 group-hover:text-slate-800'
+                    }`}>{t.dontShowAgain}</span>
+                  </label>
 
                   <button 
                     onClick={() => {
@@ -868,7 +1058,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                       }
                       setShowOnboarding(false);
                     }}
-                    className="w-full py-4 md:py-5 bg-orange-600 text-white rounded-3xl font-black text-lg md:text-xl hover:bg-orange-500 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-orange-600/25 uppercase tracking-tight"
+                    className="w-full min-h-[44px] py-3 bg-orange-600 hover:bg-orange-500 active:scale-[0.99] text-white rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base transition-all shadow-lg shadow-orange-600/20 tracking-tight focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-black"
                   >
                     {t.startLearning}
                   </button>

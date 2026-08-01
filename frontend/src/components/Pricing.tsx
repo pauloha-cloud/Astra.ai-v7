@@ -561,8 +561,8 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className={`text-4xl sm:text-5xl md:text-6xl font-black italic tracking-tighter mb-2 uppercase ${
-              isDarkMode ? 'text-white' : 'text-slate-950'
+            className={`text-3xl md:text-4xl font-bold italic tracking-tight mb-4 ${
+              isDarkMode ? 'text-white' : 'text-gray-900'
             }`}
           >
             {local.title}

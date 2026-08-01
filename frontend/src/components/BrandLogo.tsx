@@ -81,15 +81,15 @@ export const BrandLogo = ({
     <div className={`flex items-center gap-2 select-none min-w-0 ${className}`}>
       {renderIcon()}
       
-      <div className="flex flex-col items-start leading-none justify-center min-w-0">
+      <div className="flex flex-col items-start justify-center min-w-0">
         {/* Top block: Astra (white/dark) + Learning (orange) */}
-        <div className={`font-bold tracking-tight ${textSizes[size]} leading-none truncate w-full`}>
+        <div className={`font-bold tracking-tight ${textSizes[size]} leading-snug whitespace-nowrap`}>
           <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Astra</span>
           <span className="text-orange-600 ml-1">Learning</span>
         </div>
         
         {/* Bottom block: [AI] badge aligned left/below */}
-        <div className="mt-1 flex items-center">
+        <div className="mt-0.5 flex items-center">
           <div className={`border-orange-500 bg-orange-500/5 font-black uppercase text-orange-500 select-none tracking-wider ${badgeSizes[size]}`}>
             AI
           </div>

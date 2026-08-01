@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, 
@@ -22,6 +22,7 @@ interface ActivityItem {
 interface AIActivityFeedProps {
   isDarkMode: boolean;
   lang?: string;
+  onPlayDemoRef?: (fn: (e?: React.MouseEvent | React.KeyboardEvent) => void) => void;
   t: {
     title: string;
     subtitle: string;
@@ -131,15 +132,40 @@ const iframeTitles: Record<string, string> = {
   es: "Video demostrativo de Astra Learning"
 };
 
-export const AIActivityFeed = ({ isDarkMode, t, lang }: AIActivityFeedProps) => {
+export const AIActivityFeed = ({ isDarkMode, t, lang, onPlayDemoRef }: AIActivityFeedProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [thumbError, setThumbError] = useState(false);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const currentLang = (lang as 'pt' | 'en' | 'es') || 'pt';
 
   const playLabel = playAriaLabels[currentLang] || playAriaLabels.pt;
   const videoTitle = iframeTitles[currentLang] || iframeTitles.pt;
 
   const timestamps = [t.now, t.ago2, t.ago5, t.recent, t.recent, t.recent];
+
+  const handlePlayVideo = useCallback((e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    // Smooth scroll to video section considering header height
+    const el = videoContainerRef.current || document.getElementById('demo-video-container');
+    if (el) {
+      el.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+
+    // Open video player modal if not open
+    setIsOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (onPlayDemoRef) {
+      onPlayDemoRef(handlePlayVideo);
+    }
+  }, [onPlayDemoRef, handlePlayVideo]);
 
   // Esc key closure handler
   useEffect(() => {
@@ -198,15 +224,25 @@ export const AIActivityFeed = ({ isDarkMode, t, lang }: AIActivityFeedProps) => 
 
         {/* Video Block Area */}
         <motion.div
+          id="demo-video-container"
+          ref={videoContainerRef}
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.3 }}
-          className="max-w-4xl mx-auto mb-16"
+          className="max-w-4xl mx-auto mb-16 scroll-mt-28"
         >
           <div
-            onClick={() => setIsOpen(true)}
-            className={`group relative aspect-video w-full overflow-hidden rounded-3xl border cursor-pointer transition-all duration-500 shadow-xl ${
+            onClick={handlePlayVideo}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                handlePlayVideo(e);
+              }
+            }}
+            tabIndex={0}
+            role="button"
+            aria-label={playLabel}
+            className={`group relative aspect-video w-full overflow-hidden rounded-3xl border cursor-pointer transition-all duration-500 shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
               isDarkMode 
                 ? 'border-white/10 bg-black/40 hover:border-orange-500/40 hover:shadow-orange-500/5 shadow-black/40' 
                 : 'border-slate-200/80 bg-white hover:border-orange-500/30 hover:shadow-orange-500/5 shadow-slate-200/50'
@@ -241,12 +277,13 @@ export const AIActivityFeed = ({ isDarkMode, t, lang }: AIActivityFeedProps) => 
                 
                 {/* Play Button */}
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsOpen(true);
+                    handlePlayVideo(e);
                   }}
                   aria-label={playLabel}
-                  className="relative w-16 h-16 sm:w-20 sm:h-20 bg-orange-600 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-orange-500 active:scale-95 transition-all duration-300 animate-fade-in"
+                  className="relative w-16 h-16 sm:w-20 sm:h-20 bg-orange-600 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-orange-500 active:scale-95 transition-all duration-300 animate-fade-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                 >
                   <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />
                 </button>
