@@ -17,6 +17,7 @@ interface ActivityItem {
   title: string;
   desc: string;
   type: string;
+  status?: string;
 }
 
 interface AIActivityFeedProps {
@@ -30,6 +31,7 @@ interface AIActivityFeedProps {
     recent: string;
     ago2: string;
     ago5: string;
+    supportingMsg?: string;
     items: ActivityItem[];
   };
 }
@@ -93,19 +95,31 @@ const ActivityItemComponent = ({
               {item.title}
             </h4>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              {isNew && (
-                <div className="flex items-center gap-1">
-                  <span className="relative flex h-2 w-2">
+              {item.status ? (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded border bg-orange-500/10 border-orange-500/20">
+                  <span className="relative flex h-1.5 w-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-500"></span>
                   </span>
-                  <span className="text-[9px] font-black tracking-tighter text-orange-500/80 uppercase">LIVE</span>
+                  <span className="text-[9px] font-mono font-bold tracking-wider text-orange-500 uppercase">{item.status}</span>
                 </div>
+              ) : (
+                <>
+                  {isNew && (
+                    <div className="flex items-center gap-1">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                      </span>
+                      <span className="text-[9px] font-black tracking-tighter text-orange-500/80 uppercase">LIVE</span>
+                    </div>
+                  )}
+                  <span className={`text-[10px] font-mono flex items-center gap-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                    <Clock className="w-2.5 h-2.5" />
+                    {timestamp}
+                  </span>
+                </>
               )}
-              <span className={`text-[10px] font-mono flex items-center gap-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                <Clock className="w-2.5 h-2.5" />
-                {timestamp}
-              </span>
             </div>
           </div>
           <p className={`text-xs leading-relaxed line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -206,7 +220,7 @@ export const AIActivityFeed = ({ isDarkMode, t, lang, onPlayDemoRef }: AIActivit
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className={`text-3xl md:text-4xl font-bold italic tracking-tight mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
+            className={`text-3xl md:text-4xl section-heading-typography mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
           >
             {t.title}
           </motion.h2>
@@ -309,6 +323,20 @@ export const AIActivityFeed = ({ isDarkMode, t, lang, onPlayDemoRef }: AIActivit
             />
           ))}
         </div>
+
+        {t.supportingMsg && (
+          <motion.p
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.4 }}
+            className={`text-center text-xs sm:text-sm mt-10 max-w-2xl mx-auto italic font-medium leading-relaxed ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}
+          >
+            "{t.supportingMsg}"
+          </motion.p>
+        )}
       </div>
 
       {/* Modal Video Player */}

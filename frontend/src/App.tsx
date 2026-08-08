@@ -259,22 +259,24 @@ const TRANSLATIONS = {
     pricing: "Preços",
     faq: "FAQ",
     signIn: "Entrar",
-    startFree: "Começar Agora",
+    startFree: "Comece a Aprender com a Astra",
     watchDemo: "Ver Astra Learning AI em Ação",
     heroTitle: "TRANSFORME ASSISTIR",
     heroHighlight: "EM APRENDER.",
-    heroDesc: "Uma plataforma de aprendizado com IA que transforma vídeos em resumos, mapas mentais, quizzes, flashcards e experiências de estudo personalizadas.",
+    heroDesc: "Transforme vídeos, documentos e ideias em uma experiência de aprendizagem personalizada com IA — com resumos, mapas mentais, flashcards, quizzes e um tutor inteligente que ajuda você a realmente compreender o que estuda.",
     pwrByPrecision: "ECOSSISTEMA INTEGRADO DE ESTUDOS.",
-    aiSummaries: "Resumos com IA",
-    aiSummariesDesc: "Economize horas de vídeo capturando instantaneamente insights e pontos fundamentais.",
-    mindMaps: "Mapas Mentais",
-    mindMapsDesc: "Mapeie conexões visuais para organizar tópicos complexos e aumentar a retenção.",
-    studyTutor: "Tutor de Estudos",
-    studyTutorDesc: "Obtenha explicações personalizadas e tire dúvidas em tempo real com nossa IA inteligente.",
-    quizGen: "Geração de Quizzes",
-    quizGenDesc: "Valide sua compreensão instantaneamente com avaliações geradas dinamicamente.",
-    flashcards: "Flashcards",
-    flashcardsDesc: "Memorize mais rápido com flashcards inteligentes gerados a partir do seu conteúdo de estudo.",
+    ecosystemSubtitle: "Todos os recursos trabalham juntos para transformar conteúdo em compreensão, prática, retenção e evolução contínua.",
+    learningJourney: "Compreender → Organizar → Praticar → Reforçar → Evoluir",
+    aiSummaries: "Compreensão Inteligente",
+    aiSummariesDesc: "Transforme vídeos, documentos e outros conteúdos em explicações e resumos focados nos conceitos mais importantes.",
+    mindMaps: "Organização do Conhecimento",
+    mindMapsDesc: "Conecte ideias e conceitos em mapas visuais que tornam conteúdos complexos mais fáceis de compreender.",
+    studyTutor: "Tutor AI Personalizado",
+    studyTutorDesc: "Converse com a Astra para esclarecer dúvidas, aprofundar conceitos e receber explicações contextualizadas ao seu material de estudo.",
+    quizGen: "Prática Adaptativa",
+    quizGenDesc: "Pratique com quizzes e questões gerados a partir do seu conteúdo para reforçar a compreensão e identificar pontos de atenção.",
+    flashcards: "Memória e Retenção",
+    flashcardsDesc: "Reforce o aprendizado com flashcards inteligentes criados a partir do seu conteúdo de estudo.",
     welcome: "Bem-vindo de volta, Explorador",
     welcomeBack: "Bem-vindo de volta, {name}!",
     readyAnalyze: "Transforme um conteúdo em uma experiência completa de aprendizado.",
@@ -341,7 +343,6 @@ const TRANSLATIONS = {
     noResults: "Nenhum resultado para",
     adjustSearch: "Tente ajustar sua pesquisa ou palavras-chave.",
     summary: "Resumo",
-    flashcards: "Flashcards",
     summarySectionTitle: "Seu Resumo",
     summarySectionDesc: "Explore os principais tópicos extraídos do vídeo.",
     summaryKeyTakeaways: "Principais aprendizados",
@@ -499,10 +500,10 @@ const TRANSLATIONS = {
     noResponse: "Sem resposta do servidor",
     networkIssue: "Problema de conexão de rede ou tempo de espera do servidor esgotado.",
     hero: {
-      badgeOnline: "Astra Learning AI Core Online",
-      badgeOffline: "Astra Learning AI Core Offline",
+      badgeOnline: "MOTOR DE APRENDIZAGEM COM IA ONLINE",
+      badgeOffline: "MOTOR DE APRENDIZAGEM COM IA OFFLINE",
       badgeChecking: "Verificando...",
-      subtitle: "Uma plataforma de aprendizado com IA que transforma vídeos em resumos, mapas mentais, quizzes, flashcards e experiências de estudo personalizadas.",
+      subtitle: "Transforme vídeos, documentos e ideias em uma experiência de aprendizagem personalizada com IA — com resumos, mapas mentais, flashcards, quizzes e um tutor inteligente que ajuda você a realmente compreender o que estuda.",
       processingStates: [
         "Analisando transcrição...",
         "Extraindo conceitos principais...",
@@ -527,41 +528,48 @@ const TRANSLATIONS = {
     tutorSystemInstruction: "Você é o Tutor Astra Learning AI, um educador brilhante e prestativo. Você está em uma sessão ao vivo sobre o vídeo: \"{videoTitle}\". Use o contexto da transcrição para responder perguntas exatamente como um tutor faria. Seja conversacional, conciso e encoraje o pensamento crítico. Mantenha as respostas curtas para melhor interação em tempo real.",
     quizScoreMessage: "Ótimo esforço! Conhecimento é poder.",
     activityFeed: {
-      title: "FLUXO INTELIGENTE EM TEMPO REAL",
-      subtitle: "Veja como o Astra transforma suas fontes de estudo em resumo, tutor, quiz, mapa mental e flashcards.",
+      title: "FLUXO DE APRENDIZAGEM EM TEMPO REAL",
+      subtitle: "Veja como a Astra transforma seus materiais de estudo em uma experiência de aprendizagem inteligente e personalizada — em tempo real.",
       now: "agora",
       recent: "recentemente",
       ago2: "há 2 min",
       ago5: "há 5 min",
+      supportingMsg: "A Astra não apenas gera materiais de estudo. Ela transforma continuamente seu conteúdo, interações e progresso em um caminho de aprendizagem mais inteligente.",
       items: [
         {
-          title: "Sintetizando fluxo do conteúdo",
-          desc: "Ingestão e processamento da transcrição para consolidação de ideias centrais.",
+          title: "Compreendendo Seu Conteúdo",
+          desc: "Analisando seus materiais para identificar os conceitos e conexões mais importantes.",
+          status: "ANALISANDO",
           type: "summary"
         },
         {
-          title: "Mapeando ramificações semânticas",
-          desc: "Estruturação gráfica de conexões lógicas e hierarquia de conceitos de aprendizagem.",
+          title: "Construindo Seu Mapa de Conhecimento",
+          desc: "Organizando ideias em relações visuais claras para que tópicos complexos se tornem mais fáceis de entender.",
+          status: "MAPEANDO",
           type: "mindmap"
         },
         {
-          title: "Estruturando matriz de avaliação",
-          desc: "Análise quantitativa do conteúdo para formulação de testes de fixação personalizados.",
+          title: "Criando Práticas Inteligentes",
+          desc: "Gerando perguntas e quizzes personalizados com base no que você está aprendendo.",
+          status: "GERANDO",
           type: "quiz"
         },
         {
-          title: "Otimizando espaçamento de repetição",
-          desc: "Geração de cartões mnemônicos baseados em lacunas de conhecimento identificadas.",
+          title: "Fortalecendo a Memória de Longo Prazo",
+          desc: "Criando flashcards adaptativos e ciclos de revisão projetados para aumentar a retenção.",
+          status: "ADAPTANDO",
           type: "flashcards"
         },
         {
-          title: "Alinhando modelo cognitivo",
-          desc: "Ajuste de parâmetros do tutor de estudos com base nos metadados do vídeo.",
+          title: "Personalizando Seu Tutor com IA",
+          desc: "Dando ao seu tutor o contexto necessário para explicar conceitos e tirar dúvidas com base no seu material de estudo.",
+          status: "PERSONALIZANDO",
           type: "tutor"
         },
         {
-          title: "Calculando vetores de contexto",
-          desc: "Mapeamento de rotas de aprendizado complementares recomendadas.",
+          title: "Planejando Seus Próximos Passos de Estudo",
+          desc: "Identificando lacunas, progresso e padrões de aprendizagem para recomendar a melhor próxima ação de estudo.",
+          status: "PRONTO",
           type: "rec"
         }
       ]
@@ -575,22 +583,24 @@ const TRANSLATIONS = {
     pricing: "Pricing",
     faq: "FAQ",
     signIn: "Sign In",
-    startFree: "Get Started Now",
+    startFree: "Start Learning with Astra",
     watchDemo: "See Astra Learning AI in Action",
     heroTitle: "TURN WATCHING",
     heroHighlight: "INTO LEARNING.",
-    heroDesc: "An AI-powered learning platform that transforms videos into summaries, mind maps, quizzes, flashcards, and personalized study experiences.",
+    heroDesc: "Turn videos, documents and ideas into a personalized AI-powered learning experience — with summaries, mind maps, flashcards, quizzes and an intelligent tutor that helps you truly understand what you study.",
     pwrByPrecision: "INTELLIGENT STUDY ECOSYSTEM.",
-    aiSummaries: "AI Summaries",
-    aiSummariesDesc: "Save hours of watching by instantly capturing essential insights and takeaways.",
-    mindMaps: "Mind Maps",
-    mindMapsDesc: "Map out key connections visually to organize complex topics and boost retention.",
-    studyTutor: "Study Tutor",
-    studyTutorDesc: "Get tailored explanations and clarify doubts in real time with our smart AI.",
-    quizGen: "Quiz Generation",
-    quizGenDesc: "Validate your comprehension instantly with dynamically generated assessments.",
-    flashcards: "Flashcards",
-    flashcardsDesc: "Memorize faster with smart flashcards generated from your study content.",
+    ecosystemSubtitle: "All capabilities work together to transform content into understanding, practice, retention, and continuous growth.",
+    learningJourney: "Understand → Organize → Practice → Retain → Evolve",
+    aiSummaries: "Intelligent Understanding",
+    aiSummariesDesc: "Transform videos, documents, and other content into explanations and summaries focused on the most important concepts.",
+    mindMaps: "Knowledge Organization",
+    mindMapsDesc: "Connect ideas and concepts into visual maps that make complex topics easier to understand.",
+    studyTutor: "Personalized AI Tutor",
+    studyTutorDesc: "Chat with Astra to clarify doubts, deepen concepts, and receive explanations tailored to your study material.",
+    quizGen: "Adaptive Practice",
+    quizGenDesc: "Practice with quizzes and questions generated from your content to reinforce understanding and identify key areas of focus.",
+    flashcards: "Memory & Retention",
+    flashcardsDesc: "Reinforce learning with intelligent flashcards created directly from your study content.",
     welcome: "Welcome back, Explorer",
     welcomeBack: "Welcome back, {name}!",
     readyAnalyze: "Turn any content into a complete learning experience.",
@@ -657,7 +667,6 @@ const TRANSLATIONS = {
     noResults: "No results for",
     adjustSearch: "Try adjusting your search or keywords.",
     summary: "Summary",
-    flashcards: "Flashcards",
     summarySectionTitle: "Your Summary",
     summarySectionDesc: "Explore the main topics extracted from the video.",
     summaryKeyTakeaways: "Key takeaways",
@@ -815,10 +824,10 @@ const TRANSLATIONS = {
     noResponse: "No response from server",
     networkIssue: "Network connection issue or server timeout.",
     hero: {
-      badgeOnline: "Astra Learning AI Core Online",
-      badgeOffline: "Astra Learning AI Core Offline",
+      badgeOnline: "AI LEARNING ENGINE ONLINE",
+      badgeOffline: "AI LEARNING ENGINE OFFLINE",
       badgeChecking: "Checking...",
-      subtitle: "An AI-powered learning platform that transforms videos into summaries, mind maps, quizzes, flashcards and personalized study experiences.",
+      subtitle: "Turn videos, documents and ideas into a personalized AI-powered learning experience — with summaries, mind maps, flashcards, quizzes and an intelligent tutor that helps you truly understand what you study.",
       processingStates: [
         "Analyzing transcript...",
         "Extracting key concepts...",
@@ -844,40 +853,47 @@ const TRANSLATIONS = {
     quizScoreMessage: "Great effort! Knowledge is power.",
     activityFeed: {
       title: "REAL-TIME LEARNING WORKFLOW",
-      subtitle: "See how Astra turns your study sources into summaries, tutor support, quizzes, mind maps, and flashcards.",
+      subtitle: "See how Astra transforms your study materials into an intelligent, personalized learning experience — in real time.",
       now: "now",
       recent: "recently",
       ago2: "2 min ago",
       ago5: "5 min ago",
+      supportingMsg: "Astra doesn't just generate study materials. It continuously turns your content, interactions and progress into a smarter learning path.",
       items: [
         {
-          title: "Synthesizing content stream",
-          desc: "Parsing and filtering transcripts to consolidate high-value core insights.",
+          title: "Understanding Your Content",
+          desc: "Analyzing your materials to identify the most important concepts and connections.",
+          status: "ANALYZING",
           type: "summary"
         },
         {
-          title: "Mapping visual cognitive paths",
-          desc: "Structuring logical connections and topic hierarchies into visual nodes.",
+          title: "Building Your Knowledge Map",
+          desc: "Organizing ideas into clear visual relationships so complex topics become easier to understand.",
+          status: "MAPPING",
           type: "mindmap"
         },
         {
-          title: "Generating active recall matrix",
-          desc: "Formulating challenge checkpoints directly derived from video timelines.",
+          title: "Creating Smart Practice",
+          desc: "Generating personalized questions and quizzes based on what you are learning.",
+          status: "GENERATING",
           type: "quiz"
         },
         {
-          title: "Constructing spaced recall decks",
-          desc: "Creating high-retention active study cards based on conceptual patterns.",
+          title: "Strengthening Long-Term Memory",
+          desc: "Creating adaptive flashcards and review cycles designed to improve retention.",
+          status: "ADAPTING",
           type: "flashcards"
         },
         {
-          title: "Calibrating contextual tutor model",
-          desc: "Feeding real-time video parameters into the interactive learning assistant.",
+          title: "Personalizing Your AI Tutor",
+          desc: "Giving your tutor the context needed to explain concepts and answer questions based on your study material.",
+          status: "PERSONALIZING",
           type: "tutor"
         },
         {
-          title: "Predicting adaptive learning vector",
-          desc: "Calculating personalized supplemental pathways for next-step expansion.",
+          title: "Planning What You Should Learn Next",
+          desc: "Identifying gaps, progress and learning patterns to recommend the next best study action.",
+          status: "READY",
           type: "rec"
         }
       ]
@@ -891,22 +907,24 @@ const TRANSLATIONS = {
     pricing: "Precios",
     faq: "FAQ",
     signIn: "Iniciar Sesión",
-    startFree: "Empezar Ahora",
+    startFree: "Empieza a Aprender con Astra",
     watchDemo: "Ver Astra Learning AI en Acción",
     heroTitle: "CONVIERTE MIRAR",
     heroHighlight: "EN APRENDER.",
-    heroDesc: "Una plataforma de aprendizaje con IA que transforma videos en resúmenes, mapas mentales, cuestionarios, flashcards y experiencias de estudio personalizadas.",
+    heroDesc: "Transforma videos, documentos e ideas en una experiencia de aprendizaje personalizada con IA — con resúmenes, mapas mentales, flashcards, cuestionarios y un tutor inteligente que te ayuda a comprender realmente lo que estudias.",
     pwrByPrecision: "ECOSISTEMA DE ESTUDIO INTELIGENTE.",
-    aiSummaries: "Resúmenes con IA",
-    aiSummariesDesc: "Ahorra horas de reproducción capturando instantáneamente ideas y puntos clave esenciales.",
-    mindMaps: "Mapas Mentales",
-    mindMapsDesc: "Dibuja conexiones visuales clave para organizar temas complejos y mejorar la retención.",
-    studyTutor: "Tutor de Estudio",
-    studyTutorDesc: "Obtén explicaciones personalizadas y aclara dudas en tiempo real con nuestra IA inteligente.",
-    quizGen: "Generación de Cuestionarios",
-    quizGenDesc: "Valida tu comprensión al instante con evaluaciones generadas dinámicamente.",
-    flashcards: "Flashcards",
-    flashcardsDesc: "Memoriza más rápido con flashcards inteligentes creados a partir de tu contenido de estudio.",
+    ecosystemSubtitle: "Todas las funciones trabajan juntas para transformar el contenido en comprensión, práctica, retención y evolución continua.",
+    learningJourney: "Comprender → Organizar → Practicar → Reforzar → Evolucionar",
+    aiSummaries: "Comprensión Inteligente",
+    aiSummariesDesc: "Transforma videos, documentos y otros contenidos en explicaciones y resúmenes enfocados en los conceptos más importantes.",
+    mindMaps: "Organización del Conocimiento",
+    mindMapsDesc: "Conecta ideas y conceptos en mapas visuales que hacen que los temas complejos sean más fáciles de entender.",
+    studyTutor: "Tutor de IA Personalizado",
+    studyTutorDesc: "Chatea con Astra para aclarar dudas, profundizar conceptos y recibir explicaciones contextualizadas a tu material de estudio.",
+    quizGen: "Práctica Adaptativa",
+    quizGenDesc: "Practica con cuestionarios y preguntas generados a partir de tu contenido para reforzar la comprensión e identificar puntos clave.",
+    flashcards: "Memoria y Retención",
+    flashcardsDesc: "Refuerza el aprendizaje con flashcards inteligentes creadas a partir de tu contenido de estudio.",
     welcome: "Bienvenido de nuevo, Explorador",
     welcomeBack: "¡Bienvenido de nuevo, {name}!",
     readyAnalyze: "Transforma cualquier contenido en una experiencia completa de aprendizaje.",
@@ -973,7 +991,6 @@ const TRANSLATIONS = {
     noResults: "No hay resultados para",
     adjustSearch: "Prueba ajustando tu búsqueda o palabras clave.",
     summary: "Resumen",
-    flashcards: "Flashcards",
     summarySectionTitle: "Tu resumen",
     summarySectionDesc: "Explora los principales temas extraídos del video.",
     summaryKeyTakeaways: "Aprendizajes clave",
@@ -1131,10 +1148,10 @@ const TRANSLATIONS = {
     noResponse: "Sin respuesta del servidor",
     networkIssue: "Problema de conexión de red o tiempo de espera del servidor agotado.",
     hero: {
-      badgeOnline: "Astra Learning AI Core Online",
-      badgeOffline: "Astra Learning AI Core Offline",
+      badgeOnline: "MOTOR DE APRENDIZAJE CON IA ONLINE",
+      badgeOffline: "MOTOR DE APRENDIZAJE CON IA OFFLINE",
       badgeChecking: "Verificando...",
-      subtitle: "Una plataforma de aprendizaje con IA que transforma videos en resúmenes, mapas mentales, quizzes, flashcards y experiencias de estudio personalizadas.",
+      subtitle: "Transforma videos, documentos e ideas en una experiencia de aprendizaje personalizada con IA — con resúmenes, mapas mentales, flashcards, cuestionarios y un tutor inteligente que te ayuda a comprender realmente lo que estudias.",
       processingStates: [
         "Analizando transcripción...",
         "Extrayendo conceptos principales...",
@@ -1160,41 +1177,48 @@ const TRANSLATIONS = {
     // Eres el Tutor Astra Learning AI, un educador brillante y servicial. Estás en una sesión en vivo sobre el video: "{videoTitle}". Usa el contexto de la transcripción para responder preguntas exactamente como lo haría un tutor. Sé conversador, conciso y fomenta el pensamiento crítico. Mantén las respuestas cortas para una mejor interacción en tiempo real.
     quizScoreMessage: "¡Gran esfuerzo! El conocimiento es poder.",
     activityFeed: {
-      title: "FLUJO INTELIGENTE EN TIEMPO REAL",
-      subtitle: "Mira cómo Astra transforma tus fuentes de estudio en resúmenes, tutor, cuestionarios, mapas mentales y flashcards.",
+      title: "FLUJO DE APRENDIZAJE EN TIEMPO REAL",
+      subtitle: "Mira cómo Astra transforma tus materiales de estudio en una experiencia de aprendizaje inteligente y personalizada — en tiempo real.",
       now: "ahora",
       recent: "recientemente",
       ago2: "hace 2 min",
       ago5: "hace 5 min",
+      supportingMsg: "Astra no solo genera materiales de estudio. Transforma continuamente tu contenido, interacciones y progreso en un camino de aprendizaje más inteligente.",
       items: [
         {
-          title: "Sintetizando flujo de contenido",
-          desc: "Procesando transcripciones para consolidar ideas esenciales en tiempo real.",
+          title: "Comprendiendo Tu Contenido",
+          desc: "Analizando tus materiales para identificar los conceptos y conexiones más importantes.",
+          status: "ANALIZANDO",
           type: "summary"
         },
         {
-          title: "Mapeando rutas cognitivas visuales",
-          desc: "Estructurando conexiones lógicas y jerarquías de temas en nodos visuales.",
+          title: "Construyendo Tu Mapa de Conocimiento",
+          desc: "Organizando ideas en relaciones visuales claras para que los temas complejos sean más fáciles de entender.",
+          status: "MAPEANDO",
           type: "mindmap"
         },
         {
-          title: "Estructurando matriz de evaluación",
-          desc: "Formulando puntos de control interactivos basados en el progreso del video.",
+          title: "Creando Práctica Inteligente",
+          desc: "Generando preguntas y cuestionarios personalizados basados en lo que estás aprendiendo.",
+          status: "GENERANDO",
           type: "quiz"
         },
         {
-          title: "Generando mazos de repaso activo",
-          desc: "Creando tarjetas de memoria optimizadas para la retención conceptual continua.",
+          title: "Fortaleciendo la Memoria a Largo Plazo",
+          desc: "Creando flashcards adaptativas y ciclos de repaso diseñados para mejorar la retención.",
+          status: "ADAPTANDO",
           type: "flashcards"
         },
         {
-          title: "Calibrando modelo de tutor virtual",
-          desc: "Cargando parámetros de aprendizaje conversacional en el asistente inteligente.",
+          title: "Personalizando Tu Tutor con IA",
+          desc: "Dando a tu tutor el contexto necesario para explicar conceptos y responder preguntas según tu material de estudio.",
+          status: "PERSONALIZANDO",
           type: "tutor"
         },
         {
-          title: "Calculando vectores de aprendizaje",
-          desc: "Proyectando recomendaciones de estudio y temas complementarios sugeridos.",
+          title: "Planificando Qué Deberías Aprender Después",
+          desc: "Identificando lagunas, progreso y patrones de aprendizaje para recomendar la mejor siguiente acción de estudio.",
+          status: "LISTO",
           type: "rec"
         }
       ]
@@ -4405,12 +4429,19 @@ export default function App() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.1 }}
-                  className={`text-3xl md:text-4xl font-bold italic tracking-tight mb-4 ${
+                  className={`text-3xl md:text-4xl section-heading-typography mb-3 ${
                     isDarkMode ? 'text-white' : 'text-gray-900'
                   }`}
                 >
                   {t.pwrByPrecision}
                 </motion.h2>
+                {t.ecosystemSubtitle && (
+                  <p className={`text-sm sm:text-base max-w-2xl leading-relaxed font-medium ${
+                    isDarkMode ? 'text-neutral-400' : 'text-slate-600'
+                  }`}>
+                    {t.ecosystemSubtitle}
+                  </p>
+                )}
                 <div className="mt-5 w-12 h-1 bg-gradient-to-r from-orange-500 to-orange-600 rounded-full" />
               </div>
 
@@ -4480,6 +4511,24 @@ export default function App() {
                   </motion.div>
                 ))}
               </motion.div>
+
+              {t.learningJourney && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-12 text-center"
+                >
+                  <span className={`inline-flex items-center gap-2 text-xs sm:text-sm font-mono tracking-wide px-4 py-1.5 rounded-full border ${
+                    isDarkMode
+                      ? 'text-neutral-400 bg-neutral-900/60 border-neutral-800'
+                      : 'text-slate-600 bg-slate-100/80 border-slate-200'
+                  }`}>
+                    {t.learningJourney}
+                  </span>
+                </motion.div>
+              )}
             </div>
           </section>
 

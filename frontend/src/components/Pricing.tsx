@@ -44,14 +44,14 @@ const LOCAL_PRICING_LANG = {
     mo: "/mês",
     
     // Add-ons Translation
-    addonsTitle: "Minutos Extras do Tutor por Voz",
-    addonsSubtitle: "Acabou seu limite mensal? Continue estudando comprando minutos extras para o Voice Tutor.",
-    addonsExpiry: "Minutos extras válidos por 90 dias.",
-    addonBuyBtn: "Comprar minutos",
+    addonsTitle: "MINUTOS EXTRAS DO TUTOR POR VOZ",
+    addonsSubtitle: "Precisa de mais tempo com a Astra? Adicione minutos extras do Voice Tutor a qualquer momento e continue sua sessão de aprendizado.",
+    addonsExpiry: "Válidos por 90 dias após a compra",
+    addonBuyBtn: "ADICIONAR MINUTOS",
     checkoutSoon: "Checkout em breve.",
     
     // Explain text
-    explainText: "O Voice Tutor usa minutos mensais porque conversas por voz consomem recursos de IA em tempo real. Isso garante uma experiência estável e sustentável.",
+    explainText: "Os minutos do Voice Tutor permitem conversas em tempo real com a Astra. Seu plano mensal inclui uma quantidade de minutos, e você pode adicionar minutos extras a qualquer momento sem alterar sua assinatura.",
 
     // Plan Descriptions
     starterDesc: "Para quem quer começar a estudar com IA de forma simples e acessível.",
@@ -69,12 +69,17 @@ const LOCAL_PRICING_LANG = {
     proCTA: "Obter Pro",
 
     // Packages names
-    package100: "+100 min",
-    package500: "+500 min",
-    package1000: "+1.000 min",
-    package100Label: "+100 min de Tutor por Voz",
-    package500Label: "+500 min de Tutor por Voz",
-    package1000Label: "+1.000 min de Tutor por Voz",
+    package100: "100 MINUTOS EXTRAS",
+    package500: "500 MINUTOS EXTRAS",
+    package1000: "1.000 MINUTOS EXTRAS",
+    package100Label: "Ideal para sessões extras ocasionais",
+    package500Label: "Ideal para uso regular do Voice Tutor",
+    package1000Label: "Ideal para aprendizado intensivo",
+    package100Btn: "ADICIONAR 100 MINUTOS",
+    package500Btn: "ADICIONAR 500 MINUTOS",
+    package1000Btn: "ADICIONAR 1.000 MINUTOS",
+    package500Value: "Melhor custo por minuto",
+    package1000Value: "Melhor valor por minuto",
 
     // Live Limit warnings
     limitReached: "Você atingiu seu limite mensal de Tutor por Voz. Compre minutos extras ou faça upgrade para continuar.",
@@ -142,14 +147,14 @@ const LOCAL_PRICING_LANG = {
     mo: "/mo",
 
     // Add-ons Translation
-    addonsTitle: "Extra Voice Tutor Minutes",
-    addonsSubtitle: "Reached your monthly limit? Keep learning by purchasing extra Voice Tutor minutes.",
-    addonsExpiry: "Extra minutes are valid for 90 days.",
-    addonBuyBtn: "Buy minutes",
+    addonsTitle: "EXTRA VOICE TUTOR MINUTES",
+    addonsSubtitle: "Need more time with Astra? Add extra Voice Tutor minutes anytime and keep your learning session going.",
+    addonsExpiry: "Valid for 90 days after purchase",
+    addonBuyBtn: "ADD MINUTES",
     checkoutSoon: "Checkout coming soon.",
     
     // Explain text
-    explainText: "Voice Tutor uses monthly minutes because voice conversations consume real-time AI resources. This keeps the experience stable and sustainable.",
+    explainText: "Voice Tutor minutes power real-time AI conversations with Astra. Your monthly plan includes a set allowance, and you can add extra minutes anytime without changing your subscription.",
 
     // Plan Descriptions
     starterDesc: "For users who want to start studying with AI in a simple and affordable way.",
@@ -167,12 +172,17 @@ const LOCAL_PRICING_LANG = {
     proCTA: "Get Pro",
 
     // Packages names
-    package100: "+100 min",
-    package500: "+500 min",
-    package1000: "+1,000 min",
-    package100Label: "+100 Voice Tutor min",
-    package500Label: "+500 Voice Tutor min",
-    package1000Label: "+1,000 Voice Tutor min",
+    package100: "100 EXTRA MINUTES",
+    package500: "500 EXTRA MINUTES",
+    package1000: "1,000 EXTRA MINUTES",
+    package100Label: "Ideal for occasional extra sessions",
+    package500Label: "Great for regular Voice Tutor use",
+    package1000Label: "Best for intensive learning",
+    package100Btn: "ADD 100 MINUTES",
+    package500Btn: "ADD 500 MINUTES",
+    package1000Btn: "ADD 1,000 MINUTES",
+    package500Value: "Better value per minute",
+    package1000Value: "Best value per minute",
 
     // Live Limit warnings
     limitReached: "You have reached your monthly Voice Tutor limit. Buy extra minutes or upgrade to continue.",
@@ -239,14 +249,14 @@ const LOCAL_PRICING_LANG = {
     mo: "/mes",
 
     // Add-ons Translation
-    addonsTitle: "Minutos Extra del Tutor por Voz",
-    addonsSubtitle: "¿Alcanzaste tu límite mensual? Sigue aprendiendo comprando minutos extra para el Voice Tutor.",
-    addonsExpiry: "Los minutos extra son válidos por 90 días.",
-    addonBuyBtn: "Comprar minutos",
+    addonsTitle: "MINUTOS EXTRA DEL TUTOR POR VOZ",
+    addonsSubtitle: "¿Necesitas más tiempo con Astra? Añade minutos adicionales de Voice Tutor en cualquier momento y continúa tu sesión de aprendizaje.",
+    addonsExpiry: "Válidos durante 90 días después de la compra",
+    addonBuyBtn: "AÑADIR MINUTOS",
     checkoutSoon: "Checkout próximamente.",
     
     // Explain text
-    explainText: "El Tutor por Voz usa minutos mensuales porque las conversaciones por voz consumen recursos de IA en tiempo real. Esto mantiene la experiencia estable y sostenible.",
+    explainText: "Los minutos de Voice Tutor permiten conversaciones en tiempo real con Astra. Tu plan mensual incluye una cantidad de minutos y puedes añadir minutos adicionales en cualquier momento sin cambiar tu suscripción.",
 
     // Plan Descriptions
     starterDesc: "Para quienes quieren comenzar a estudiar con IA de forma simple y accesible.",
@@ -264,12 +274,17 @@ const LOCAL_PRICING_LANG = {
     proCTA: "Obtener Pro",
 
     // Packages names
-    package100: "+100 min",
-    package500: "+500 min",
-    package1000: "+1.000 min",
-    package100Label: "+100 min de Tutor por Voz",
-    package500Label: "+500 min de Tutor por Voz",
-    package1000Label: "+1.000 min de Tutor por Voz",
+    package100: "100 MINUTOS EXTRA",
+    package500: "500 MINUTOS EXTRA",
+    package1000: "1.000 MINUTOS EXTRA",
+    package100Label: "Ideal para sesiones adicionales ocasionales",
+    package500Label: "Ideal para el uso habitual de Voice Tutor",
+    package1000Label: "Ideal para un aprendizaje intensivo",
+    package100Btn: "AÑADIR 100 MINUTOS",
+    package500Btn: "AÑADIR 500 MINUTOS",
+    package1000Btn: "AÑADIR 1.000 MINUTOS",
+    package500Value: "Mejor valor por minuto",
+    package1000Value: "Excelente valor por minuto",
 
     // Live Limit warnings
     limitReached: "Has alcanzado tu límite mensual del Tutor por Voz. Compra minutos extra o actualiza tu plan para continuar.",
@@ -399,18 +414,22 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
       title: local.package100,
       price: '$9.90',
       label: local.package100Label,
+      btnText: local.package100Btn,
     },
     {
       id: 'addon_500',
       title: local.package500,
       price: '$39.00',
       label: local.package500Label,
+      btnText: local.package500Btn,
     },
     {
       id: 'addon_1000',
       title: local.package1000,
       price: '$69.00',
       label: local.package1000Label,
+      btnText: local.package1000Btn,
+      valueBadge: local.package1000Value,
     },
   ];
 
@@ -561,7 +580,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className={`text-3xl md:text-4xl font-bold italic tracking-tight mb-4 ${
+            className={`text-3xl md:text-4xl section-heading-typography mb-4 ${
               isDarkMode ? 'text-white' : 'text-gray-900'
             }`}
           >
@@ -861,7 +880,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
         {/* Extra Voice Tutor Add-ons Section */}
         <div className="relative z-10 max-w-5xl mx-auto">
           <div className="text-center mb-10 space-y-2">
-            <h3 className={`text-2xl sm:text-3xl font-black italic uppercase tracking-tight ${
+            <h3 className={`text-2xl sm:text-3xl section-heading-typography ${
               isDarkMode ? 'text-white' : 'text-slate-950'
             }`}>
               {local.addonsTitle}
@@ -878,21 +897,32 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
               <motion.div
                 key={addon.id}
                 whileHover={{ y: -4 }}
-                className={`p-6 rounded-2xl border flex flex-col justify-between transition-all duration-300 ${
+                className={`p-6 rounded-2xl border flex flex-col justify-between relative transition-all duration-300 h-full ${
                   isDarkMode
                     ? 'bg-white/[0.01] border-white/5 hover:border-orange-500/30'
                     : 'bg-white border-slate-200 hover:border-orange-500/30 shadow-md'
                 }`}
               >
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-black text-orange-500 uppercase tracking-tight">
+                <div className="flex flex-col">
+                  {/* Reserved Badge Row (Same height across all 3 cards) */}
+                  <div className="h-6 flex items-center mb-3">
+                    {addon.valueBadge ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/20">
+                        {addon.valueBadge}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {/* Title Row */}
+                  <div className="flex items-center justify-between min-h-[28px] mb-3">
+                    <span className="text-sm sm:text-base font-black text-orange-500 uppercase tracking-tight">
                       {addon.title}
                     </span>
-                    <Clock size={18} className="text-orange-500/60" />
+                    <Clock size={18} className="text-orange-500/60 flex-shrink-0 ml-2" />
                   </div>
                   
-                  <div>
+                  {/* Price Row */}
+                  <div className="mb-3">
                     <span className={`text-3xl font-black tracking-tight ${
                       isDarkMode ? 'text-white' : 'text-slate-950'
                     }`}>
@@ -900,16 +930,20 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
                     </span>
                   </div>
 
-                  <p className={`text-xs font-bold ${
-                    isDarkMode ? 'text-gray-400' : 'text-slate-600'
-                  }`}>
-                    {addon.label}
-                  </p>
+                  {/* Description Row */}
+                  <div className="min-h-[36px] mb-6">
+                    <p className={`text-xs font-semibold leading-relaxed ${
+                      isDarkMode ? 'text-gray-400' : 'text-slate-600'
+                    }`}>
+                      {addon.label}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  <span className={`block text-[10px] font-black uppercase tracking-wider text-center ${
-                    isDarkMode ? 'text-gray-650' : 'text-slate-400'
+                {/* Bottom Area */}
+                <div className="space-y-4 pt-2">
+                  <span className={`block text-[10px] font-bold uppercase tracking-wider text-center ${
+                    isDarkMode ? 'text-gray-500' : 'text-slate-400'
                   }`}>
                     {local.addonsExpiry}
                   </span>
@@ -919,7 +953,7 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
                     onClick={() => handleBuyAddon(addon.id)}
                     className="w-full py-2.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-black text-xs uppercase tracking-widest transition-all duration-300 active:scale-95 text-center"
                   >
-                    {local.addonBuyBtn}
+                    {addon.btnText || local.addonBuyBtn}
                   </button>
                 </div>
               </motion.div>
