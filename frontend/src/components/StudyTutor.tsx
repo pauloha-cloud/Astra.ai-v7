@@ -44,10 +44,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [aiVolume, setAiVolume] = useState(0);
   const [userVolume, setUserVolume] = useState(0);
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    return localStorage.getItem('astra_onboarding_dismissed') !== 'true';
-  });
-  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(true);
   
   const aiRef = useRef<any>(null);
   const sessionRef = useRef<any>(null);
@@ -263,16 +260,12 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showOnboarding) {
-          setShowOnboarding(false);
-        } else {
-          onClose();
-        }
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showOnboarding, onClose]);
+  }, [onClose]);
 
   const toggleCamera = async () => {
     if (!isCameraOn) {
@@ -918,19 +911,6 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                  </div>
               </div>
             </div>
-
-            {/* End Session Button */}
-            <button 
-              onClick={onClose}
-              aria-label={t.backToOverview || "Encerrar"}
-              className={`w-full py-2.5 min-h-[44px] border rounded-xl transition-all font-medium text-xs flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
-                isDarkMode 
-                  ? 'bg-white/5 hover:bg-red-500/10 hover:border-red-500/30 border-white/5 text-gray-300 hover:text-red-400 dark:focus-visible:ring-offset-black' 
-                  : 'bg-white hover:bg-red-50 border-slate-200 text-slate-700 hover:text-red-600 hover:border-red-200 shadow-sm focus-visible:ring-offset-white'
-              }`}
-            >
-              <span>{t.backToOverview}</span>
-            </button>
           </div>
         </div>
       </motion.div>
@@ -956,6 +936,20 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                   : 'bg-white border-slate-200 text-slate-900'
               }`}
             >
+              {/* Close Button "X" */}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label={t.closeTutor || "Fechar Tutor"}
+                className={`absolute top-3.5 right-3.5 sm:top-4 sm:right-4 p-2 rounded-xl transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+                  isDarkMode 
+                    ? 'text-gray-400 hover:text-white hover:bg-white/10 dark:focus-visible:ring-offset-black' 
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 focus-visible:ring-offset-white'
+                }`}
+              >
+                <X size={18} />
+              </button>
+
               <div className="p-5 sm:p-6 space-y-4 sm:space-y-5">
                 {/* Header Side */}
                 <div className="flex flex-col items-center text-center gap-3">
@@ -1027,37 +1021,9 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
                 <div className={`space-y-3.5 pt-3 border-t transition-colors ${
                   isDarkMode ? 'border-white/5' : 'border-slate-100'
                 }`}>
-                  <label 
-                    htmlFor="dont-show-tutor-onboarding"
-                    className="flex items-center gap-3 cursor-pointer group select-none"
-                  >
-                    <input 
-                      type="checkbox"
-                      id="dont-show-tutor-onboarding"
-                      name="dontShowAgain"
-                      checked={dontShowAgain}
-                      onChange={(e) => setDontShowAgain(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500 peer-focus-visible:ring-offset-2 ${
-                      dontShowAgain 
-                        ? 'bg-orange-600 border-orange-600' 
-                        : (isDarkMode ? 'border-white/20 bg-white/5 group-hover:border-white/40' : 'border-slate-300 bg-slate-50 group-hover:border-slate-400')
-                    }`}>
-                      {dontShowAgain && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
-                    </div>
-                    <span className={`text-xs transition-colors font-semibold ${
-                      isDarkMode ? 'text-gray-400 group-hover:text-gray-200' : 'text-slate-500 group-hover:text-slate-800'
-                    }`}>{t.dontShowAgain}</span>
-                  </label>
-
                   <button 
-                    onClick={() => {
-                      if (dontShowAgain) {
-                        localStorage.setItem('astra_onboarding_dismissed', 'true');
-                      }
-                      setShowOnboarding(false);
-                    }}
+                    type="button"
+                    onClick={() => setShowOnboarding(false)}
                     className="w-full min-h-[44px] py-3 bg-orange-600 hover:bg-orange-500 active:scale-[0.99] text-white rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base transition-all shadow-lg shadow-orange-600/20 tracking-tight focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-black"
                   >
                     {t.startLearning}

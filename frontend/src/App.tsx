@@ -396,6 +396,7 @@ const TRANSLATIONS = {
     downloadTxt: "Baixar .txt",
     noTranscript: "Nenhuma transcrição disponível para este vídeo.",
     closeAnalysis: "Fechar Análise",
+    closeTutor: "Fechar Tutor",
     studyTutorLive: "Tutor de Estudos",
     onboardingTitle: "Tutor de Estudos",
     onboardingDesc: "Converse por voz com a Astra sobre o conteúdo deste estudo.",
@@ -711,6 +712,7 @@ const TRANSLATIONS = {
     downloadTxt: "Download .txt",
     noTranscript: "No transcript available for this video.",
     closeAnalysis: "Close Analysis",
+    closeTutor: "Close Tutor",
     studyTutorLive: "Study Tutor",
     onboardingTitle: "Study Tutor",
     onboardingDesc: "Talk by voice with Astra about the content of this study.",
@@ -1026,6 +1028,7 @@ const TRANSLATIONS = {
     downloadTxt: "Descargar .txt",
     noTranscript: "No hay transcripción disponible para este vídeo.",
     closeAnalysis: "Cerrar Análisis",
+    closeTutor: "Cerrar Tutor",
     studyTutorLive: "Tutor de Estudios",
     onboardingTitle: "Tutor de Estudios",
     onboardingDesc: "Conversa por voz con Astra sobre el contenido de este estudio.",
@@ -1580,7 +1583,10 @@ export default function App() {
   const sidebarLangButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarLangPortalRef = useRef<HTMLDivElement>(null);
   const sidebarUserMenuRef = useRef<HTMLDivElement>(null);
+  const sidebarUserButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarUserPortalRef = useRef<HTMLDivElement>(null);
   const [sidebarLangPopoverCoords, setSidebarLangPopoverCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [sidebarUserPopoverCoords, setSidebarUserPopoverCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   const updateSidebarLangPopoverPos = useCallback(() => {
     if (sidebarLangButtonRef.current) {
@@ -1598,6 +1604,22 @@ export default function App() {
     }
   }, []);
 
+  const updateSidebarUserPopoverPos = useCallback(() => {
+    if (sidebarUserButtonRef.current) {
+      const rect = sidebarUserButtonRef.current.getBoundingClientRect();
+      const popoverHeight = 290;
+      let top = rect.bottom - popoverHeight - 32; // Offset 32px higher than button bottom alignment
+      if (top < 16) top = 16;
+      if (top + popoverHeight > window.innerHeight - 16) {
+        top = Math.max(16, window.innerHeight - popoverHeight - 16);
+      }
+      setSidebarUserPopoverCoords({
+        top,
+        left: rect.right + 12,
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (isSidebarCollapsed && isSidebarLangMenuOpen) {
       updateSidebarLangPopoverPos();
@@ -1609,6 +1631,18 @@ export default function App() {
       };
     }
   }, [isSidebarCollapsed, isSidebarLangMenuOpen, updateSidebarLangPopoverPos]);
+
+  useEffect(() => {
+    if (isSidebarCollapsed && isUserMenuOpen) {
+      updateSidebarUserPopoverPos();
+      window.addEventListener('resize', updateSidebarUserPopoverPos);
+      window.addEventListener('scroll', updateSidebarUserPopoverPos, true);
+      return () => {
+        window.removeEventListener('resize', updateSidebarUserPopoverPos);
+        window.removeEventListener('scroll', updateSidebarUserPopoverPos, true);
+      };
+    }
+  }, [isSidebarCollapsed, isUserMenuOpen, updateSidebarUserPopoverPos]);
 
   // Handle Stripe redirects in URL parameters
   useEffect(() => {
@@ -1823,10 +1857,11 @@ export default function App() {
       <div className="relative group/profile w-full shrink-0" ref={sidebarUserMenuRef}>
         <SidebarTooltip
           label={user.displayName || (currentLang === 'pt' ? 'Perfil' : currentLang === 'es' ? 'Perfil' : 'Profile')}
-          isCollapsed={isSidebarCollapsed}
+          isCollapsed={isSidebarCollapsed && !isUserMenuOpen}
           isDarkMode={isDarkMode}
         >
           <button
+            ref={sidebarUserButtonRef}
             onClick={() => {
               setIsUserMenuOpen(!isUserMenuOpen);
               setIsSidebarLangMenuOpen(false); // Close language menu if open
@@ -1869,112 +1904,243 @@ export default function App() {
           </button>
         </SidebarTooltip>
 
-        <AnimatePresence>
-          {isUserMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.15 }}
-              className={`absolute ${isSidebarCollapsed ? 'left-full ml-3 bottom-0 w-72' : 'left-0 right-0 bottom-full mb-3 w-full min-w-[240px]'} rounded-2xl border p-4 shadow-xl z-50 text-left ${
-                isDarkMode 
-                  ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
-                  : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
-              }`}
-            >
-              {/* User Info Header */}
-              <div className="flex items-center gap-3 pb-3 mb-3 border-b border-white/5 dark:border-white/5 border-slate-100">
-                <img src={user.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-sm font-bold truncate">
-                    {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
-                  </h4>
-                  <p className="text-xs text-gray-400 truncate">
-                    {user.email}
-                  </p>
-                </div>
-              </div>
-
-              {/* Seção de Plano Consolidada */}
-              <div className={`p-3 rounded-xl border mb-3 flex flex-col gap-2.5 ${
-                isDarkMode 
-                  ? 'bg-white/5 border-white/10' 
-                  : 'bg-slate-50 border-slate-200'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">
-                    {currentLang === 'pt' ? 'Plano atual:' : currentLang === 'es' ? 'Plan actual:' : 'Current plan:'}
-                  </span>
-                  <span className="text-xs font-bold text-orange-500">
-                    {getPlanTranslatedName(userPlan, currentLang)}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">
-                    {currentLang === 'pt' ? 'Status:' : currentLang === 'es' ? 'Estado:' : 'Status:'}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {getStatusTranslatedName(subscriptionStatus, currentLang)}
-                  </span>
+        {/* Expanded Sidebar Profile Menu */}
+        {!isSidebarCollapsed && (
+          <AnimatePresence>
+            {isUserMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.15 }}
+                role="menu"
+                className={`absolute left-0 right-0 bottom-full mb-3 w-full min-w-[240px] rounded-2xl border p-4 shadow-xl z-50 text-left ${
+                  isDarkMode 
+                    ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                    : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
+                }`}
+              >
+                {/* User Info Header */}
+                <div className="flex items-center gap-3 pb-3 mb-3 border-b border-white/5 dark:border-white/5 border-slate-100">
+                  <img src={user.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold truncate">
+                      {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
+                    </h4>
+                    <p className="text-xs text-gray-400 truncate">
+                      {user.email}
+                    </p>
+                  </div>
                 </div>
 
-                <button
-                  onClick={async () => {
-                    setIsUserMenuOpen(false);
-                    setIsSidebarOpen(false); // Close mobile drawer if open
-                    if (stripeSubscriptionId || stripeCustomerId) {
-                      await handleOpenPortal();
-                    } else {
-                      setIsUpgradeModalOpen(true);
-                    }
+                {/* Seção de Plano Consolidada */}
+                <div className={`p-3 rounded-xl border mb-3 flex flex-col gap-2.5 ${
+                  isDarkMode 
+                    ? 'bg-white/5 border-white/10' 
+                    : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">
+                      {currentLang === 'pt' ? 'Plano atual:' : currentLang === 'es' ? 'Plan actual:' : 'Current plan:'}
+                    </span>
+                    <span className="text-xs font-bold text-orange-500">
+                      {getPlanTranslatedName(userPlan, currentLang)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">
+                      {currentLang === 'pt' ? 'Status:' : currentLang === 'es' ? 'Estado:' : 'Status:'}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {getStatusTranslatedName(subscriptionStatus, currentLang)}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      setIsUserMenuOpen(false);
+                      setIsSidebarOpen(false); // Close mobile drawer if open
+                      if (stripeSubscriptionId || stripeCustomerId) {
+                        await handleOpenPortal();
+                      } else {
+                        setIsUpgradeModalOpen(true);
+                      }
+                    }}
+                    className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer shadow-sm hover:brightness-110 active:scale-98"
+                  >
+                    <CreditCard size={12} />
+                    <span>
+                      {currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage subscription'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Dropdown Options */}
+                <div className="space-y-1">
+                  {/* Plano e assinatura */}
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsBillingModalOpen(true);
+                      setIsSidebarOpen(false); // Close mobile drawer if open
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
+                      isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                    }`}
+                  >
+                    <CreditCard size={16} className="text-orange-500" />
+                    <span>
+                      {currentLang === 'pt' ? 'Plano e assinatura' : currentLang === 'es' ? 'Plan y facturación' : 'Plan and Billing'}
+                    </span>
+                  </button>
+
+                  {/* Sair */}
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsSidebarOpen(false); // Close mobile drawer if open
+                      signOut();
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-left text-red-500 hover:bg-red-500/10 mt-2 border-t border-white/5 dark:border-white/5 border-slate-100 pt-3 cursor-pointer"
+                  >
+                    <LogOut size={16} />
+                    <span>
+                      {currentLang === 'pt' ? 'Sair' : currentLang === 'es' ? 'Cerrar sesión' : 'Sign Out'}
+                    </span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+
+        {/* Collapsed Sidebar Profile Popover rendered via Portal */}
+        {isSidebarCollapsed && isUserMenuOpen && createPortal(
+          <div
+            ref={sidebarUserPortalRef}
+            style={{
+              position: 'fixed',
+              top: `${sidebarUserPopoverCoords.top}px`,
+              left: `${sidebarUserPopoverCoords.left}px`,
+            }}
+            className="z-[9999]"
+          >
+            <AnimatePresence>
+              {isUserMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.94, x: -8 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.94, x: -8 }}
+                  transition={{ 
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 25,
+                    mass: 0.8
                   }}
-                  className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer shadow-sm hover:brightness-110 active:scale-98"
-                >
-                  <CreditCard size={12} />
-                  <span>
-                    {currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage subscription'}
-                  </span>
-                </button>
-              </div>
-
-              {/* Dropdown Options - Removed Dashboard and Settings */}
-              <div className="space-y-1">
-                {/* Plano e assinatura */}
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    setIsBillingModalOpen(true);
-                    setIsSidebarOpen(false); // Close mobile drawer if open
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
-                    isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                  role="menu"
+                  className={`w-72 rounded-2xl border p-4 shadow-xl text-left ${
+                    isDarkMode 
+                      ? 'bg-[#0d0d0d] border-zinc-800/80 text-white shadow-black/80' 
+                      : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/50'
                   }`}
                 >
-                  <CreditCard size={16} className="text-orange-500" />
-                  <span>
-                    {currentLang === 'pt' ? 'Plano e assinatura' : currentLang === 'es' ? 'Plan y facturación' : 'Plan and Billing'}
-                  </span>
-                </button>
+                  {/* User Info Header */}
+                  <div className="flex items-center gap-3 pb-3 mb-3 border-b border-white/5 dark:border-white/5 border-slate-100">
+                    <img src={user.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-bold truncate">
+                        {user.displayName || (currentLang === 'pt' ? 'Explorador' : currentLang === 'es' ? 'Explorador' : 'Explorer')}
+                      </h4>
+                      <p className="text-xs text-gray-400 truncate">
+                        {user.email}
+                      </p>
+                    </div>
+                  </div>
 
-                {/* Sair */}
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    setIsSidebarOpen(false); // Close mobile drawer if open
-                    signOut();
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-left text-red-500 hover:bg-red-500/10 mt-2 border-t border-white/5 dark:border-white/5 border-slate-100 pt-3 cursor-pointer"
-                >
-                  <LogOut size={16} />
-                  <span>
-                    {currentLang === 'pt' ? 'Sair' : currentLang === 'es' ? 'Cerrar sesión' : 'Sign Out'}
-                  </span>
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  {/* Seção de Plano Consolidada */}
+                  <div className={`p-3 rounded-xl border mb-3 flex flex-col gap-2.5 ${
+                    isDarkMode 
+                      ? 'bg-white/5 border-white/10' 
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-400">
+                        {currentLang === 'pt' ? 'Plano atual:' : currentLang === 'es' ? 'Plan actual:' : 'Current plan:'}
+                      </span>
+                      <span className="text-xs font-bold text-orange-500">
+                        {getPlanTranslatedName(userPlan, currentLang)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-400">
+                        {currentLang === 'pt' ? 'Status:' : currentLang === 'es' ? 'Estado:' : 'Status:'}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {getStatusTranslatedName(subscriptionStatus, currentLang)}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        setIsUserMenuOpen(false);
+                        setIsSidebarOpen(false);
+                        if (stripeSubscriptionId || stripeCustomerId) {
+                          await handleOpenPortal();
+                        } else {
+                          setIsUpgradeModalOpen(true);
+                        }
+                      }}
+                      className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer shadow-sm hover:brightness-110 active:scale-98"
+                    >
+                      <CreditCard size={12} />
+                      <span>
+                        {currentLang === 'pt' ? 'Gerenciar assinatura' : currentLang === 'es' ? 'Gestionar suscripción' : 'Manage subscription'}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Dropdown Options */}
+                  <div className="space-y-1">
+                    {/* Plano e assinatura */}
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsBillingModalOpen(true);
+                        setIsSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
+                        isDarkMode ? 'hover:bg-white/5 text-gray-200 hover:text-white' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                      }`}
+                    >
+                      <CreditCard size={16} className="text-orange-500" />
+                      <span>
+                        {currentLang === 'pt' ? 'Plano e assinatura' : currentLang === 'es' ? 'Plan y facturación' : 'Plan and Billing'}
+                      </span>
+                    </button>
+
+                    {/* Sair */}
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsSidebarOpen(false);
+                        signOut();
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-left text-red-500 hover:bg-red-500/10 mt-2 border-t border-white/5 dark:border-white/5 border-slate-100 pt-3 cursor-pointer"
+                    >
+                      <LogOut size={16} />
+                      <span>
+                        {currentLang === 'pt' ? 'Sair' : currentLang === 'es' ? 'Cerrar sesión' : 'Sign Out'}
+                      </span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>,
+          document.body
+        )}
       </div>
     );
   };
@@ -2761,7 +2927,8 @@ export default function App() {
     function handleClickOutside(event: MouseEvent) {
       const clickedOutsideHeaderUser = !userMenuRef.current || !userMenuRef.current.contains(event.target as Node);
       const clickedOutsideSidebarUser = !sidebarUserMenuRef.current || !sidebarUserMenuRef.current.contains(event.target as Node);
-      if (clickedOutsideHeaderUser && clickedOutsideSidebarUser) {
+      const clickedOutsideSidebarUserPortal = !sidebarUserPortalRef.current || !sidebarUserPortalRef.current.contains(event.target as Node);
+      if (clickedOutsideHeaderUser && clickedOutsideSidebarUser && clickedOutsideSidebarUserPortal) {
         setIsUserMenuOpen(false);
       }
       if (
@@ -4342,9 +4509,9 @@ export default function App() {
           <aside 
             id="sidebar-menu"
             className={`
-              fixed md:relative top-20 left-0 md:top-auto md:left-auto z-50 md:z-30 h-[calc(100vh-80px)] md:h-screen border-r transition-all duration-300 ease-in-out box-border flex flex-col justify-between overflow-x-hidden md:overflow-x-visible overflow-y-auto md:overflow-y-hidden shrink-0
+              fixed md:relative top-20 left-0 md:top-auto md:left-auto z-50 md:z-30 h-[calc(100vh-80px)] md:h-screen border-r md:border-r-0 transition-all duration-300 ease-in-out box-border flex flex-col justify-between overflow-x-hidden md:overflow-x-visible overflow-y-auto md:overflow-y-hidden shrink-0
               ${isSidebarCollapsed ? 'w-[280px] max-w-[85vw] md:w-20 p-5 md:p-4' : 'w-[280px] max-w-[85vw] md:w-64 p-5 md:p-5'}
-              ${isDarkMode ? 'bg-[#0a0a0a] border-white/5' : 'bg-white/90 border-slate-200 shadow-sm'}
+              ${isDarkMode ? 'bg-[#0a0a0a] border-white/5' : 'bg-white/90 border-slate-200 shadow-sm md:shadow-none'}
               ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
             `}
           >
@@ -4841,7 +5008,7 @@ export default function App() {
             </div>
           </aside>
 
-          <section id="main-scrollable-section" className={`flex-1 min-w-0 p-4 sm:p-8 overflow-y-auto overflow-x-hidden ${isDarkMode ? '' : 'bg-transparent'}`}>
+          <section id="main-scrollable-section" className={`flex-1 min-w-0 p-4 sm:p-8 overflow-y-auto overflow-x-hidden md:mt-2 md:ml-1 md:rounded-tl-[20px] md:border-t md:border-l ${isDarkMode ? 'bg-[#111113] border-white/10' : 'bg-white border-slate-200/80'}`}>
             <div className="max-w-[1440px] mx-auto w-full space-y-8">
               {dashboardSubView === 'settings' ? (
                 <SettingsView 
