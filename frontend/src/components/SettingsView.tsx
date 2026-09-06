@@ -27,6 +27,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { api } from '../lib/api';
 
 interface SettingsViewProps {
   user: any;
@@ -106,17 +107,9 @@ export function SettingsView({
     try {
       setPortalLoading(true);
       setPortalError(null);
-      const res = await fetch('/api/stripe/create-portal-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.uid })
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed to create portal session');
-      }
-      const data = await res.json();
-      if (data.url) {
+      const res = await api.post('/stripe/create-portal-session', {});
+      const data = res.data;
+      if (data?.url) {
         window.location.href = data.url;
       } else {
         throw new Error('No url returned from server');

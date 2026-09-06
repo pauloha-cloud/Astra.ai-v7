@@ -4,6 +4,7 @@ import { CheckCircle, ArrowRight, Sparkles, CreditCard, Loader2 } from 'lucide-r
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { api } from '../lib/api';
 
 interface BillingSuccessProps {
   isDarkMode?: boolean;
@@ -89,21 +90,9 @@ export const BillingSuccess = ({
     try {
       setPortalLoading(true);
       setErrorMessage(null);
-      const response = await fetch('/api/stripe/create-portal-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId: user.uid }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Failed to create portal session');
-      }
-
-      const data = await response.json();
-      if (data.url) {
+      const res = await api.post('/stripe/create-portal-session', {});
+      const data = res.data;
+      if (data?.url) {
         window.location.href = data.url;
       } else {
         throw new Error('No portal URL returned from server');

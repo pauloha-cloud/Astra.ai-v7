@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
+import { api } from '../lib/api';
 
 interface Props {
   t: any;
@@ -465,21 +466,9 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
       console.log("[Billing] Opening Customer Portal");
       try {
         setIsLoading(planId);
-        const response = await fetch('/api/stripe/create-portal-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ userId: user.uid }),
-        });
-
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || 'Failed to create portal session');
-        }
-
-        const data = await response.json();
-        if (data.url) {
+        const res = await api.post('/stripe/create-portal-session', {});
+        const data = res.data;
+        if (data?.url) {
           window.location.href = data.url;
           return;
         } else {
@@ -504,34 +493,22 @@ export const Pricing = ({ t, isDarkMode = true, lang = 'en', showToast }: Props)
       setIsLoading(planId);
       console.log(`[Stripe Checkout] Initiating checkout for user: ${user.email}, plan: ${selectedPlan}`);
       
-      const response = await fetch('/api/stripe/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          plan: selectedPlan,
-          userEmail: user.email,
-          userId: user.uid,
-          successUrl: `${window.location.origin}/dashboard?checkout=success`,
-          cancelUrl: `${window.location.origin}/dashboard?checkout=cancel`
-        }),
+      const res = await api.post('/stripe/create-checkout-session', {
+        plan: selectedPlan,
+        successUrl: `${window.location.origin}/dashboard?checkout=success`,
+        cancelUrl: `${window.location.origin}/dashboard?checkout=cancel`
       });
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Failed to initiate checkout session');
-      }
-
-      const data = await response.json();
-      if (data.url) {
+      const data = res.data;
+      if (data?.url) {
         window.location.href = data.url;
       } else {
         throw new Error('No checkout URL received from server');
       }
     } catch (error: any) {
       console.error('[Stripe Checkout] Error:', error);
-      notify(error.message || 'Error processing transaction');
+      const msg = error.response?.data?.error || error.message || 'Error processing transaction';
+      notify(msg);
     } finally {
       setIsLoading(null);
     }

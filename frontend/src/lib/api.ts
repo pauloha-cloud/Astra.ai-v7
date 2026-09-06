@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { auth } from './firebase';
 
 const API_URL = '/api';
 
@@ -10,6 +11,18 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Request interceptor to attach Firebase ID Token to Authorization header if user is authenticated
+api.interceptors.request.use(async (config) => {
+  const user = auth.currentUser;
+
+  if (user) {
+    const token = await user.getIdToken();
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
 });
 
 // Response interceptor to detect HTML responses (such as the platform's security/cookie check page)

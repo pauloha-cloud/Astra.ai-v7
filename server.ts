@@ -17,6 +17,7 @@ import { initializeApp as initializeFirebaseApp } from "firebase/app";
 import { getFirestore as getFirebaseFirestore, doc as firebaseDoc, updateDoc as firebaseUpdateDoc, setDoc as firebaseSetDoc, collection as firebaseCollection, query as firebaseQuery, where as firebaseWhere, getDocs as firebaseGetDocs, getDoc as firebaseGetDoc, serverTimestamp as firebaseServerTimestamp } from "firebase/firestore";
 import { initializeApp as initializeAdminApp, getApps as getAdminApps, getApp as getAdminApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore, FieldValue as AdminFieldValue } from "firebase-admin/firestore";
+import { getAuth as getAdminAuth, type Auth as AdminAuth } from "firebase-admin/auth";
 // @ts-ignore
 import mammoth from "mammoth";
 
@@ -404,6 +405,88 @@ function getFirebaseAdminDb(): any {
   } catch (err: any) {
     console.error("[Backend Firebase Admin] Initialization failed:", err);
     throw err;
+  }
+}
+
+let cachedAdminAuth: AdminAuth | null = null;
+export function getFirebaseAdminAuth(): AdminAuth {
+  if (cachedAdminAuth) return cachedAdminAuth;
+  try {
+    const apps = getAdminApps();
+    let adminApp;
+    if (apps.length === 0) {
+      const firebaseConfigPath = path.resolve(__dirname, "./firebase-applet-config.json");
+      if (!fs.existsSync(firebaseConfigPath)) {
+        throw new Error(`Firebase configuration file not found at ${firebaseConfigPath}`);
+      }
+      const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+      adminApp = initializeAdminApp({
+        projectId: firebaseConfig.projectId,
+      });
+    } else {
+      adminApp = apps[0] || getAdminApp();
+    }
+    cachedAdminAuth = getAdminAuth(adminApp);
+    return cachedAdminAuth;
+  } catch (err: any) {
+    console.error("[Backend Firebase Admin Auth] Initialization failed:", err);
+    throw err;
+  }
+}
+
+export interface AuthenticatedRequest extends express.Request {
+  auth?: {
+    uid: string;
+    email?: string;
+  };
+}
+
+export async function requireAuth(
+  req: AuthenticatedRequest,
+  res: express.Response,
+  next: express.NextFunction
+): Promise<void | express.Response> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || typeof authHeader !== "string") {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
+  const parts = authHeader.trim().split(/\s+/);
+  if (parts.length !== 2 || parts[0] !== "Bearer" || !parts[1]) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
+  const token = parts[1];
+
+  try {
+    const adminAuth = getFirebaseAdminAuth();
+    const decodedToken = await adminAuth.verifyIdToken(token, true);
+    req.auth = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+    };
+    return next();
+  } catch (err: any) {
+    const code = err?.code;
+    const isExpectedAuthError =
+      code && (
+        code === "auth/id-token-expired" ||
+        code === "auth/id-token-revoked" ||
+        code === "auth/invalid-id-token" ||
+        code === "auth/argument-error" ||
+        code === "auth/invalid-argument" ||
+        code === "auth/user-disabled" ||
+        code === "auth/user-not-found" ||
+        String(code).startsWith("auth/")
+      );
+
+    if (isExpectedAuthError) {
+      console.warn(`[requireAuth] Authentication failed: ${code}`);
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    console.error("[requireAuth] Unexpected authentication service error");
+    return res.status(500).json({ error: "authentication_service_error" });
   }
 }
 
@@ -1111,227 +1194,279 @@ async function startServer() {
   app.use(express.json());
 
   // Stripe Checkout Session Creation Endpoint
-  app.post("/api/stripe/create-checkout-session", async (req: express.Request, res: express.Response) => {
-    try {
-      const { plan, userEmail, userId, successUrl, cancelUrl } = req.body;
-
-      if (!plan || !userEmail) {
-        return res.status(400).json({ error: "Missing plan or userEmail parameter." });
-      }
-
-      const validPlans = ["start", "starter", "explorer", "pro"];
-      if (!validPlans.includes(plan)) {
-        return res.status(400).json({ error: "Invalid plan specified." });
-      }
-
-      // Normalize starter to start
-      const targetPlan = (plan === "starter" ? "start" : plan);
-
-      const priceMap: Record<string, string | undefined> = {
-        start: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
-        starter: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
-        explorer: process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT",
-        pro: process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi"
-      };
-
-      const priceId = priceMap[targetPlan];
-      if (!priceId) {
-        return res.status(500).json({ error: `Stripe price ID for plan '${targetPlan}' is not configured on the server.` });
-      }
-
-      const stripe = getStripe();
-      const FRONTEND_URL = process.env.FRONTEND_URL || process.env.APP_URL || "http://localhost:3000";
-
-      console.log(`[Stripe] Creating subscription checkout session for: ${userEmail}, userId: ${userId || 'none'}, plan: ${targetPlan}`);
-
-      const session = await stripe.checkout.sessions.create({
-        mode: "subscription",
-        payment_method_types: ["card"],
-        customer_email: userEmail,
-        line_items: [{ price: priceId, quantity: 1 }],
-        success_url: successUrl || `${FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: cancelUrl || `${FRONTEND_URL}/pricing`,
-        client_reference_id: userId || undefined,
-        metadata: {
-          plan: targetPlan,
-          userId: userId || "",
-          userEmail,
-          app: "astra-learning-ai"
+  app.post(
+    "/api/stripe/create-checkout-session",
+    requireAuth,
+    async (req: AuthenticatedRequest, res: express.Response) => {
+      try {
+        const userId = req.auth?.uid;
+        if (!userId) {
+          return res.status(401).json({ error: "unauthorized" });
         }
-      });
 
-      res.json({ url: session.url });
-    } catch (err: any) {
-      console.error("[Stripe] Failed to create checkout session:", err);
-      res.status(500).json({ error: err.message || "Internal server error creating checkout session." });
+        const userEmail = req.auth?.email;
+        const { plan, successUrl, cancelUrl } = req.body;
+
+        if (!plan) {
+          return res.status(400).json({ error: "Missing plan parameter." });
+        }
+
+        const validPlans = ["start", "starter", "explorer", "pro"];
+        if (!validPlans.includes(plan)) {
+          return res.status(400).json({ error: "Invalid plan specified." });
+        }
+
+        // Normalize starter to start
+        const targetPlan = (plan === "starter" ? "start" : plan);
+
+        const priceMap: Record<string, string | undefined> = {
+          start: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+          starter: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+          explorer: process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT",
+          pro: process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi"
+        };
+
+        const priceId = priceMap[targetPlan];
+        if (!priceId) {
+          return res.status(500).json({ error: `Stripe price ID for plan '${targetPlan}' is not configured on the server.` });
+        }
+
+        const stripe = getStripe();
+        const FRONTEND_URL = process.env.FRONTEND_URL || process.env.APP_URL || "http://localhost:3000";
+
+        console.log(`[Stripe] Creating subscription checkout session for authenticated user: ${userId}, plan: ${targetPlan}`);
+
+        const session = await stripe.checkout.sessions.create({
+          mode: "subscription",
+          payment_method_types: ["card"],
+          ...(userEmail ? { customer_email: userEmail } : {}),
+          line_items: [{ price: priceId, quantity: 1 }],
+          success_url: successUrl || `${FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: cancelUrl || `${FRONTEND_URL}/pricing`,
+          client_reference_id: userId,
+          metadata: {
+            plan: targetPlan,
+            userId: userId,
+            userEmail: userEmail || "",
+            app: "astra-learning-ai"
+          }
+        });
+
+        res.json({ url: session.url });
+      } catch (err: any) {
+        console.error("[Stripe] Failed to create checkout session:", err);
+        res.status(500).json({ error: err.message || "Internal server error creating checkout session." });
+      }
     }
-  });
+  );
 
   // Stripe Upgrade Subscription Endpoint
-  app.post("/api/stripe/update-subscription", async (req: express.Request, res: express.Response) => {
-    try {
-      const { userId, newPlan } = req.body;
-
-      if (!userId || !newPlan) {
-        return res.status(400).json({ error: "Missing userId or newPlan parameters." });
-      }
-
-      const validPlans = ["start", "starter", "explorer", "pro"];
-      if (!validPlans.includes(newPlan)) {
-        return res.status(400).json({ error: "Invalid plan specified." });
-      }
-
-      // Normalize starter to start
-      const targetPlan = (newPlan === "starter" ? "start" : newPlan);
-
-      // 1. Get user document from Firestore using Admin SDK
-      const adminDb = getFirebaseAdminDb();
-      const userRef = adminDb.collection("users").doc(userId);
-      const userDoc = await userRef.get();
-
-      if (!userDoc.exists) {
-        return res.status(404).json({ error: "User not found in database." });
-      }
-
-      const userData = userDoc.data() || {};
-      const stripeSubscriptionId = userData.stripeSubscriptionId;
-
-      if (!stripeSubscriptionId) {
-        return res.status(400).json({ error: "User does not have an active Stripe subscription to update. Please create a new subscription." });
-      }
-
-      // 2. Fetch price ID for new plan
-      const priceMap: Record<string, string | undefined> = {
-        start: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
-        starter: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
-        explorer: process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT",
-        pro: process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi"
-      };
-
-      const priceId = priceMap[targetPlan];
-      if (!priceId) {
-        return res.status(500).json({ error: `Stripe price ID for plan '${targetPlan}' is not configured.` });
-      }
-
-      const stripe = getStripe();
-
-      console.log(`[Stripe Update] Fetching subscription ${stripeSubscriptionId} for user ${userId}`);
-      const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-
-      if (!subscription) {
-        return res.status(404).json({ error: "Subscription not found on Stripe." });
-      }
-
-      console.log(`[Stripe Update] Updating subscription ${stripeSubscriptionId} to price ${priceId} for plan ${targetPlan}`);
-      
-      // Update subscription item
-      const updatedSubscription: any = await stripe.subscriptions.update(stripeSubscriptionId, {
-        items: [{
-          id: subscription.items.data[0].id,
-          price: priceId,
-        }],
-        proration_behavior: "create_prorations",
-        metadata: {
-          plan: targetPlan,
-          userId: userId,
-          userEmail: userData.email || ""
+  app.post(
+    "/api/stripe/update-subscription",
+    requireAuth,
+    async (req: AuthenticatedRequest, res: express.Response) => {
+      try {
+        const userId = req.auth?.uid;
+        if (!userId) {
+          return res.status(401).json({ error: "unauthorized" });
         }
-      });
 
-      // 3. Update user document in Firestore using Admin SDK
-      console.log("Updating subscription with Admin SDK:", {
-        userId,
-        plan: targetPlan,
-        stripeCustomerId: userData.stripeCustomerId || "",
-        stripeSubscriptionId
-      });
+        const { newPlan } = req.body;
 
-      const limits = getPlanLimits(targetPlan);
-      const billingInterval = updatedSubscription.items.data[0]?.price.recurring?.interval || "month";
-      const currentPeriodEnd = stripeUnixToDate(updatedSubscription.current_period_end);
-      const cancelAtPeriodEnd = updatedSubscription.cancel_at_period_end || false;
+        if (!newPlan) {
+          return res.status(400).json({ error: "Missing newPlan parameter." });
+        }
 
-      console.log("[Stripe Update] current_period_end raw:", updatedSubscription.current_period_end);
-      console.log("[Stripe Update] currentPeriodEnd parsed:", currentPeriodEnd);
+        const validPlans = ["start", "starter", "explorer", "pro"];
+        if (!validPlans.includes(newPlan)) {
+          return res.status(400).json({ error: "Invalid plan specified." });
+        }
 
-      const updateData: any = {
-        plan: targetPlan,
-        subscriptionStatus: updatedSubscription.status || "active",
-        stripePriceId: priceId,
-        billingInterval,
-        cancelAtPeriodEnd,
-        ...limits,
-        updatedAt: AdminFieldValue.serverTimestamp()
-      };
+        // Normalize starter to start
+        const targetPlan = (newPlan === "starter" ? "start" : newPlan);
 
-      if (currentPeriodEnd) {
-        updateData.currentPeriodEnd = currentPeriodEnd;
+        // 1. Get user document from Firestore using Admin SDK
+        const adminDb = getFirebaseAdminDb();
+        const userRef = adminDb.collection("users").doc(userId);
+        const userDoc = await userRef.get();
+
+        if (!userDoc.exists) {
+          return res.status(404).json({ error: "User not found in database." });
+        }
+
+        const userData = userDoc.data() || {};
+        const stripeSubscriptionId = userData.stripeSubscriptionId;
+
+        if (!stripeSubscriptionId) {
+          return res.status(409).json({ error: "billing_state_invalid" });
+        }
+
+        // Resolve Stripe Customer ID (primary: users/{uid}.stripeCustomerId; fallback: billing/current only if root missing)
+        let resolvedStripeCustomerId = userData.stripeCustomerId;
+        if (!resolvedStripeCustomerId) {
+          try {
+            const billingRef = adminDb.collection("users").doc(userId).collection("billing").doc("current");
+            const billingSnap = await billingRef.get();
+            if (billingSnap.exists) {
+              resolvedStripeCustomerId = billingSnap.data()?.stripeCustomerId;
+            }
+          } catch (billingErr) {
+            console.error("[Stripe Update] Error fetching stripeCustomerId from billing/current:", billingErr);
+          }
+        }
+
+        if (!resolvedStripeCustomerId) {
+          return res.status(409).json({ error: "billing_state_invalid" });
+        }
+
+        // 2. Fetch price ID for new plan
+        const priceMap: Record<string, string | undefined> = {
+          start: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+          starter: process.env.STRIPE_STARTER_PRICE_ID || "price_1TrPxJ671Ksfyi4xJBh7oW23",
+          explorer: process.env.STRIPE_EXPLORER_PRICE_ID || "price_1TrQ07671Ksfyi4xrGx4dexT",
+          pro: process.env.STRIPE_PRO_PRICE_ID || "price_1TrQ2y671Ksfyi4xe1v0USXi"
+        };
+
+        const priceId = priceMap[targetPlan];
+        if (!priceId) {
+          return res.status(500).json({ error: `Stripe price ID for plan '${targetPlan}' is not configured.` });
+        }
+
+        const stripe = getStripe();
+
+        console.log(`[Stripe Update] Fetching subscription ${stripeSubscriptionId} for authenticated user ${userId}`);
+        const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+
+        if (!subscription) {
+          return res.status(404).json({ error: "Subscription not found on Stripe." });
+        }
+
+        // Extract customer ID from retrieved Stripe subscription
+        let subscriptionCustomerId: string | undefined = undefined;
+        if (typeof subscription.customer === "string") {
+          subscriptionCustomerId = subscription.customer;
+        } else if (subscription.customer && typeof subscription.customer === "object" && "id" in subscription.customer) {
+          subscriptionCustomerId = (subscription.customer as { id: string }).id;
+        }
+
+        // Ownership check: subscription must belong to the resolved Stripe customer of the authenticated user
+        if (!subscriptionCustomerId || subscriptionCustomerId !== resolvedStripeCustomerId) {
+          return res.status(403).json({ error: "forbidden" });
+        }
+
+        console.log(`[Stripe Update] Updating subscription ${stripeSubscriptionId} to price ${priceId} for plan ${targetPlan}`);
+        
+        // Update subscription item
+        const updatedSubscription: any = await stripe.subscriptions.update(stripeSubscriptionId, {
+          items: [{
+            id: subscription.items.data[0].id,
+            price: priceId,
+          }],
+          proration_behavior: "create_prorations",
+          metadata: {
+            plan: targetPlan,
+            userId: userId,
+            userEmail: userData.email || ""
+          }
+        });
+
+        // 3. Update user document in Firestore using Admin SDK
+        console.log("Updating subscription with Admin SDK:", {
+          userId,
+          plan: targetPlan,
+          stripeCustomerId: resolvedStripeCustomerId,
+          stripeSubscriptionId
+        });
+
+        const limits = getPlanLimits(targetPlan);
+        const billingInterval = updatedSubscription.items.data[0]?.price.recurring?.interval || "month";
+        const currentPeriodEnd = stripeUnixToDate(updatedSubscription.current_period_end);
+        const cancelAtPeriodEnd = updatedSubscription.cancel_at_period_end || false;
+
+        console.log("[Stripe Update] current_period_end raw:", updatedSubscription.current_period_end);
+        console.log("[Stripe Update] currentPeriodEnd parsed:", currentPeriodEnd);
+
+        const updateData: any = {
+          plan: targetPlan,
+          subscriptionStatus: updatedSubscription.status || "active",
+          stripePriceId: priceId,
+          billingInterval,
+          cancelAtPeriodEnd,
+          ...limits,
+          updatedAt: AdminFieldValue.serverTimestamp()
+        };
+
+        if (currentPeriodEnd) {
+          updateData.currentPeriodEnd = currentPeriodEnd;
+        }
+
+        await userRef.update(updateData);
+
+        console.log(`[Stripe Update] Successfully upgraded user ${userId} to ${targetPlan}`);
+        res.json({ success: true, plan: targetPlan, subscriptionStatus: updatedSubscription.status });
+      } catch (err: any) {
+        console.error("[Stripe Update] Failed to update subscription:", err);
+        res.status(500).json({ error: err.message || "Internal server error updating subscription." });
       }
-
-      await userRef.update(updateData);
-
-      console.log(`[Stripe Update] Successfully upgraded user ${userId} to ${targetPlan}`);
-      res.json({ success: true, plan: targetPlan, subscriptionStatus: updatedSubscription.status });
-    } catch (err: any) {
-      console.error("[Stripe Update] Failed to update subscription:", err);
-      res.status(500).json({ error: err.message || "Internal server error updating subscription." });
     }
-  });
+  );
 
   // Stripe Billing Customer Portal Session Endpoint
-  app.post("/api/stripe/create-portal-session", async (req: express.Request, res: express.Response) => {
-    try {
-      const { userId } = req.body;
-      if (!userId) {
-        return res.status(400).json({ error: "Missing userId parameter." });
-      }
-
-      console.log("[Stripe Portal] Creating portal session for user:", userId);
-
-      const db = getFirebaseAdminDb();
-      let stripeCustomerId: string | undefined = undefined;
-
-      // Check users/{userId}/billing/current first
+  app.post(
+    "/api/stripe/create-portal-session",
+    requireAuth,
+    async (req: AuthenticatedRequest, res: express.Response) => {
       try {
-        const billingRef = db.collection("users").doc(userId).collection("billing").doc("current");
-        const billingSnap = await billingRef.get();
-        if (billingSnap.exists) {
-          stripeCustomerId = billingSnap.data()?.stripeCustomerId;
+        const userId = req.auth?.uid;
+        if (!userId) {
+          return res.status(401).json({ error: "unauthorized" });
         }
-      } catch (billingErr) {
-        console.error("[Stripe Portal] Error fetching stripeCustomerId from billing/current:", billingErr);
-      }
 
-      // Fallback to the main user document
-      if (!stripeCustomerId) {
-        const userRef = db.collection("users").doc(userId);
-        const userSnap = await userRef.get();
-        if (userSnap.exists) {
-          const userData = userSnap.data() || {};
-          stripeCustomerId = userData.stripeCustomerId;
+        console.log("[Stripe Portal] Creating portal session for authenticated user:", userId);
+
+        const db = getFirebaseAdminDb();
+        let stripeCustomerId: string | undefined = undefined;
+
+        // Check users/{userId}/billing/current first
+        try {
+          const billingRef = db.collection("users").doc(userId).collection("billing").doc("current");
+          const billingSnap = await billingRef.get();
+          if (billingSnap.exists) {
+            stripeCustomerId = billingSnap.data()?.stripeCustomerId;
+          }
+        } catch (billingErr) {
+          console.error("[Stripe Portal] Error fetching stripeCustomerId from billing/current:", billingErr);
         }
+
+        // Fallback to the main user document
+        if (!stripeCustomerId) {
+          const userRef = db.collection("users").doc(userId);
+          const userSnap = await userRef.get();
+          if (userSnap.exists) {
+            const userData = userSnap.data() || {};
+            stripeCustomerId = userData.stripeCustomerId;
+          }
+        }
+
+        if (!stripeCustomerId) {
+          return res.status(400).json({ error: "No Stripe customer found for this user." });
+        }
+
+        const stripe = getStripe();
+        const FRONTEND_URL = process.env.FRONTEND_URL || "https://astra-learning-ai-hml-668575929018.us-west2.run.app";
+
+        const session = await stripe.billingPortal.sessions.create({
+          customer: stripeCustomerId,
+          return_url: `${FRONTEND_URL}/dashboard`
+        });
+
+        res.json({ url: session.url });
+      } catch (err: any) {
+        console.error("[Stripe Portal] Failed to create portal session:", err);
+        res.status(500).json({ error: err.message || "Internal server error creating portal session." });
       }
-
-      console.log("[Stripe Portal] Customer ID:", stripeCustomerId);
-
-      if (!stripeCustomerId) {
-        return res.status(400).json({ error: "No Stripe customer found for this user." });
-      }
-
-      const stripe = getStripe();
-      const FRONTEND_URL = process.env.FRONTEND_URL || "https://astra-learning-ai-hml-668575929018.us-west2.run.app";
-
-      const session = await stripe.billingPortal.sessions.create({
-        customer: stripeCustomerId,
-        return_url: `${FRONTEND_URL}/dashboard`
-      });
-
-      res.json({ url: session.url });
-    } catch (err: any) {
-      console.error("[Stripe Portal] Failed to create portal session:", err);
-      res.status(500).json({ error: err.message || "Internal server error creating portal session." });
     }
-  });
+  );
 
   // Backend Health Check
   const healthHandler = (req: express.Request, res: express.Response) => {
