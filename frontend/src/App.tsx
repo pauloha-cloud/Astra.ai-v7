@@ -2706,7 +2706,7 @@ export default function App() {
     if (user) {
       try {
         const userRef = doc(db, 'users', user.uid);
-        await setDoc(userRef, { language: lang, lang: lang }, { merge: true });
+        await setDoc(userRef, { language: lang, lang: lang, updatedAt: serverTimestamp() }, { merge: true });
       } catch (err) {
         console.warn('Failed to save language to user profile:', err);
       }
