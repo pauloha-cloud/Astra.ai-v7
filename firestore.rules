@@ -6,11 +6,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Connectivity Test Path
-    match /test/connection {
-      allow read: if true;
-    }
-
     // --- Helpers ---
     function isSignedIn() {
       return request.auth != null;
@@ -53,7 +48,42 @@ service cloud.firestore {
 
     function isValidAnalysis(data) {
       return data.userId == request.auth.uid
+        && data.keys().hasAll([
+          'userId',
+          'video',
+          'createdAt',
+          'lastAnalyzedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId',
+          'video',
+          'mode',
+          'summary',
+          'key_points',
+          'quiz',
+          'mind_map',
+          'flashcards',
+          'tutor_questions',
+          'limitations',
+          'transcript',
+          'tutorContext',
+          'generatedLanguage',
+          'sourceMetadata',
+          'sourceType',
+          'documentType',
+          'fileName',
+          'fileSize',
+          'createdAt',
+          'lastAnalyzedAt'
+        ])
         && data.video is map
+        && data.video.keys().hasOnly([
+          'videoId',
+          'url',
+          'title',
+          'channel',
+          'thumbnail'
+        ])
         && (data.video.get('title', '') is string && data.video.get('title', '').size() <= 4096)
         && (data.get('summary', null) == null || (data.get('summary', '') is string && data.get('summary', '').size() <= 250000))
         && (data.get('transcript', null) == null || (data.get('transcript', '') is string && data.get('transcript', '').size() <= 3000000))
@@ -98,18 +128,25 @@ service cloud.firestore {
 
       // Sub-collection rule for billing details
       match /billing/{billingId} {
-        allow read: if isOwner(userId);
+        allow get: if isOwner(userId)
+          && billingId == 'current';
       }
 
       // Sub-collection rule for preferences following Master Gate pattern (check parent)
       match /preferences/{preferenceId} {
-        allow get: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidId(preferenceId)
+        allow get: if isOwner(userId)
+          && preferenceId == 'app';
+
+        allow create: if isOwner(userId)
+          && preferenceId == 'app'
           && exists(/databases/$(database)/documents/users/$(userId)) // Master Gate
           && incoming().keys().hasAll(['defaultStudyFormat', 'explanationLevel', 'defaultQuizQuestionCount', 'updatedAt'])
+          && incoming().keys().hasOnly(['defaultStudyFormat', 'explanationLevel', 'defaultQuizQuestionCount', 'updatedAt'])
           && incoming().updatedAt == request.time
           && isValidPreference(incoming());
+
         allow update: if isOwner(userId)
+          && preferenceId == 'app'
           && incoming().updatedAt == request.time
           && incoming().diff(existing()).affectedKeys().hasOnly(['defaultStudyFormat', 'explanationLevel', 'defaultQuizQuestionCount', 'updatedAt'])
           && isValidPreference(incoming());
@@ -125,6 +162,8 @@ service cloud.firestore {
           && isValidAnalysis(incoming());
         allow update: if isOwner(userId)
           && incoming().userId == userId
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
           && isValidAnalysis(incoming());
         allow delete: if isOwner(userId);
       }
