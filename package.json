@@ -9,7 +9,9 @@
     "start": "tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit && eslint firestore.rules"
+    "lint": "tsc --noEmit && eslint firestore.rules",
+    "test:firestore-rules:unit": "node --test --test-concurrency=1 tests/firestore.rules.test.mjs",
+    "test:firestore-rules": "npx --yes firebase-tools@15.26.0 emulators:exec --only firestore --project demo-astra-rules \"npm run test:firestore-rules:unit\""
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -42,6 +44,7 @@
   },
   "devDependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
+    "@firebase/rules-unit-testing": "5.0.2",
     "@types/express": "^4.17.21",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.14.0",

@@ -1453,7 +1453,7 @@ async function startServer() {
         }
 
         const stripe = getStripe();
-        const FRONTEND_URL = process.env.FRONTEND_URL || "https://astra-learning-ai-hml-668575929018.us-west2.run.app";
+        const FRONTEND_URL = process.env.FRONTEND_URL || process.env.APP_URL || "http://localhost:3000";
 
         const session = await stripe.billingPortal.sessions.create({
           customer: stripeCustomerId,

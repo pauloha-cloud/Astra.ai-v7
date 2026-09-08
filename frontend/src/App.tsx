@@ -2534,6 +2534,11 @@ export default function App() {
         try {
           const docId = data.video?.videoId || `doc-${Date.now()}`;
           const docRef = doc(db, 'users', user.uid, 'analyses', docId);
+          const existingAnalysis = await getDoc(docRef);
+          const existingCreatedAt = existingAnalysis.exists()
+            ? existingAnalysis.data().createdAt
+            : null;
+
           await setDoc(docRef, {
             userId: user.uid,
             video: {
@@ -2559,7 +2564,7 @@ export default function App() {
             documentType: data.documentType || (isImage ? "image" : (fileExt || "txt")),
             fileName: data.fileName || selectedFile.name,
             fileSize: data.fileSize || selectedFile.size,
-            createdAt: serverTimestamp(),
+            createdAt: existingCreatedAt || serverTimestamp(),
             lastAnalyzedAt: serverTimestamp()
           });
         } catch (firestoreErr) {
@@ -2706,7 +2711,7 @@ export default function App() {
     if (user) {
       try {
         const userRef = doc(db, 'users', user.uid);
-        await setDoc(userRef, { language: lang, lang: lang }, { merge: true });
+        await setDoc(userRef, { language: lang, lang: lang, updatedAt: serverTimestamp() }, { merge: true });
       } catch (err) {
         console.warn('Failed to save language to user profile:', err);
       }
@@ -3025,6 +3030,12 @@ export default function App() {
         const videoId = data.video?.videoId || extractYouTubeVideoId(data.video?.url || videoUrl);
         if (videoId) {
           const docRef = doc(db, 'users', user.uid, 'analyses', videoId);
+
+          const existingAnalysis = await getDoc(docRef);
+          const existingCreatedAt = existingAnalysis.exists()
+            ? existingAnalysis.data().createdAt
+            : null;
+
           await setDoc(docRef, {
             userId: user.uid,
             video: {
@@ -3043,7 +3054,7 @@ export default function App() {
             tutor_questions: data.tutor_questions || [],
             limitations: data.limitations || [],
             transcript: data.transcript || '',
-            createdAt: serverTimestamp(),
+            createdAt: existingCreatedAt || serverTimestamp(),
             lastAnalyzedAt: serverTimestamp()
           });
         } else {

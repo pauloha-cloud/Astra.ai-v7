@@ -1,10 +1,8 @@
 {
-  "projectId": "modelo-animal-mvp-489520",
-  "appId": "1:668575929018:web:48b5e5a1bba59819eda883",
-  "apiKey": "AIzaSyD_qxgZXtSa07JywJWdhgVawkzQs4_PEYs",
-  "authDomain": "modelo-animal-mvp-489520.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-084db04d-c8d8-4cf4-9ce7-04d3685c95c0",
-  "storageBucket": "modelo-animal-mvp-489520.firebasestorage.app",
-  "messagingSenderId": "668575929018",
-  "measurementId": ""
+  "projectId": "astra-learning-ai-dev",
+  "appId": "1:520231585118:web:ab3628c6ed9188ddd43bcf",
+  "authDomain": "astra-learning-ai-dev.firebaseapp.com",
+  "firestoreDatabaseId": "astra-learning-ai-dev",
+  "storageBucket": "astra-learning-ai-dev.firebasestorage.app",
+  "messagingSenderId": "520231585118"
 }
