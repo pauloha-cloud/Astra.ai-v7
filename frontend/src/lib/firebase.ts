@@ -3,7 +3,16 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const firebaseApiKey = import.meta.env.VITE_FIREBASE_API_KEY?.trim();
+
+if (!firebaseApiKey) {
+  throw new Error('Missing VITE_FIREBASE_API_KEY for Firebase initialization.');
+}
+
+const app = initializeApp({
+  ...firebaseConfig,
+  apiKey: firebaseApiKey,
+});
 
 console.log("Firebase projectId (from config):", firebaseConfig.projectId);
 console.log("Firebase authDomain (from config):", firebaseConfig.authDomain);
