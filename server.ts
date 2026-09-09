@@ -57,7 +57,7 @@ function getAI(): GoogleGenAI {
     throw new Error("Missing or invalid Gemini API configuration. Please configure GEMINI_API_KEY on the server.");
   }
 
-  console.log(`[Backend AI] AUTH WORKFLOW DETECTED: Standard Gemini API (API Key starts with: ${apiKey.substring(0, 4)}...)`);
+  console.log("[Backend AI] AUTH WORKFLOW DETECTED: Standard Gemini API");
   currentAuthWorkflow = "Standard Gemini API Key";
   cachedAIClient = new GoogleGenAI({
     apiKey: apiKey,
@@ -1472,13 +1472,11 @@ async function startServer() {
   const healthHandler = (req: express.Request, res: express.Response) => {
     const geminiKey = process.env.GEMINI_API_KEY;
     const keyConfigured = !!geminiKey && geminiKey !== "MY_GEMINI_API_KEY" && geminiKey.length > 5;
-    const keySnippet = keyConfigured ? `${geminiKey!.substring(0, 4)}...` : "none";
     
     res.json({ 
       status: "ok", 
       service: "astra-api", 
       gemini: keyConfigured ? "configured" : "missing",
-      keySnippet,
       timestamp: new Date().toISOString() 
     });
   };

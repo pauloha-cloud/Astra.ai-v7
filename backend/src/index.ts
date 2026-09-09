@@ -41,7 +41,7 @@ function getAI(): GoogleGenAI {
     throw new Error("Missing or invalid Gemini API configuration. Please configure GEMINI_API_KEY on the server.");
   }
 
-  console.log(`[Backend AI] AUTH WORKFLOW DETECTED: Standard Gemini API (API Key starts with: ${apiKey.substring(0, 4)}...)`);
+  console.log("[Backend AI] AUTH WORKFLOW DETECTED: Standard Gemini API");
   currentAuthWorkflow = "Standard Gemini API Key";
   cachedAIClient = new GoogleGenAI({
     apiKey: apiKey,
