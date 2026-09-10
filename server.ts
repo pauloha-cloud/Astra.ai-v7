@@ -460,7 +460,10 @@ export async function requireAuth(
 
   try {
     const adminAuth = getFirebaseAdminAuth();
-    const decodedToken = await adminAuth.verifyIdToken(token, true);
+    const decodedToken = await adminAuth.verifyIdToken(
+      token,
+      process.env.FIREBASE_AUTH_CHECK_REVOKED !== "false"
+    );
     req.auth = {
       uid: decodedToken.uid,
       email: decodedToken.email,
@@ -814,7 +817,7 @@ async function updateUserSubscriptionData(userId: string, data: {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Use a standard User-Agent for all axios requests
   const AXIOS_CONFIG = {
@@ -1485,7 +1488,10 @@ async function startServer() {
   app.get("/health", healthHandler);
 
   // YouTube Info Endpoint
-  app.post("/api/youtube-info", async (req, res) => {
+  app.post(
+    "/api/youtube-info",
+    requireAuth,
+    async (req: AuthenticatedRequest, res: express.Response) => {
     const { url, youtube_url, lang: reqLang = 'en', targetLanguage, explanationLevel = 'intermediate' } = req.body;
     const lang = targetLanguage || reqLang || 'en';
     const targetUrl = url || youtube_url;
@@ -1960,7 +1966,11 @@ If the image contains original text in another language, translate the interpret
   }
 
   // Analyze Document Endpoint
-  app.post("/api/analyze-source", upload.single("file"), async (req, res) => {
+  app.post(
+    "/api/analyze-source",
+    requireAuth,
+    upload.single("file"),
+    async (req: AuthenticatedRequest, res: express.Response) => {
     const { sourceType, documentType, lang: reqLang = "en", targetLanguage, fileName, fileSize } = req.body;
     const lang = targetLanguage || reqLang || "en";
     
@@ -2416,7 +2426,10 @@ ${normalizedText}`;
   });
 
   // Extra Quiz Questions Generation Endpoint (Secure server-side proxy)
-  app.post("/api/generate-extra-questions", async (req, res) => {
+  app.post(
+    "/api/generate-extra-questions",
+    requireAuth,
+    async (req: AuthenticatedRequest, res: express.Response) => {
     const { title, content, lang: reqLang = 'en', targetLanguage, count = 5, explanationLevel = 'intermediate' } = req.body;
     const lang = targetLanguage || reqLang || 'en';
     try {
@@ -2529,7 +2542,10 @@ ${(content || "").substring(0, 30000)}`;
   });
 
   // Dedicated Mind Map Generation Endpoint
-  app.post("/api/generate-mindmap", async (req, res) => {
+  app.post(
+    "/api/generate-mindmap",
+    requireAuth,
+    async (req: AuthenticatedRequest, res: express.Response) => {
     const { title, content, summary, keyTakeaways, actionableLessons, transcript, fallbackReason, lang: reqLang = 'en', targetLanguage, explanationLevel = 'intermediate' } = req.body;
     const lang = targetLanguage || reqLang || 'en';
     try {
@@ -2649,16 +2665,32 @@ Formato obrigatório:
         });
         return labels;
       }
-
       function validateMindMap(mindMap: any): boolean {
-        if (!mindMap) return false;
-        if (!mindMap.centralTopic) return false;
-        if (!Array.isArray(mindMap.nodes)) return false;
-        if (mindMap.nodes.length < 3) return false;
-
+        if (!mindMap) {
+          console.warn("[MindMap Validation] failed: missing_response");
+          return false;
+        }
+        if (!mindMap.centralTopic) {
+          console.warn("[MindMap Validation] failed: missing_central_topic");
+          return false;
+        }
+        if (!Array.isArray(mindMap.nodes)) {
+          console.warn("[MindMap Validation] failed: nodes_not_array");
+          return false;
+        }
+        if (mindMap.nodes.length < 3) {
+          console.warn(
+            `[MindMap Validation] failed: too_few_main_branches count=${mindMap.nodes.length}`
+          );
+          return false;
+        }
         const totalNodes = countNodes(mindMap.nodes);
-        if (totalNodes < 10) return false;
-
+        if (totalNodes < 10) {
+          console.warn(
+            `[MindMap Validation] failed: too_few_total_nodes count=${totalNodes}`
+          );
+          return false;
+        }
         const invalidLabels = [
           "youtube",
           "aula completa",
@@ -2669,18 +2701,21 @@ Formato obrigatório:
           "vídeo",
           "video"
         ];
-
-        const allLabels = collectAllLabels(mindMap.nodes).map((label: string) => label.toLowerCase());
-
-        const hasInvalidLabel = allLabels.some((label: string) =>
-          invalidLabels.some((invalid: string) => label === invalid || label.includes(invalid))
+        const allLabels = collectAllLabels(mindMap.nodes).map(
+          (label: string) => label.toLowerCase()
         );
-
-        if (hasInvalidLabel) return false;
-
+        const hasInvalidLabel = allLabels.some((label: string) =>
+          invalidLabels.some((invalid: string) => label.trim() === invalid)
+        );
+        if (hasInvalidLabel) {
+          console.warn("[MindMap Validation] failed: invalid_label");
+          return false;
+        }
+        console.log(
+          `[MindMap Validation] passed: mainBranches=${mindMap.nodes.length} totalNodes=${totalNodes}`
+        );
         return true;
       }
-
       const nodeSchema = (depth: number): any => {
         if (depth > 4) {
           return {
@@ -2723,7 +2758,6 @@ Formato obrigatório:
         },
         required: ["centralTopic", "summary", "nodes"]
       };
-
       let attempts = 0;
       let mindMapData: any = null;
       let finalPrompt = basePrompt;
@@ -2731,7 +2765,6 @@ Formato obrigatório:
       while (attempts < 2) {
         attempts++;
         console.log(`[Backend] Generating mind map, attempt ${attempts}`);
-        
         const response = await generateContentWithRetry(getAI(), {
           model: "gemini-3.5-flash",
           contents: finalPrompt,
@@ -2740,10 +2773,8 @@ Formato obrigatório:
             responseSchema: responseSchema
           }
         });
-
         const text = response.text || "";
         const parsed = safeParseAIJSON(text);
-
         if (parsed && validateMindMap(parsed)) {
           mindMapData = parsed;
           console.log(`[Backend] Mind map validation succeeded! Found ${parsed.nodes.length} main branches.`);
@@ -2756,7 +2787,6 @@ Formato obrigatório:
           }
         }
       }
-
       if (!mindMapData) {
         return res.status(422).json({ 
           error: "SuficientDepthError", 
@@ -2776,7 +2806,10 @@ Formato obrigatório:
   });
 
   // Real-time Interaction Endpoint with Gemini for Mind Map Chat
-  app.post("/api/mindmap-chat", async (req, res) => {
+  app.post(
+    "/api/mindmap-chat",
+    requireAuth,
+    async (req: AuthenticatedRequest, res: express.Response) => {
     const { question, centralTopic, mindMap, videoTitle, summary, transcript, mode, lang: reqLang = 'pt', targetLanguage, explanationLevel = 'intermediate' } = req.body;
     const lang = targetLanguage || reqLang || 'pt';
 
@@ -2899,7 +2932,9 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
       try {
         parsedResponse = JSON.parse(text);
       } catch (err) {
-        console.error("[Backend] Error parsing JSON response for mindmap-chat, text:", text);
+        console.warn(
+          "[Backend] Failed to parse structured response for mindmap-chat; returning unstructured fallback."
+        );
         parsedResponse = {
           type: "markdown",
           title: lang === 'pt' ? "Explicação da IA" : lang === 'es' ? "Explicación de la IA" : "AI Explanation",
@@ -2965,53 +3000,106 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
   wss.on("connection", (clientWs) => {
     console.log("[Backend Tutor] Client connected to live WebSocket");
     let session: any = null;
-
+    let authenticated = false;
+    let authenticating = false;
+    const authTimeout = setTimeout(() => {
+      if (!authenticated && clientWs.readyState === 1) {
+        clientWs.close(1008, "Authentication required");
+      }
+    }, 10000);
     clientWs.on("message", async (messageData) => {
       try {
         const msg = JSON.parse(messageData.toString());
         if (msg.type === "setup") {
-          const { videoTitle, transcript, explanationLevel = "intermediate", lang = "en" } = msg;
-          console.log(`[Backend Tutor] Initializing separated Tutor Live Session for: "${videoTitle}" (level: ${explanationLevel}, lang: ${lang})`);
+          if (authenticated || authenticating) {
+            return;
+          }
 
-          session = await initializeTutorSession(videoTitle, transcript, clientWs, explanationLevel, lang);
+          authenticating = true;
+          const {
+            idToken,
+            videoTitle,
+            transcript,
+            explanationLevel = "intermediate",
+            lang = "en"
+          } = msg;
+          if (!idToken || typeof idToken !== "string") {
+            authenticating = false;
+            clientWs.close(1008, "Authentication required");
+            return;
+          }
+          try {
+            await getFirebaseAdminAuth().verifyIdToken(
+              idToken,
+              process.env.FIREBASE_AUTH_CHECK_REVOKED !== "false"
+            );
+          } catch {
+            authenticating = false;
+            console.warn("[Backend Tutor] WebSocket authentication failed");
+            clientWs.close(1008, "Authentication failed");
+            return;
+          }
+          authenticated = true;
+          authenticating = false;
+          clearTimeout(authTimeout);
+          console.log(
+            `[Backend Tutor] Initializing separated Tutor Live Session for: "${videoTitle}" (level: ${explanationLevel}, lang: ${lang})`
+          );
+          session = await initializeTutorSession(
+            videoTitle,
+            transcript,
+            clientWs,
+            explanationLevel,
+            lang
+          );
         } else if (msg.type === "audio") {
-          if (session) {
+          if (authenticated && session) {
             session.sendRealtimeInput({
-              audio: { data: msg.data, mimeType: 'audio/pcm;rate=16000' }
+              audio: {
+                data: msg.data,
+                mimeType: "audio/pcm;rate=16000"
+              }
             });
           }
         } else if (msg.type === "video") {
-          if (session) {
+          if (authenticated && session) {
             session.sendRealtimeInput({
-              video: { data: msg.data, mimeType: 'image/jpeg' }
+              video: {
+                data: msg.data,
+                mimeType: "image/jpeg"
+              }
             });
           }
         }
       } catch (error: any) {
         console.error("[Backend Tutor] Error processing socket message:", error);
-        clientWs.send(JSON.stringify({ event: "error", details: error?.message || "Invalid message format" }));
+        if (clientWs.readyState === 1) {
+          clientWs.send(JSON.stringify({
+            event: "error",
+            details: error?.message || "Invalid message format"
+          }));
+        }
       }
     });
-
     clientWs.on("close", () => {
-      console.log("[Backend Tutor] Client WebSocket disconnected, cleaning up Gemini session...");
+      clearTimeout(authTimeout);
+      console.log(
+        "[Backend Tutor] Client WebSocket disconnected, cleaning up Gemini session..."
+      );
       if (session) {
         try {
           session.close();
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
     });
-
     clientWs.on("error", (err) => {
       console.error("[Backend Tutor] Client WebSocket error:", err);
     });
   });
-
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Astra Learning AI integrated server running on http://localhost:${PORT}`);
   });
 }
-
 startServer();
