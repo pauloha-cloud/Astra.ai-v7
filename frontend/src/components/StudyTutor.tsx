@@ -49,6 +49,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   
   const aiRef = useRef<any>(null);
   const sessionRef = useRef<any>(null);
+  const disposedRef = useRef(false);
   const streamerRef = useRef<AudioStreamer | null>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -132,6 +133,11 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
         throw new Error("Authentication required");
       }
       const idToken = await currentUser.getIdToken();
+      if (disposedRef.current) {
+        streamerRef.current?.stop();
+        playerRef.current?.close();
+        return;
+      }
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const socketUrl = `${protocol}//${window.location.host}/ws/tutor`;
       
@@ -251,10 +257,13 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   };
 
   useEffect(() => {
+    disposedRef.current = false;
+
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
+      disposedRef.current = true;
       stopSession();
       document.body.style.overflow = originalOverflow;
     };
