@@ -3039,19 +3039,34 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
             clientWs.close(1008, "Authentication failed");
             return;
           }
+          if (clientWs.readyState !== 1) {
+            authenticating = false;
+            return;
+          }
           authenticated = true;
           authenticating = false;
           clearTimeout(authTimeout);
           console.log(
             `[Backend Tutor] Initializing separated Tutor Live Session for: "${videoTitle}" (level: ${explanationLevel}, lang: ${lang})`
           );
-          session = await initializeTutorSession(
+          const initializedSession = await initializeTutorSession(
             videoTitle,
             transcript,
             clientWs,
             explanationLevel,
             lang
           );
+
+          if (clientWs.readyState !== 1) {
+            try {
+              initializedSession?.close();
+            } catch {
+              // ignore
+            }
+            return;
+          }
+
+          session = initializedSession;
         } else if (msg.type === "audio") {
           if (authenticated && session) {
             session.sendRealtimeInput({
