@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AudioStreamer, AudioPlayer } from '../lib/audio-utils';
+import { auth } from '../lib/firebase';
 
 interface Props {
   videoTitle?: string;
@@ -48,6 +49,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   
   const aiRef = useRef<any>(null);
   const sessionRef = useRef<any>(null);
+  const disposedRef = useRef(false);
   const streamerRef = useRef<AudioStreamer | null>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -103,6 +105,12 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
     setStatus(t.initializingGemini);
     
     try {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        throw new Error("Authentication required");
+      }
+
       playerRef.current = new AudioPlayer((playing) => {
         setIsAiSpeaking(playing);
         if (playing) setIsAiThinking(false);
@@ -126,6 +134,12 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
         setUserVolume(vol);
       });
 
+      const idToken = await currentUser.getIdToken();
+      if (disposedRef.current) {
+        streamerRef.current?.stop();
+        playerRef.current?.close();
+        return;
+      }
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const socketUrl = `${protocol}//${window.location.host}/ws/tutor`;
       
@@ -134,22 +148,15 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
       
       ws.onopen = () => {
         console.log("[Tutor Client] WebSocket connected, sending setup packet...");
-        setIsConnected(true);
-        setIsConnecting(false);
-        setStatus(t.liveSessionActive);
-        playNotificationSound('connect');
-        
         // Send setup payload to configure the backend's Gemini Live connection
         ws.send(JSON.stringify({
           type: "setup",
+          idToken,
           videoTitle,
           transcript,
           lang,
           explanationLevel
         }));
-
-        // Start mic streamer
-        streamerRef.current?.start();
       };
 
       ws.onmessage = async (event) => {
@@ -158,6 +165,11 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
           
           if (envelope.event === "open") {
             console.log("[Tutor Client] Server-side session opened");
+            setIsConnected(true);
+            setIsConnecting(false);
+            setStatus(t.liveSessionActive);
+            playNotificationSound('connect');
+            streamerRef.current?.start();
           } else if (envelope.event === "close") {
             console.log("[Tutor Client] Server-side session closed");
             stopSession();
@@ -212,6 +224,9 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
 
     } catch (error: any) {
       console.error("Failed to start session:", error);
+      streamerRef.current?.stop();
+      playerRef.current?.close();
+
       setIsConnecting(false);
       const isPermErr = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
       const isNotFoundErr = error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError';
@@ -247,10 +262,13 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
   };
 
   useEffect(() => {
+    disposedRef.current = false;
+
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
+      disposedRef.current = true;
       stopSession();
       document.body.style.overflow = originalOverflow;
     };

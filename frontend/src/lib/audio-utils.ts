@@ -136,6 +136,7 @@ export class AudioPlayer {
   private onStatusChange?: (isPlaying: boolean) => void;
   private onVolume?: (volume: number) => void;
   private timeoutId: any = null;
+  private animationFrameId: number | null = null;
   private analyser: AnalyserNode;
   private frequencyData: Uint8Array;
 
@@ -168,7 +169,7 @@ export class AudioPlayer {
       } else {
         this.onVolume?.(0);
       }
-      requestAnimationFrame(update);
+      this.animationFrameId = requestAnimationFrame(update);
     };
     update();
   }
@@ -227,6 +228,20 @@ export class AudioPlayer {
   }
 
   close() {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+
+    this.isPlaying = false;
+    this.onStatusChange?.(false);
+    this.onVolume?.(0);
+
     if (this.audioContext.state !== 'closed') {
       this.audioContext.close();
     }
