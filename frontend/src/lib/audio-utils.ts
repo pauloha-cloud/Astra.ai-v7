@@ -238,6 +238,10 @@ export class AudioPlayer {
       this.timeoutId = null;
     }
 
+    this.isPlaying = false;
+    this.onStatusChange?.(false);
+    this.onVolume?.(0);
+
     if (this.audioContext.state !== 'closed') {
       this.audioContext.close();
     }
