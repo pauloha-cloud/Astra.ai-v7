@@ -105,6 +105,12 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
     setStatus(t.initializingGemini);
     
     try {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        throw new Error("Authentication required");
+      }
+
       playerRef.current = new AudioPlayer((playing) => {
         setIsAiSpeaking(playing);
         if (playing) setIsAiThinking(false);
@@ -127,11 +133,7 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
       }, (vol) => {
         setUserVolume(vol);
       });
-      const currentUser = auth.currentUser;
 
-      if (!currentUser) {
-        throw new Error("Authentication required");
-      }
       const idToken = await currentUser.getIdToken();
       if (disposedRef.current) {
         streamerRef.current?.stop();
@@ -222,6 +224,9 @@ export const StudyTutor = ({ videoTitle = 'Selected Video', videoId, transcript,
 
     } catch (error: any) {
       console.error("Failed to start session:", error);
+      streamerRef.current?.stop();
+      playerRef.current?.close();
+
       setIsConnecting(false);
       const isPermErr = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
       const isNotFoundErr = error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError';
