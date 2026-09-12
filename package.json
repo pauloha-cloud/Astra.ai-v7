@@ -14,7 +14,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit && eslint firestore.rules",
     "test:firestore-rules:unit": "node --test --test-concurrency=1 tests/firestore.rules.test.mjs",
-    "test:firestore-rules": "npx --yes firebase-tools@15.26.0 emulators:exec --only firestore --project demo-astra-rules \"npm run test:firestore-rules:unit\""
+    "test:firestore-rules": "npx --yes firebase-tools@15.26.0 emulators:exec --only firestore --project demo-astra-rules \"npm run test:firestore-rules:unit\"",
+    "test:rate-limit": "npx --yes firebase-tools@15.26.0 emulators:exec --only firestore --project demo-astra-rate-limit \"tsx --test tests/rateLimit.test.ts\""
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
