@@ -18,6 +18,13 @@ import { getFirestore as getFirebaseFirestore, doc as firebaseDoc, updateDoc as 
 import { initializeApp as initializeAdminApp, getApps as getAdminApps, getApp as getAdminApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore, FieldValue as AdminFieldValue } from "firebase-admin/firestore";
 import { getAuth as getAdminAuth, type Auth as AdminAuth } from "firebase-admin/auth";
+import {
+  acquireVoiceLease,
+  consumeUidRateLimit,
+  createUidRateLimitMiddleware,
+  releaseVoiceLease,
+  renewVoiceLease,
+} from "./rateLimit.js";
 // @ts-ignore
 import mammoth from "mammoth";
 
@@ -819,6 +826,30 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
+  const aiAnalysisRateLimit =
+    createUidRateLimitMiddleware(
+      "ai-analysis",
+      getFirebaseAdminDb
+    );
+
+  const aiGenerationRateLimit =
+    createUidRateLimitMiddleware(
+      "ai-generation",
+      getFirebaseAdminDb
+    );
+
+  const aiChatRateLimit =
+    createUidRateLimitMiddleware(
+      "ai-chat",
+      getFirebaseAdminDb
+    );
+
+  const billingRateLimit =
+    createUidRateLimitMiddleware(
+      "billing",
+      getFirebaseAdminDb
+    );
+
   // Use a standard User-Agent for all axios requests
   const AXIOS_CONFIG = {
     headers: {
@@ -1200,6 +1231,7 @@ async function startServer() {
   app.post(
     "/api/stripe/create-checkout-session",
     requireAuth,
+    billingRateLimit,
     async (req: AuthenticatedRequest, res: express.Response) => {
       try {
         const userId = req.auth?.uid;
@@ -1267,6 +1299,7 @@ async function startServer() {
   app.post(
     "/api/stripe/update-subscription",
     requireAuth,
+    billingRateLimit,
     async (req: AuthenticatedRequest, res: express.Response) => {
       try {
         const userId = req.auth?.uid;
@@ -1418,6 +1451,7 @@ async function startServer() {
   app.post(
     "/api/stripe/create-portal-session",
     requireAuth,
+    billingRateLimit,
     async (req: AuthenticatedRequest, res: express.Response) => {
       try {
         const userId = req.auth?.uid;
@@ -1491,6 +1525,7 @@ async function startServer() {
   app.post(
     "/api/youtube-info",
     requireAuth,
+    aiAnalysisRateLimit,
     async (req: AuthenticatedRequest, res: express.Response) => {
     const { url, youtube_url, lang: reqLang = 'en', targetLanguage, explanationLevel = 'intermediate' } = req.body;
     const lang = targetLanguage || reqLang || 'en';
@@ -1969,6 +2004,7 @@ If the image contains original text in another language, translate the interpret
   app.post(
     "/api/analyze-source",
     requireAuth,
+    aiAnalysisRateLimit,
     upload.single("file"),
     async (req: AuthenticatedRequest, res: express.Response) => {
     const { sourceType, documentType, lang: reqLang = "en", targetLanguage, fileName, fileSize } = req.body;
@@ -2429,6 +2465,7 @@ ${normalizedText}`;
   app.post(
     "/api/generate-extra-questions",
     requireAuth,
+    aiGenerationRateLimit,
     async (req: AuthenticatedRequest, res: express.Response) => {
     const { title, content, lang: reqLang = 'en', targetLanguage, count = 5, explanationLevel = 'intermediate' } = req.body;
     const lang = targetLanguage || reqLang || 'en';
@@ -2545,6 +2582,7 @@ ${(content || "").substring(0, 30000)}`;
   app.post(
     "/api/generate-mindmap",
     requireAuth,
+    aiGenerationRateLimit,
     async (req: AuthenticatedRequest, res: express.Response) => {
     const { title, content, summary, keyTakeaways, actionableLessons, transcript, fallbackReason, lang: reqLang = 'en', targetLanguage, explanationLevel = 'intermediate' } = req.body;
     const lang = targetLanguage || reqLang || 'en';
@@ -2809,6 +2847,7 @@ Formato obrigatório:
   app.post(
     "/api/mindmap-chat",
     requireAuth,
+    aiChatRateLimit,
     async (req: AuthenticatedRequest, res: express.Response) => {
     const { question, centralTopic, mindMap, videoTitle, summary, transcript, mode, lang: reqLang = 'pt', targetLanguage, explanationLevel = 'intermediate' } = req.body;
     const lang = targetLanguage || reqLang || 'pt';
@@ -3002,11 +3041,106 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
     let session: any = null;
     let authenticated = false;
     let authenticating = false;
+    let voiceUid: string | null = null;
+    let voiceLeaseId: string | null = null;
+    let voiceLeaseHeartbeat: ReturnType<typeof setInterval> | null = null;
+    let voiceLeaseRenewing = false;
+
+    const getSafeErrorCode = (error: unknown): string => {
+      if (typeof error === "object" && error !== null && "code" in error) {
+        return String((error as { code?: unknown }).code || "unknown");
+      }
+      return "unknown";
+    };
+
+    const cleanupVoiceResources = async (): Promise<void> => {
+      authenticated = false;
+      authenticating = false;
+
+      if (voiceLeaseHeartbeat) {
+        clearInterval(voiceLeaseHeartbeat);
+        voiceLeaseHeartbeat = null;
+      }
+
+      const activeSession = session;
+      session = null;
+
+      if (activeSession) {
+        try {
+          activeSession.close();
+        } catch {
+          // ignore
+        }
+      }
+
+      const uid = voiceUid;
+      const leaseId = voiceLeaseId;
+      voiceUid = null;
+      voiceLeaseId = null;
+
+      if (uid && leaseId) {
+        try {
+          await releaseVoiceLease(getFirebaseAdminDb(), uid, leaseId);
+        } catch (error: unknown) {
+          console.error("[Backend Tutor] Voice lease release failed", {
+            code: getSafeErrorCode(error),
+          });
+        }
+      }
+    };
+
+    const startVoiceLeaseHeartbeat = (): void => {
+      if (voiceLeaseHeartbeat) {
+        clearInterval(voiceLeaseHeartbeat);
+      }
+
+      voiceLeaseHeartbeat = setInterval(() => {
+        if (voiceLeaseRenewing || !voiceUid || !voiceLeaseId) {
+          return;
+        }
+
+        const uid = voiceUid;
+        const leaseId = voiceLeaseId;
+        voiceLeaseRenewing = true;
+
+        void (async () => {
+          try {
+            const renewed = await renewVoiceLease(
+              getFirebaseAdminDb(),
+              uid,
+              leaseId
+            );
+
+            if (!renewed) {
+              console.warn(
+                "[Backend Tutor] Voice lease could not be renewed; closing session"
+              );
+              if (clientWs.readyState === 1) {
+                clientWs.close(1013, "Voice session lease lost");
+              }
+              await cleanupVoiceResources();
+            }
+          } catch (error: unknown) {
+            console.error("[Backend Tutor] Voice lease renewal failed", {
+              code: getSafeErrorCode(error),
+            });
+            if (clientWs.readyState === 1) {
+              clientWs.close(1013, "Voice session temporarily unavailable");
+            }
+            await cleanupVoiceResources();
+          } finally {
+            voiceLeaseRenewing = false;
+          }
+        })();
+      }, 60_000);
+    };
+
     const authTimeout = setTimeout(() => {
       if (!authenticated && clientWs.readyState === 1) {
         clientWs.close(1008, "Authentication required");
       }
     }, 10000);
+
     clientWs.on("message", async (messageData) => {
       try {
         const msg = JSON.parse(messageData.toString());
@@ -3023,13 +3157,16 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
             explanationLevel = "intermediate",
             lang = "en"
           } = msg;
+
           if (!idToken || typeof idToken !== "string") {
             authenticating = false;
             clientWs.close(1008, "Authentication required");
             return;
           }
+
+          let decodedToken;
           try {
-            await getFirebaseAdminAuth().verifyIdToken(
+            decodedToken = await getFirebaseAdminAuth().verifyIdToken(
               idToken,
               process.env.FIREBASE_AUTH_CHECK_REVOKED !== "false"
             );
@@ -3039,23 +3176,109 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
             clientWs.close(1008, "Authentication failed");
             return;
           }
+
           if (clientWs.readyState !== 1) {
             authenticating = false;
             return;
           }
+
+          const uid = decodedToken.uid;
+
+          let rateLimitDecision;
+          try {
+            rateLimitDecision = await consumeUidRateLimit(
+              getFirebaseAdminDb(),
+              uid,
+              "voice-connect"
+            );
+          } catch (error: unknown) {
+            authenticating = false;
+            console.error("[Backend Tutor] Voice rate-limit check failed", {
+              code: getSafeErrorCode(error),
+            });
+            clientWs.close(1013, "Voice session temporarily unavailable");
+            return;
+          }
+
+          if (!rateLimitDecision.allowed) {
+            authenticating = false;
+            console.warn("[Backend Tutor] Voice connection rate limited");
+            clientWs.close(1008, "Rate limited");
+            return;
+          }
+
+          if (clientWs.readyState !== 1) {
+            authenticating = false;
+            return;
+          }
+
+          let leaseDecision;
+          try {
+            leaseDecision = await acquireVoiceLease(
+              getFirebaseAdminDb(),
+              uid
+            );
+          } catch (error: unknown) {
+            authenticating = false;
+            console.error("[Backend Tutor] Voice lease acquisition failed", {
+              code: getSafeErrorCode(error),
+            });
+            clientWs.close(1013, "Voice session temporarily unavailable");
+            return;
+          }
+
+          if (!leaseDecision.acquired) {
+            authenticating = false;
+            console.warn("[Backend Tutor] Voice session already active");
+            clientWs.close(1008, "Voice session already active");
+            return;
+          }
+
+          if (!leaseDecision.leaseId) {
+            authenticating = false;
+            console.error(
+              "[Backend Tutor] Voice lease acquired without lease identifier"
+            );
+            clientWs.close(1013, "Voice session temporarily unavailable");
+            return;
+          }
+
+          voiceUid = uid;
+          voiceLeaseId = leaseDecision.leaseId;
+
+          if (clientWs.readyState !== 1) {
+            await cleanupVoiceResources();
+            return;
+          }
+
+          startVoiceLeaseHeartbeat();
           authenticated = true;
           authenticating = false;
           clearTimeout(authTimeout);
+
           console.log(
             `[Backend Tutor] Initializing separated Tutor Live Session for: "${videoTitle}" (level: ${explanationLevel}, lang: ${lang})`
           );
-          const initializedSession = await initializeTutorSession(
-            videoTitle,
-            transcript,
-            clientWs,
-            explanationLevel,
-            lang
-          );
+
+          let initializedSession: any;
+          try {
+            initializedSession = await initializeTutorSession(
+              videoTitle,
+              transcript,
+              clientWs,
+              explanationLevel,
+              lang
+            );
+          } catch (error: unknown) {
+            console.error("[Backend Tutor] Tutor session initialization failed", {
+              code: getSafeErrorCode(error),
+            });
+            if (clientWs.readyState === 1) {
+              clientWs.close(1013, "Voice session temporarily unavailable");
+            }
+            await cleanupVoiceResources();
+            return;
+          }
 
           if (clientWs.readyState !== 1) {
             try {
@@ -3063,6 +3286,7 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
             } catch {
               // ignore
             }
+            await cleanupVoiceResources();
             return;
           }
 
@@ -3096,19 +3320,15 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
         }
       }
     });
+
     clientWs.on("close", () => {
       clearTimeout(authTimeout);
       console.log(
-        "[Backend Tutor] Client WebSocket disconnected, cleaning up Gemini session..."
+        "[Backend Tutor] Client WebSocket disconnected, cleaning up voice resources..."
       );
-      if (session) {
-        try {
-          session.close();
-        } catch {
-          // ignore
-        }
-      }
+      void cleanupVoiceResources();
     });
+
     clientWs.on("error", (err) => {
       console.error("[Backend Tutor] Client WebSocket error:", err);
     });
