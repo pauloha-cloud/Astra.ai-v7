@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Private keys and local credential files
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+credentials*.json

@@ -21,7 +21,7 @@ astra-learning-ai/
 ├── public/             # Static assets
 ├── server.ts           # Root entry point (Express + Vite Middleware)
 ├── package.json        # Main project configuration
-└── cloudbuild.yaml     # CI/CD for Google Cloud
+└── .github/workflows/  # GitHub Actions quality gates
 ```
 
 ## Local Development
@@ -47,7 +47,8 @@ astra-learning-ai/
 
 ## Deployment
 
-Deploy to Google Cloud Run using Cloud Build:
-```bash
-gcloud builds submit --config cloudbuild.yaml
-```
+Deployments are controlled operations and are not performed from a repository-level Cloud Build configuration.
+
+Before any deployment, confirm the target environment, Google Cloud project, region, Cloud Run service, source branch/commit, runtime service account, secrets, and rollback target. Changes must be validated in DEV before any PRD deployment.
+
+Do not create or modify deployment resources from legacy project configuration without explicit approval.
