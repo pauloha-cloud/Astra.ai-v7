@@ -44,6 +44,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userPlan, setUserPlan] = useState<string>('free');
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('active');
@@ -56,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [limits, setLimits] = useState<any>(null);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !emailVerified) {
       setUserPlan('free');
       setSubscriptionStatus('no_plan');
       setStripeSubscriptionId('');
@@ -122,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       unsubUser();
       unsubBilling();
     };
-  }, [user]);
+  }, [user, emailVerified]);
 
   const syncUserToFirestore = async (currentUser: User) => {
     const userRef = doc(db, 'users', currentUser.uid);
@@ -151,13 +152,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
+      if (currentUser?.emailVerified) {
         try {
           await syncUserToFirestore(currentUser);
         } catch (syncError) {
           console.error("Failed to sync user to Firestore on auth change:", syncError);
         }
       }
+      setEmailVerified(currentUser?.emailVerified === true);
       setUser(currentUser);
       setLoading(false);
     });
@@ -240,14 +242,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await auth.currentUser.reload();
         const updatedUser = auth.currentUser;
-        setUser(updatedUser);
+
         if (updatedUser.emailVerified) {
+          await updatedUser.getIdToken(true);
+
           try {
             await syncUserToFirestore(updatedUser);
           } catch (syncError) {
             console.error("Failed to sync user to Firestore on reload:", syncError);
           }
         }
+
+        setEmailVerified(updatedUser.emailVerified);
+        setUser(updatedUser);
       } catch (error) {
         throw error;
       }

@@ -471,6 +471,11 @@ export async function requireAuth(
       token,
       process.env.FIREBASE_AUTH_CHECK_REVOKED !== "false"
     );
+
+    if (decodedToken.email_verified !== true) {
+      return res.status(403).json({ error: "email_not_verified" });
+    }
+
     req.auth = {
       uid: decodedToken.uid,
       email: decodedToken.email,
@@ -3174,6 +3179,15 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
             authenticating = false;
             console.warn("[Backend Tutor] WebSocket authentication failed");
             clientWs.close(1008, "Authentication failed");
+            return;
+          }
+
+          if (decodedToken.email_verified !== true) {
+            authenticating = false;
+            console.warn(
+              "[Backend Tutor] WebSocket rejected unverified email"
+            );
+            clientWs.close(1008, "Email verification required");
             return;
           }
 
