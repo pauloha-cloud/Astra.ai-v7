@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [limits, setLimits] = useState<any>(null);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !user.emailVerified) {
       setUserPlan('free');
       setSubscriptionStatus('no_plan');
       setStripeSubscriptionId('');
@@ -151,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
+      if (currentUser?.emailVerified) {
         try {
           await syncUserToFirestore(currentUser);
         } catch (syncError) {

@@ -32,6 +32,15 @@ function authenticatedDb(uid) {
     .firestore();
 }
 
+function unverifiedDb(uid) {
+  return testEnv
+    .authenticatedContext(uid, {
+      email: `${uid}@example.com`,
+      email_verified: false,
+    })
+    .firestore();
+}
+
 function validCreatePayload(uid, extra = {}) {
   return {
     uid,
@@ -182,6 +191,65 @@ after(async () => {
   if (testEnv) {
     await testEnv.cleanup();
   }
+});
+
+test('EMAIL VERIFICATION: unverified user cannot create own profile', async () => {
+  const db = unverifiedDb('alice');
+
+  await assertFails(
+    setDoc(
+      doc(db, 'users', 'alice'),
+      validCreatePayload('alice'),
+    ),
+  );
+});
+
+test('EMAIL VERIFICATION: unverified user cannot read own profile', async () => {
+  await seedUser('alice');
+
+  const db = unverifiedDb('alice');
+
+  await assertFails(
+    getDoc(doc(db, 'users', 'alice')),
+  );
+});
+
+test('EMAIL VERIFICATION: unverified user cannot read own billing', async () => {
+  await seedUser('alice');
+  await seedBilling('alice');
+
+  const db = unverifiedDb('alice');
+
+  await assertFails(
+    getDoc(
+      doc(
+        db,
+        'users',
+        'alice',
+        'billing',
+        'current'
+      )
+    ),
+  );
+});
+
+test('EMAIL VERIFICATION: unverified user cannot create analysis', async () => {
+  await seedUser('alice');
+
+  const db = unverifiedDb('alice');
+
+  await assertFails(
+    setDoc(
+      doc(
+        db,
+        'users',
+        'alice',
+        'analyses',
+        'analysis-unverified'
+      ),
+      validAnalysisPayload('alice'),
+    ),
+  );
 });
 
 test('CREATE: owner can create a valid free profile', async () => {
