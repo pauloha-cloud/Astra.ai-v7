@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import http from 'http';
 import { WebSocketServer } from 'ws';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import { YoutubeTranscript } from 'youtube-transcript';
 import axios from 'axios';
@@ -267,7 +266,6 @@ async function startServer() {
     timeout: 10000
   };
 
-  app.use(cors());
   app.use(express.json());
 
   // Health Check

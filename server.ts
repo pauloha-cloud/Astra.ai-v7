@@ -4,7 +4,6 @@ import { WebSocketServer } from "ws";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import cors from "cors";
 import { YoutubeTranscript } from 'youtube-transcript';
 import axios from 'axios';
 import "dotenv/config";
@@ -865,7 +864,6 @@ async function startServer() {
     timeout: 10000
   };
 
-  app.use(cors());
 
   // Stripe Webhook Endpoint (requires raw body, defined before express.json()!)
   app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req: express.Request, res: express.Response) => {
