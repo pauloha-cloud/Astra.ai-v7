@@ -828,6 +828,7 @@ async function updateUserSubscriptionData(userId: string, data: {
 
 async function startServer() {
   const app = express();
+  app.disable("x-powered-by");
   const PORT = Number(process.env.PORT) || 3000;
 
   const aiAnalysisRateLimit =
