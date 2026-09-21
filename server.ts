@@ -24,6 +24,11 @@ import {
   releaseVoiceLease,
   renewVoiceLease,
 } from "./rateLimit.js";
+import {
+  createRequestLoggingMiddleware,
+  getSafeErrorCode,
+  writeStructuredLog,
+} from "./requestLogging.js";
 // @ts-ignore
 import mammoth from "mammoth";
 
@@ -135,7 +140,7 @@ function extractVideoId(url: string | any): string | null {
   }
   
   const cleanUrl = url.trim();
-  console.log(`[Backend] Received URL to extract: "${cleanUrl}"`);
+  console.log("[Backend] Received URL for video ID extraction");
   
   try {
     // Attempt standard URL parsing
@@ -186,7 +191,7 @@ function extractVideoId(url: string | any): string | null {
   for (const pattern of patterns) {
     const match = cleanUrl.match(pattern);
     if (match && match[1]) {
-      console.log(`[Backend] Regex matched: ${match[1]}`);
+      console.log("[Backend] Regex matched a YouTube video ID");
       return match[1];
     }
   }
@@ -292,7 +297,7 @@ async function initializeTutorSession(
     ? (process.env.VERTEX_MODEL_NAME || "gemini-3.1-flash-live-preview")
     : "gemini-3.1-flash-live-preview";
 
-  console.log(`[Backend Tutor] Starting Gemini/Vertex Live API connection under model '${modelName}' for: "${videoTitle}"`);
+  console.log(`[Backend Tutor] Starting Gemini/Vertex Live API connection under model '${modelName}'`);
 
   return await aiClient.live.connect({
     model: modelName,
@@ -555,30 +560,50 @@ async function findUserAndSubscriptionUpdate(
       userRef = docRef;
       foundUserId = userId;
       if (docSnap.exists) {
-        console.log(`[Stripe Webhook] Found user directly by ID: ${userId}`);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_user_lookup_by_id_succeeded",
+        });
       } else {
-        console.log(`[Stripe Webhook] User document does not exist for ID: ${userId}. Will auto-create.`);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_user_document_missing",
+        });
         isNewDoc = true;
       }
     } catch (err) {
-      console.error(`[Stripe Webhook] Error fetching user doc by ID ${userId}:`, err);
+      writeStructuredLog({
+        severity: "ERROR",
+        event: "stripe_user_lookup_by_id_failed",
+        errorCode: getSafeErrorCode(err),
+      });
     }
   }
 
   // 2. Try finding by email query if not found by ID
   if (!userRef && email) {
     const cleanEmail = email.toLowerCase().trim();
-    console.log(`[Stripe Webhook] Looking up user by email query: ${cleanEmail}`);
+    writeStructuredLog({
+      severity: "INFO",
+      event: "stripe_user_lookup_by_email_started",
+    });
     try {
       const querySnapshot = await db.collection("users").where("email", "==", cleanEmail).get();
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         userRef = db.collection("users").doc(userDoc.id);
         foundUserId = userDoc.id;
-        console.log(`[Stripe Webhook] Found user by email query: ${cleanEmail}, user UID: ${userDoc.id}`);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_user_lookup_by_email_succeeded",
+        });
       }
     } catch (err) {
-      console.error(`[Stripe Webhook] Error querying user by email ${cleanEmail}:`, err);
+      writeStructuredLog({
+      severity: "ERROR",
+      event: "stripe_user_lookup_by_email_failed",
+      errorCode: getSafeErrorCode(err),
+    });
     }
   }
 
@@ -587,23 +612,16 @@ async function findUserAndSubscriptionUpdate(
     userRef = db.collection("users").doc(userId);
     foundUserId = userId;
     isNewDoc = true;
-    console.log(`[Stripe Webhook] Creating fallback user document for ID: ${userId}`);
+    writeStructuredLog({
+      severity: "INFO",
+      event: "stripe_fallback_user_document_create_started",
+    });
   }
 
   if (userRef && foundUserId) {
-    console.log("Updating subscription with Admin SDK:", {
-      userId: foundUserId,
-      plan: subscriptionData.plan,
-      stripeCustomerId: subscriptionData.stripeCustomerId,
-      stripeSubscriptionId: subscriptionData.stripeSubscriptionId
-    });
-
-    console.log("Updating user subscription:", {
-      userId: foundUserId,
-      email: email || "",
-      plan: subscriptionData.plan,
-      subscriptionStatus: subscriptionData.subscriptionStatus,
-      isNewDoc
+    writeStructuredLog({
+      severity: "INFO",
+      event: "stripe_subscription_write_started",
     });
 
     try {
@@ -619,16 +637,28 @@ async function findUserAndSubscriptionUpdate(
         finalData.uid = foundUserId;
       }
       await userRef.set(finalData, { merge: true });
-      console.log(`[Stripe Webhook] Successfully wrote user ${foundUserId} (isNewDoc: ${isNewDoc}) with plan ${subscriptionData.plan}`);
+      writeStructuredLog({
+        severity: "INFO",
+        event: "stripe_subscription_write_succeeded",
+      });
       return true;
     } catch (err) {
-      console.error(`[Stripe Webhook] Critical Error setting user doc ${foundUserId} in Firestore:`, err);
+      writeStructuredLog({
+      severity: "ERROR",
+      event: "stripe_subscription_write_failed",
+      errorCode: getSafeErrorCode(err),
+    });
       throw err;
     }
   } else {
-    const errorMsg = `User not found and cannot be created for Stripe checkout session. userId: ${userId || 'none'}, email: ${email || 'none'}`;
-    console.error(`[Stripe Webhook] ${errorMsg}`);
-    throw new Error(errorMsg);
+    const errorMessage = "Stripe checkout user could not be resolved";
+
+    writeStructuredLog({
+      severity: "ERROR",
+      event: "stripe_checkout_user_resolution_failed",
+    });
+
+    throw new Error(errorMessage);
   }
 }
 
@@ -662,17 +692,9 @@ async function findUserByStripeIdsAndUpdate(
   }
 
   if (userRef && foundUserId) {
-    console.log("Updating subscription with Admin SDK:", {
-      userId: foundUserId,
-      plan: subscriptionData.plan,
-      stripeCustomerId: subscriptionData.stripeCustomerId || stripeCustomerId,
-      stripeSubscriptionId: subscriptionData.stripeSubscriptionId || stripeSubscriptionId
-    });
-
-    console.log("Updating user subscription from webhook event:", {
-      userId: foundUserId,
-      stripeSubscriptionId,
-      subscriptionData
+    writeStructuredLog({
+      severity: "INFO",
+      event: "stripe_subscription_event_write_started",
     });
     try {
       await userRef.update({
@@ -681,11 +703,18 @@ async function findUserByStripeIdsAndUpdate(
       });
       return true;
     } catch (err) {
-      console.error(`[Stripe Webhook] Error updating user doc ${foundUserId} with subscription data:`, err);
+      writeStructuredLog({
+      severity: "ERROR",
+      event: "stripe_subscription_event_write_failed",
+      errorCode: getSafeErrorCode(err),
+    });
       throw err;
     }
   } else {
-    console.warn(`[Stripe Webhook] No user found for stripeSubscriptionId: ${stripeSubscriptionId} or stripeCustomerId: ${stripeCustomerId}`);
+    writeStructuredLog({
+      severity: "WARNING",
+      event: "stripe_subscription_user_not_found",
+    });
     return false;
   }
 }
@@ -723,9 +752,16 @@ async function saveStripeCustomerMapping(stripeCustomerId: string, userId: strin
       email: email || "",
       updatedAt: AdminFieldValue.serverTimestamp()
     }, { merge: true });
-    console.log(`[Stripe Webhook] Saved mapping: stripeCustomers/${stripeCustomerId} -> userId: ${userId}`);
+    writeStructuredLog({
+      severity: "INFO",
+      event: "stripe_customer_mapping_saved",
+    });
   } catch (err) {
-    console.error(`[Stripe Webhook] Error saving customer mapping for ${stripeCustomerId}:`, err);
+    writeStructuredLog({
+      severity: "ERROR",
+      event: "stripe_customer_mapping_save_failed",
+      errorCode: getSafeErrorCode(err),
+    });
   }
 }
 
@@ -739,7 +775,10 @@ async function getUserIdByStripeCustomerId(stripeCustomerId: string): Promise<st
     if (snap.exists) {
       const data = snap.data();
       if (data && data.userId) {
-        console.log(`[Stripe Webhook] Found userId ${data.userId} in stripeCustomers mapping for customerId: ${stripeCustomerId}`);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_customer_mapping_lookup_succeeded",
+        });
         return data.userId;
       }
     }
@@ -748,11 +787,18 @@ async function getUserIdByStripeCustomerId(stripeCustomerId: string): Promise<st
     const querySnapshot = await db.collection("users").where("stripeCustomerId", "==", stripeCustomerId).get();
     if (!querySnapshot.empty) {
       const userId = querySnapshot.docs[0].id;
-      console.log(`[Stripe Webhook] Found userId ${userId} in users collection by stripeCustomerId query`);
+      writeStructuredLog({
+        severity: "INFO",
+        event: "stripe_customer_user_lookup_succeeded",
+      });
       return userId;
     }
   } catch (err) {
-    console.error(`[Stripe Webhook] Error retrieving userId for customerId ${stripeCustomerId}:`, err);
+    writeStructuredLog({
+    severity: "ERROR",
+    event: "stripe_customer_user_lookup_failed",
+    errorCode: getSafeErrorCode(err),
+  });
   }
   return null;
 }
@@ -764,11 +810,18 @@ async function getUserIdByStripeSubscriptionId(stripeSubscriptionId: string): Pr
     const querySnapshot = await db.collection("users").where("stripeSubscriptionId", "==", stripeSubscriptionId).get();
     if (!querySnapshot.empty) {
       const userId = querySnapshot.docs[0].id;
-      console.log(`[Stripe Webhook] Found userId ${userId} in users collection by stripeSubscriptionId query`);
+      writeStructuredLog({
+        severity: "INFO",
+        event: "stripe_subscription_user_lookup_succeeded",
+      });
       return userId;
     }
   } catch (err) {
-    console.error(`[Stripe Webhook] Error retrieving userId for subscriptionId ${stripeSubscriptionId}:`, err);
+    writeStructuredLog({
+    severity: "ERROR",
+    event: "stripe_subscription_user_lookup_failed",
+    errorCode: getSafeErrorCode(err),
+  });
   }
   return null;
 }
@@ -804,7 +857,10 @@ async function updateUserSubscriptionData(userId: string, data: {
   };
   
   await billingRef.set(billingData, { merge: true });
-  console.log(`[Firestore Sync] Updated users/${userId}/billing/current with:`, billingData);
+  writeStructuredLog({
+    severity: "INFO",
+    event: "billing_current_sync_succeeded",
+  });
   
   // 2. Update users/{uid} main document
   const userRef = db.collection("users").doc(userId);
@@ -823,12 +879,16 @@ async function updateUserSubscriptionData(userId: string, data: {
   };
   
   await userRef.set(mainUserData, { merge: true });
-  console.log(`[Firestore Sync] Updated users/${userId} with:`, mainUserData);
+  writeStructuredLog({
+    severity: "INFO",
+    event: "user_subscription_sync_succeeded",
+  });
 }
 
 async function startServer() {
   const app = express();
   app.disable("x-powered-by");
+  app.use(createRequestLoggingMiddleware());
   const PORT = Number(process.env.PORT) || 3000;
 
   const aiAnalysisRateLimit =
@@ -887,12 +947,20 @@ async function startServer() {
       const stripe = getStripe();
       event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
     } catch (err: any) {
-      console.error(`[Stripe Webhook] Signature verification failed:`, err.message);
+      writeStructuredLog({
+      severity: "WARNING",
+      event: "stripe_webhook_signature_verification_failed",
+      errorCode: getSafeErrorCode(err),
+    });
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
     const dataObject = event.data.object as any;
-    console.log(`[Stripe Webhook] Received event of type: ${event.type}`);
+    writeStructuredLog({
+      severity: "INFO",
+      event: "stripe_webhook_received",
+      stripeEventType: event.type,
+    });
 
     try {
       switch (event.type) {
@@ -901,20 +969,29 @@ async function startServer() {
           const stripeCustomerId = session.customer as string;
           const stripeSubscriptionId = session.subscription as string;
           
-          console.log(`[Stripe Webhook] Received event: checkout.session.completed`, {
-            customerId: stripeCustomerId,
-            subscriptionId: stripeSubscriptionId
+          writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_checkout_completed_received",
+            stripeEventType: event.type,
           });
 
           const userId = session.metadata?.userId || session.client_reference_id || undefined;
           const email = session.customer_details?.email || session.customer_email || session.metadata?.userEmail || undefined;
 
           if (!userId) {
-            console.error("[Stripe Webhook] No userId found in checkout.session.completed metadata or client_reference_id");
+            writeStructuredLog({
+            severity: "ERROR",
+            event: "stripe_checkout_user_missing",
+            stripeEventType: event.type,
+          });
             break;
           }
 
-          console.log(`[Stripe Webhook] Found userId: ${userId}`);
+          writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_webhook_user_resolved",
+            stripeEventType: event.type,
+          });
 
           // Always save stripeCustomerId to userId mapping
           if (stripeCustomerId) {
@@ -939,7 +1016,12 @@ async function startServer() {
               currentPeriodEnd = stripeUnixToDate(sub.current_period_end);
               cancelAtPeriodEnd = sub.cancel_at_period_end || false;
             } catch (err) {
-              console.error("[Stripe Webhook] Error retrieving subscription details from Stripe:", err);
+              writeStructuredLog({
+              severity: "ERROR",
+              event: "stripe_subscription_retrieve_failed",
+              stripeEventType: event.type,
+              errorCode: getSafeErrorCode(err),
+            });
             }
           }
 
@@ -964,7 +1046,10 @@ async function startServer() {
             plan = mapPriceIdToPlan(stripePriceId);
           }
 
-          console.log(`[Stripe Webhook] Mapped plan: ${plan}, priceId: ${stripePriceId}`);
+          writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_plan_mapping_succeeded",
+        });
 
           await updateUserSubscriptionData(userId, {
             plan,
@@ -977,7 +1062,11 @@ async function startServer() {
             cancelAtPeriodEnd
           });
 
-          console.log(`[Stripe Webhook] Firestore updated successfully for checkout.session.completed (userId: ${userId})`);
+          writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_checkout_completed_sync_succeeded",
+            stripeEventType: event.type,
+          });
           break;
         }
 
@@ -993,11 +1082,10 @@ async function startServer() {
 
           const plan = mapPriceIdToPlan(priceId);
 
-          console.log(`[Stripe Webhook] Received event: customer.subscription.created`, {
-            customerId: stripeCustomerId,
-            subscriptionId: stripeSubscriptionId,
-            priceId,
-            plan_mapped: plan
+          writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_subscription_created_received",
+            stripeEventType: event.type,
           });
 
           const metadataUserId = subscription.metadata?.userId;
@@ -1007,7 +1095,11 @@ async function startServer() {
           }
 
           if (userId) {
-            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_webhook_user_resolved",
+            stripeEventType: event.type,
+          });
             await saveStripeCustomerMapping(stripeCustomerId, userId);
             
             await updateUserSubscriptionData(userId, {
@@ -1020,9 +1112,17 @@ async function startServer() {
               currentPeriodEnd,
               cancelAtPeriodEnd
             });
-            console.log(`[Stripe Webhook] Firestore updated successfully for customer.subscription.created (userId: ${userId})`);
+            writeStructuredLog({
+              severity: "INFO",
+              event: "stripe_subscription_created_sync_succeeded",
+              stripeEventType: event.type,
+            });
           } else {
-            console.warn(`[Stripe Webhook] No userId found for customer.subscription.created (customerId: ${stripeCustomerId})`);
+            writeStructuredLog({
+              severity: "WARNING",
+              event: "stripe_subscription_created_user_not_found",
+              stripeEventType: event.type,
+            });
           }
           break;
         }
@@ -1039,11 +1139,10 @@ async function startServer() {
 
           const plan = mapPriceIdToPlan(priceId);
 
-          console.log(`[Stripe Webhook] Received event: customer.subscription.updated`, {
-            customerId: stripeCustomerId,
-            subscriptionId: stripeSubscriptionId,
-            priceId,
-            plan_mapped: plan
+          writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_subscription_updated_received",
+            stripeEventType: event.type,
           });
 
           let userId = await getUserIdByStripeCustomerId(stripeCustomerId);
@@ -1052,7 +1151,11 @@ async function startServer() {
           }
 
           if (userId) {
-            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_webhook_user_resolved",
+            stripeEventType: event.type,
+          });
             await updateUserSubscriptionData(userId, {
               plan,
               subscriptionStatus: cancelAtPeriodEnd ? "active" : status,
@@ -1063,9 +1166,17 @@ async function startServer() {
               currentPeriodEnd,
               cancelAtPeriodEnd
             });
-            console.log(`[Stripe Webhook] Firestore updated successfully for customer.subscription.updated (userId: ${userId})`);
+            writeStructuredLog({
+              severity: "INFO",
+              event: "stripe_subscription_updated_sync_succeeded",
+              stripeEventType: event.type,
+            });
           } else {
-            console.warn(`[Stripe Webhook] No userId found for customer.subscription.updated (customerId: ${stripeCustomerId})`);
+            writeStructuredLog({
+              severity: "WARNING",
+              event: "stripe_subscription_updated_user_not_found",
+              stripeEventType: event.type,
+            });
           }
           break;
         }
@@ -1075,9 +1186,10 @@ async function startServer() {
           const stripeSubscriptionId = subscription.id;
           const stripeCustomerId = subscription.customer as string;
 
-          console.log(`[Stripe Webhook] Received event: customer.subscription.deleted`, {
-            customerId: stripeCustomerId,
-            subscriptionId: stripeSubscriptionId
+          writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_subscription_deleted_received",
+            stripeEventType: event.type,
           });
 
           let userId = await getUserIdByStripeCustomerId(stripeCustomerId);
@@ -1086,7 +1198,11 @@ async function startServer() {
           }
 
           if (userId) {
-            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_webhook_user_resolved",
+            stripeEventType: event.type,
+          });
             await updateUserSubscriptionData(userId, {
               plan: "free",
               subscriptionStatus: "canceled",
@@ -1097,9 +1213,17 @@ async function startServer() {
               currentPeriodEnd: null,
               cancelAtPeriodEnd: false
             });
-            console.log(`[Stripe Webhook] Firestore updated successfully for customer.subscription.deleted (userId: ${userId})`);
+            writeStructuredLog({
+              severity: "INFO",
+              event: "stripe_subscription_deleted_sync_succeeded",
+              stripeEventType: event.type,
+            });
           } else {
-            console.warn(`[Stripe Webhook] No userId found for customer.subscription.deleted (customerId: ${stripeCustomerId})`);
+            writeStructuredLog({
+              severity: "WARNING",
+              event: "stripe_subscription_deleted_user_not_found",
+              stripeEventType: event.type,
+            });
           }
           break;
         }
@@ -1109,9 +1233,10 @@ async function startServer() {
           const stripeCustomerId = invoice.customer as string;
           const stripeSubscriptionId = invoice.subscription as string;
 
-          console.log(`[Stripe Webhook] Received event: invoice.payment_succeeded`, {
-            customerId: stripeCustomerId,
-            subscriptionId: stripeSubscriptionId
+          writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_invoice_payment_succeeded_received",
+            stripeEventType: event.type,
           });
 
           let userId = await getUserIdByStripeCustomerId(stripeCustomerId);
@@ -1120,7 +1245,11 @@ async function startServer() {
           }
 
           if (userId) {
-            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_webhook_user_resolved",
+            stripeEventType: event.type,
+          });
             let currentPeriodEnd: Date | null = null;
             let stripePriceId: string | undefined = undefined;
             let billingInterval = "month";
@@ -1140,7 +1269,12 @@ async function startServer() {
                 currentPeriodEnd = stripeUnixToDate(sub.current_period_end);
                 cancelAtPeriodEnd = sub.cancel_at_period_end || false;
               } catch (err) {
-                console.error("[Stripe Webhook] Error fetching subscription details in payment_succeeded:", err);
+                writeStructuredLog({
+                severity: "ERROR",
+                event: "stripe_invoice_subscription_retrieve_failed",
+                stripeEventType: event.type,
+                errorCode: getSafeErrorCode(err),
+              });
               }
             }
 
@@ -1154,9 +1288,17 @@ async function startServer() {
               currentPeriodEnd,
               cancelAtPeriodEnd
             });
-            console.log(`[Stripe Webhook] Firestore updated successfully for invoice.payment_succeeded (userId: ${userId})`);
+            writeStructuredLog({
+              severity: "INFO",
+              event: "stripe_invoice_payment_succeeded_sync_succeeded",
+              stripeEventType: event.type,
+            });
           } else {
-            console.warn(`[Stripe Webhook] No userId found for invoice.payment_succeeded (customerId: ${stripeCustomerId})`);
+            writeStructuredLog({
+              severity: "WARNING",
+              event: "stripe_invoice_payment_succeeded_user_not_found",
+              stripeEventType: event.type,
+            });
           }
           break;
         }
@@ -1166,9 +1308,10 @@ async function startServer() {
           const stripeCustomerId = invoice.customer as string;
           const stripeSubscriptionId = invoice.subscription as string;
 
-          console.log(`[Stripe Webhook] Received event: invoice.payment_failed`, {
-            customerId: stripeCustomerId,
-            subscriptionId: stripeSubscriptionId
+          writeStructuredLog({
+            severity: "WARNING",
+            event: "stripe_invoice_payment_failed_received",
+            stripeEventType: event.type,
           });
 
           let userId = await getUserIdByStripeCustomerId(stripeCustomerId);
@@ -1177,7 +1320,11 @@ async function startServer() {
           }
 
           if (userId) {
-            console.log(`[Stripe Webhook] Found userId: ${userId}`);
+            writeStructuredLog({
+            severity: "INFO",
+            event: "stripe_webhook_user_resolved",
+            stripeEventType: event.type,
+          });
             let currentPeriodEnd: Date | null = null;
             let stripePriceId: string | undefined = undefined;
             let billingInterval = "month";
@@ -1197,7 +1344,12 @@ async function startServer() {
                 currentPeriodEnd = stripeUnixToDate(sub.current_period_end);
                 cancelAtPeriodEnd = sub.cancel_at_period_end || false;
               } catch (err) {
-                console.error("[Stripe Webhook] Error fetching subscription details in payment_failed:", err);
+                writeStructuredLog({
+                severity: "ERROR",
+                event: "stripe_failed_invoice_subscription_retrieve_failed",
+                stripeEventType: event.type,
+                errorCode: getSafeErrorCode(err),
+              });
               }
             }
 
@@ -1211,18 +1363,35 @@ async function startServer() {
               currentPeriodEnd,
               cancelAtPeriodEnd
             });
-            console.log(`[Stripe Webhook] Firestore updated successfully for invoice.payment_failed (userId: ${userId})`);
+            writeStructuredLog({
+              severity: "INFO",
+              event: "stripe_invoice_payment_failed_sync_succeeded",
+              stripeEventType: event.type,
+            });
           } else {
-            console.warn(`[Stripe Webhook] No userId found for invoice.payment_failed (customerId: ${stripeCustomerId})`);
+            writeStructuredLog({
+              severity: "WARNING",
+              event: "stripe_invoice_payment_failed_user_not_found",
+              stripeEventType: event.type,
+            });
           }
           break;
         }
 
         default:
-          console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`);
+          writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_webhook_unhandled_event",
+          stripeEventType: event.type,
+        });
       }
     } catch (err: any) {
-      console.error(`[Stripe Webhook] Critical failure processing event ${event.type}:`, err);
+      writeStructuredLog({
+      severity: "ERROR",
+      event: "stripe_webhook_processing_failed",
+      stripeEventType: event.type,
+      errorCode: getSafeErrorCode(err),
+    });
       return res.status(500).send(`Webhook Error: ${err.message || "Internal error"}`);
     }
 
@@ -1273,7 +1442,10 @@ async function startServer() {
         const stripe = getStripe();
         const FRONTEND_URL = process.env.FRONTEND_URL || process.env.APP_URL || "http://localhost:3000";
 
-        console.log(`[Stripe] Creating subscription checkout session for authenticated user: ${userId}, plan: ${targetPlan}`);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_checkout_session_create_started",
+        });
 
         const session = await stripe.checkout.sessions.create({
           mode: "subscription",
@@ -1293,7 +1465,11 @@ async function startServer() {
 
         res.json({ url: session.url });
       } catch (err: any) {
-        console.error("[Stripe] Failed to create checkout session:", err);
+        writeStructuredLog({
+        severity: "ERROR",
+        event: "stripe_checkout_session_create_failed",
+        errorCode: getSafeErrorCode(err),
+      });
         res.status(500).json({ error: err.message || "Internal server error creating checkout session." });
       }
     }
@@ -1351,7 +1527,11 @@ async function startServer() {
               resolvedStripeCustomerId = billingSnap.data()?.stripeCustomerId;
             }
           } catch (billingErr) {
-            console.error("[Stripe Update] Error fetching stripeCustomerId from billing/current:", billingErr);
+            writeStructuredLog({
+            severity: "ERROR",
+            event: "stripe_update_billing_lookup_failed",
+            errorCode: getSafeErrorCode(billingErr),
+          });
           }
         }
 
@@ -1374,7 +1554,10 @@ async function startServer() {
 
         const stripe = getStripe();
 
-        console.log(`[Stripe Update] Fetching subscription ${stripeSubscriptionId} for authenticated user ${userId}`);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_subscription_update_lookup_started",
+        });
         const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
 
         if (!subscription) {
@@ -1394,7 +1577,10 @@ async function startServer() {
           return res.status(403).json({ error: "forbidden" });
         }
 
-        console.log(`[Stripe Update] Updating subscription ${stripeSubscriptionId} to price ${priceId} for plan ${targetPlan}`);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_subscription_update_started",
+        });
         
         // Update subscription item
         const updatedSubscription: any = await stripe.subscriptions.update(stripeSubscriptionId, {
@@ -1411,11 +1597,9 @@ async function startServer() {
         });
 
         // 3. Update user document in Firestore using Admin SDK
-        console.log("Updating subscription with Admin SDK:", {
-          userId,
-          plan: targetPlan,
-          stripeCustomerId: resolvedStripeCustomerId,
-          stripeSubscriptionId
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_subscription_firestore_update_started",
         });
 
         const limits = getPlanLimits(targetPlan);
@@ -1423,8 +1607,11 @@ async function startServer() {
         const currentPeriodEnd = stripeUnixToDate(updatedSubscription.current_period_end);
         const cancelAtPeriodEnd = updatedSubscription.cancel_at_period_end || false;
 
-        console.log("[Stripe Update] current_period_end raw:", updatedSubscription.current_period_end);
-        console.log("[Stripe Update] currentPeriodEnd parsed:", currentPeriodEnd);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_subscription_period_resolved",
+        });
+
 
         const updateData: any = {
           plan: targetPlan,
@@ -1442,10 +1629,17 @@ async function startServer() {
 
         await userRef.update(updateData);
 
-        console.log(`[Stripe Update] Successfully upgraded user ${userId} to ${targetPlan}`);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_subscription_update_succeeded",
+        });
         res.json({ success: true, plan: targetPlan, subscriptionStatus: updatedSubscription.status });
       } catch (err: any) {
-        console.error("[Stripe Update] Failed to update subscription:", err);
+        writeStructuredLog({
+        severity: "ERROR",
+        event: "stripe_subscription_update_failed",
+        errorCode: getSafeErrorCode(err),
+      });
         res.status(500).json({ error: err.message || "Internal server error updating subscription." });
       }
     }
@@ -1463,7 +1657,10 @@ async function startServer() {
           return res.status(401).json({ error: "unauthorized" });
         }
 
-        console.log("[Stripe Portal] Creating portal session for authenticated user:", userId);
+        writeStructuredLog({
+          severity: "INFO",
+          event: "stripe_portal_session_create_started",
+        });
 
         const db = getFirebaseAdminDb();
         let stripeCustomerId: string | undefined = undefined;
@@ -1476,7 +1673,11 @@ async function startServer() {
             stripeCustomerId = billingSnap.data()?.stripeCustomerId;
           }
         } catch (billingErr) {
-          console.error("[Stripe Portal] Error fetching stripeCustomerId from billing/current:", billingErr);
+          writeStructuredLog({
+          severity: "ERROR",
+          event: "stripe_portal_billing_lookup_failed",
+          errorCode: getSafeErrorCode(billingErr),
+        });
         }
 
         // Fallback to the main user document
@@ -1503,7 +1704,11 @@ async function startServer() {
 
         res.json({ url: session.url });
       } catch (err: any) {
-        console.error("[Stripe Portal] Failed to create portal session:", err);
+        writeStructuredLog({
+        severity: "ERROR",
+        event: "stripe_portal_session_create_failed",
+        errorCode: getSafeErrorCode(err),
+      });
         res.status(500).json({ error: err.message || "Internal server error creating portal session." });
       }
     }
@@ -1542,7 +1747,7 @@ async function startServer() {
     };
     const targetLang = langNames[lang] || 'English';
 
-    console.log(`[Backend] /api/youtube-info: New request for URL: "${targetUrl}" (lang: ${lang})`);
+    console.log(`[Backend] /api/youtube-info: New request (lang: ${lang})`);
 
     if (!targetUrl) {
       return res.status(400).json({ 
@@ -1552,7 +1757,7 @@ async function startServer() {
 
     // Step 1: Video ID Extraction
     const videoId = extractVideoId(targetUrl);
-    console.log(`[Backend] Extracted Video ID: ${videoId || 'FAILED'}`);
+    console.log(`[Backend] Video ID extraction: ${videoId ? "SUCCESS" : "FAILED"}`);
     
     if (!videoId) {
       return res.status(400).json({ 
@@ -1565,11 +1770,11 @@ async function startServer() {
       // Step 2: Metadata Fetching (Defensive)
       let metadata: any = null;
       try {
-        console.log(`[Backend] Fetching metadata for ${videoId}...`);
+        console.log("[Backend] Fetching video metadata...");
         const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
         const oEmbedResponse = await axios.get(oEmbedUrl, AXIOS_CONFIG);
         metadata = oEmbedResponse.data;
-        console.log(`[Backend] Metadata fetch: SUCCESS (title: ${metadata.title})`);
+        console.log("[Backend] Metadata fetch: SUCCESS");
       } catch (metaErr: any) {
         const is404 = metaErr.response?.status === 404;
         console.warn(`[Backend] Metadata fetch: ${is404 ? 'NOT FOUND (404)' : 'FAILED'} - ${metaErr.message}`);
@@ -1594,7 +1799,7 @@ async function startServer() {
       let mode: "transcript" | "metadata_fallback" = "transcript";
       
       try {
-        console.log(`[Backend] Fetching transcript for ${videoId}...`);
+        console.log("[Backend] Fetching video transcript...");
         const fetchItems = await Promise.race([
           YoutubeTranscript.fetchTranscript(videoId),
           new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 12000))
@@ -2226,7 +2431,7 @@ If the image contains original text in another language, translate the interpret
         });
       }
 
-      console.log(`[Backend] /api/analyze-source: Processing ${documentType.toUpperCase()} "${file.originalname}" (${normalizedText.length} chars) in ${targetLangName}`);
+      console.log(`[Backend] /api/analyze-source: Processing ${documentType.toUpperCase()} (${normalizedText.length} chars) in ${targetLangName}`);
 
       // 4. Generate Study Content using Gemini API
       let prompt = "";
@@ -2543,7 +2748,7 @@ Content:
 ${(content || "").substring(0, 30000)}`;
       }
 
-      console.log(`[Backend] Generating extra questions for video "${title}" in: ${lang}`);
+      console.log(`[Backend] Generating extra questions (lang: ${lang})`);
       
       const aiClient = getAI();
       const response = await generateContentWithRetry(aiClient, {
@@ -2994,7 +3199,15 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
 
   // Global Error Handler
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error("Unhandled Application Error:", err);
+    writeStructuredLog({
+      severity: "ERROR",
+      event: "unhandled_application_error",
+      requestId:
+        typeof res.locals.requestId === "string"
+          ? res.locals.requestId
+          : undefined,
+      errorCode: getSafeErrorCode(err),
+    });
     res.status(500).json({ error: "Internal server error" });
   });
 
@@ -3270,7 +3483,7 @@ Retorne obrigatoriamente no formato JSON definido na especificação do response
           clearTimeout(authTimeout);
 
           console.log(
-            `[Backend Tutor] Initializing separated Tutor Live Session for: "${videoTitle}" (level: ${explanationLevel}, lang: ${lang})`
+            `[Backend Tutor] Initializing separated Tutor Live Session (level: ${explanationLevel}, lang: ${lang})`
           );
 
           let initializedSession: any;
