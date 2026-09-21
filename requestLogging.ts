@@ -106,27 +106,56 @@ export function createRequestLoggingMiddleware(
     res.locals.requestId = requestId;
     res.setHeader("x-request-id", requestId);
 
-    res.once("finish", () => {
-      if (!shouldLogRequest(req)) {
+    let logged = false;
+    let finishedNormally = false;
+
+    const emitRequestLog = (
+      event: "http_request_completed" | "http_request_aborted",
+      severity: SafeLogSeverity,
+      status?: number
+    ): void => {
+      if (logged || !shouldLogRequest(req)) {
         return;
       }
+
+      logged = true;
 
       try {
         const elapsedNs = process.hrtime.bigint() - startedAt;
         const durationMs =
           Math.round((Number(elapsedNs) / 1_000_000) * 100) / 100;
 
-        writer({
-          severity: requestSeverity(res.statusCode),
-          event: "http_request_completed",
+        const record: SafeLogRecord = {
+          severity,
+          event,
           requestId,
           method: req.method,
           route: resolveRoute(req),
-          status: res.statusCode,
           durationMs,
-        });
+        };
+
+        if (typeof status === "number") {
+          record.status = status;
+        }
+
+        writer(record);
       } catch {
         // Observability must never affect the HTTP response lifecycle.
+      }
+    };
+
+    res.once("finish", () => {
+      finishedNormally = true;
+      emitRequestLog(
+        "http_request_completed",
+        requestSeverity(res.statusCode),
+        res.statusCode
+      );
+    });
+
+    res.once("close", () => {
+      if (!finishedNormally) {
+        emitRequestLog("http_request_aborted", "WARNING");
       }
     });
 

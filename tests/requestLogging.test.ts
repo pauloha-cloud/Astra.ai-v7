@@ -303,6 +303,33 @@ test("logging failures never change the HTTP response", async () => {
   );
 });
 
+test("logs an aborted request exactly once when the response closes before finish", async () => {
+  await withServer(
+    (app) => {
+      app.get("/api/abort", (_req, res) => {
+        res.destroy();
+      });
+    },
+    async (baseUrl, records) => {
+      await assert.rejects(fetch(`${baseUrl}/api/abort`));
+
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      assert.equal(records.length, 1);
+
+      const record = records[0];
+
+      assert.equal(record.event, "http_request_aborted");
+      assert.equal(record.severity, "WARNING");
+      assert.equal(record.method, "GET");
+      assert.equal(record.route, "/api/abort");
+      assert.equal(typeof record.durationMs, "number");
+      assert.ok(record.requestId);
+      assert.equal(record.status, undefined);
+    }
+  );
+});
+
 test("getSafeErrorCode preserves a safe error code", () => {
   assert.equal(
     getSafeErrorCode({ code: "PERMISSION_DENIED" }),

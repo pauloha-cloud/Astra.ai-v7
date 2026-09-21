@@ -1445,6 +1445,10 @@ async function startServer() {
         writeStructuredLog({
           severity: "INFO",
           event: "stripe_checkout_session_create_started",
+          requestId:
+            typeof res.locals.requestId === "string"
+              ? res.locals.requestId
+              : undefined,
         });
 
         const session = await stripe.checkout.sessions.create({
@@ -1466,10 +1470,14 @@ async function startServer() {
         res.json({ url: session.url });
       } catch (err: any) {
         writeStructuredLog({
-        severity: "ERROR",
-        event: "stripe_checkout_session_create_failed",
-        errorCode: getSafeErrorCode(err),
-      });
+          severity: "ERROR",
+          event: "stripe_checkout_session_create_failed",
+          requestId:
+            typeof res.locals.requestId === "string"
+              ? res.locals.requestId
+              : undefined,
+          errorCode: getSafeErrorCode(err),
+        });
         res.status(500).json({ error: err.message || "Internal server error creating checkout session." });
       }
     }
