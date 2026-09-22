@@ -1805,6 +1805,7 @@ async function startServer() {
       // Step 3: Transcript Fetching (Defensive)
       let transcript = "";
       let mode: "transcript" | "metadata_fallback" = "transcript";
+      const transcriptStartedAt = Date.now();
       
       try {
         console.log("[Backend] Fetching video transcript...");
@@ -1819,6 +1820,30 @@ async function startServer() {
         }
         console.log("[Backend] Transcript fetch: SUCCESS");
       } catch (transErr: any) {
+        const transcriptErrorMessage =
+          transErr instanceof Error
+            ? transErr.message
+            : String(transErr ?? "");
+
+        const transcriptErrorCode =
+          transcriptErrorMessage === "Timeout"
+            ? "youtube_transcript_timeout"
+            : transcriptErrorMessage.includes("Transcript is disabled")
+              ? "youtube_transcript_disabled_or_unavailable"
+              : transcriptErrorMessage.includes("Transcript too short or empty")
+                ? "youtube_transcript_empty"
+                : getSafeErrorCode(transErr);
+
+        writeStructuredLog({
+          severity: "WARNING",
+          event: "youtube_transcript_fetch_failed",
+          requestId: res.locals.requestId,
+          method: req.method,
+          route: "/api/youtube-info",
+          durationMs: Date.now() - transcriptStartedAt,
+          errorCode: transcriptErrorCode,
+        });
+
         console.log(`[Backend] Transcript fetch: Using metadata fallback.`);
         mode = "metadata_fallback";
       }
