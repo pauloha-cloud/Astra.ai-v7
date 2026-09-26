@@ -29,6 +29,10 @@ import {
   getSafeErrorCode,
   writeStructuredLog,
 } from "./requestLogging.js";
+import {
+  SupadataTranscriptError,
+  fetchSupadataNativeTranscript,
+} from "./supadataTranscript.js";
 // @ts-ignore
 import mammoth from "mammoth";
 
@@ -1844,8 +1848,42 @@ async function startServer() {
           errorCode: transcriptErrorCode,
         });
 
-        console.log(`[Backend] Transcript fetch: Using metadata fallback.`);
-        mode = "metadata_fallback";
+        const supadataStartedAt = Date.now();
+        try {
+          const supadataResult = await fetchSupadataNativeTranscript({
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            apiKey: process.env.SUPADATA_API_KEY,
+          });
+
+          transcript = supadataResult.text;
+          writeStructuredLog({
+            severity: "INFO",
+            event: "supadata_transcript_fetch_succeeded",
+            requestId: res.locals.requestId,
+            method: req.method,
+            route: "/api/youtube-info",
+            durationMs: Date.now() - supadataStartedAt,
+          });
+          console.log("[Backend] Supadata native transcript fetch: SUCCESS");
+        } catch (supadataErr: any) {
+          const supadataErrorCode =
+            supadataErr instanceof SupadataTranscriptError
+              ? supadataErr.code
+              : getSafeErrorCode(supadataErr);
+
+          writeStructuredLog({
+            severity: "WARNING",
+            event: "supadata_transcript_fetch_failed",
+            requestId: res.locals.requestId,
+            method: req.method,
+            route: "/api/youtube-info",
+            durationMs: Date.now() - supadataStartedAt,
+            errorCode: supadataErrorCode,
+          });
+
+          console.log("[Backend] Transcript fetch: Using metadata fallback.");
+          mode = "metadata_fallback";
+        }
       }
 
       // Step 4: AI Analysis (Gemini)
