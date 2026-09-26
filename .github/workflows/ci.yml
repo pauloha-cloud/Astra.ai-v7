@@ -49,6 +49,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Supadata native transcript tests
+        run: npm run test:supadata-transcript
+
       - name: Rate limiter tests
         run: npm run test:rate-limit
 
