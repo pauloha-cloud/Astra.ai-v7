@@ -1852,7 +1852,6 @@ async function startServer() {
         try {
           const supadataResult = await fetchSupadataNativeTranscript({
             url: `https://www.youtube.com/watch?v=${videoId}`,
-            lang,
             apiKey: process.env.SUPADATA_API_KEY,
           });
 

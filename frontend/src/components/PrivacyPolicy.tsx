@@ -12,7 +12,7 @@ export function PrivacyPolicy({ isDarkMode, currentLang, onBack }: PrivacyPolicy
     pt: {
       title: "Política de Privacidade",
       subtitle: "Como protegemos e gerenciamos suas informações no Astra Learning.",
-      lastUpdated: "Última atualização: Julho de 2026",
+      lastUpdated: "Última atualização: Setembro de 2026",
       backBtn: "Voltar",
       baseText: "O Astra Learning utiliza dados de conta, preferências, histórico de vídeos e conteúdos gerados para oferecer funcionalidades educacionais com inteligência artificial. As informações podem ser processadas por serviços de infraestrutura e IA, como Firebase, Google Cloud e Gemini, sempre com o objetivo de entregar a experiência da plataforma.",
       sections: [
@@ -34,7 +34,7 @@ export function PrivacyPolicy({ isDarkMode, currentLang, onBack }: PrivacyPolicy
         },
         {
           title: "5. Compartilhamento com terceiros",
-          text: "Não vendemos ou alugamos seus dados pessoais. Compartilhamos informações estritamente necessárias para o funcionamento técnico da plataforma com provedores de infraestrutura hospedados na nuvem (Firebase Authentication, Cloud Run, Firestore) e com a API do Gemini, seguindo rigorosos padrões de segurança."
+          text: "Não vendemos ou alugamos seus dados pessoais. Compartilhamos informações estritamente necessárias para o funcionamento técnico da plataforma com provedores de infraestrutura hospedados na nuvem (Firebase Authentication, Cloud Run, Firestore), com a API do Gemini e, quando necessário para obter a transcrição de um vídeo analisado, a URL do vídeo pode ser processada pelo serviço Supadata."
         },
         {
           title: "6. Cookies e tecnologias semelhantes",
@@ -65,7 +65,7 @@ export function PrivacyPolicy({ isDarkMode, currentLang, onBack }: PrivacyPolicy
     en: {
       title: "Privacy Policy",
       subtitle: "How we protect and manage your information at Astra Learning.",
-      lastUpdated: "Last updated: July 2026",
+      lastUpdated: "Last updated: September 2026",
       backBtn: "Back",
       baseText: "Astra Learning uses account data, preferences, video history, and generated content to offer educational features powered by artificial intelligence. Information may be processed by infrastructure and AI services such as Firebase, Google Cloud, and Gemini, always with the purpose of delivering the platform experience.",
       sections: [
@@ -87,7 +87,7 @@ export function PrivacyPolicy({ isDarkMode, currentLang, onBack }: PrivacyPolicy
         },
         {
           title: "5. Sharing with Third Parties",
-          text: "We do not sell or rent your personal data. We share information strictly required for the platform's technical operations with cloud-hosted infrastructure providers (Firebase Authentication, Cloud Run, Firestore) and the Gemini API, adhering to high security standards."
+          text: "We do not sell or rent your personal data. We share information strictly required for the platform's technical operations with cloud-hosted infrastructure providers (Firebase Authentication, Cloud Run, Firestore), the Gemini API and, when necessary to obtain the transcript of an analyzed video, the video URL may be processed by the Supadata service."
         },
         {
           title: "6. Cookies and Similar Technologies",
@@ -118,7 +118,7 @@ export function PrivacyPolicy({ isDarkMode, currentLang, onBack }: PrivacyPolicy
     es: {
       title: "Política de Privacidad",
       subtitle: "Cómo protegemos y gestionamos su información en Astra Learning.",
-      lastUpdated: "Última actualización: Julio de 2026",
+      lastUpdated: "Última actualización: Septiembre de 2026",
       backBtn: "Volver",
       baseText: "Astra Learning utiliza datos de cuenta, preferencias, historial de videos y contenidos generados para ofrecer funcionalidades educativas con inteligencia artificial. La información puede ser procesada por servicios de infraestructura e IA, como Firebase, Google Cloud y Gemini, siempre con el objetivo de entregar la experiencia de la plataforma.",
       sections: [
@@ -140,7 +140,7 @@ export function PrivacyPolicy({ isDarkMode, currentLang, onBack }: PrivacyPolicy
         },
         {
           title: "5. Compartir con terceros",
-          text: "No vendemos ni alquilamos seus datos personales. Compartimos información estrictamente necesaria para el funcionamiento técnico de la plataforma con proveedores de infraestructura alojados en la nube (Firebase Authentication, Cloud Run, Firestore) y la API Gemini, siguiendo rigurosos estándares de seguridad."
+          text: "No vendemos ni alquilamos sus datos personales. Compartimos información estrictamente necesaria para el funcionamiento técnico de la plataforma con proveedores de infraestructura alojados en la nube (Firebase Authentication, Cloud Run, Firestore), con la API de Gemini y, cuando sea necesario para obtener la transcripción de un video analizado, la URL del video puede ser procesada por el servicio Supadata."
         },
         {
           title: "6. Cookies y tecnologías similares",
