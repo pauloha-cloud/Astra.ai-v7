@@ -52,6 +52,9 @@ jobs:
       - name: Supadata native transcript tests
         run: npm run test:supadata-transcript
 
+      - name: YouTube transcript resolver tests
+        run: npm run test:youtube-transcript-resolver
+
       - name: Rate limiter tests
         run: npm run test:rate-limit
 
