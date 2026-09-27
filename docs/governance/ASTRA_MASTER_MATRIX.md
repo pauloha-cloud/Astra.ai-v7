@@ -366,7 +366,7 @@ YES / NO
 
 ## 29. Production Authorization Rule
 
-No PRD deployment may be authorized while an applicable mandatory production gate is `FAILED`, `NOT AUDITED`, or `BLOCKED`, unless the Council records an explicit waiver with affected gate, risk, justification, accountable owner, mitigation, and review/expiration date.
+No PRD deployment may be authorized while an applicable mandatory production gate is `PENDING`, `FAILED`, `NOT AUDITED`, or `BLOCKED`, unless the Council records an explicit waiver with affected gate, risk, justification, accountable owner, mitigation, and review/expiration date.
 
 A waiver does not convert missing evidence into `PASS`.
 
