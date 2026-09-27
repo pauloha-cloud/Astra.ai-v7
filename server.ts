@@ -33,6 +33,7 @@ import {
   SupadataTranscriptError,
   fetchSupadataNativeTranscript,
 } from "./supadataTranscript.js";
+import { resolveYouTubeTranscript } from "./youtubeTranscriptResolver.js";
 // @ts-ignore
 import mammoth from "mammoth";
 
@@ -1807,23 +1808,40 @@ async function startServer() {
       }
 
       // Step 3: Transcript Fetching (Defensive)
-      let transcript = "";
-      let mode: "transcript" | "metadata_fallback" = "transcript";
-      const transcriptStartedAt = Date.now();
-      
-      try {
-        console.log("[Backend] Fetching video transcript...");
-        const fetchItems = await Promise.race([
-          YoutubeTranscript.fetchTranscript(videoId),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 12000))
-        ]) as any[];
-        
-        transcript = fetchItems.map(i => i.text).join(' ');
-        if (!transcript || transcript.trim().length < 10) {
-          throw new Error("Transcript too short or empty");
-        }
-        console.log("[Backend] Transcript fetch: SUCCESS");
-      } catch (transErr: any) {
+      let primaryStartedAt = 0;
+      let primaryFinishedAt = 0;
+      let supadataStartedAt = 0;
+      let supadataFinishedAt = 0;
+
+      const transcriptResolution = await resolveYouTubeTranscript({
+        videoId,
+        primary: async (id) => {
+          primaryStartedAt = Date.now();
+          console.log("[Backend] Fetching video transcript...");
+          try {
+            return await YoutubeTranscript.fetchTranscript(id);
+          } finally {
+            primaryFinishedAt = Date.now();
+          }
+        },
+        fallback: async (id) => {
+          supadataStartedAt = Date.now();
+          try {
+            return await fetchSupadataNativeTranscript({
+              url: `https://www.youtube.com/watch?v=${id}`,
+              apiKey: process.env.SUPADATA_API_KEY,
+            });
+          } finally {
+            supadataFinishedAt = Date.now();
+          }
+        },
+      });
+
+      const transcript = transcriptResolution.text;
+      const mode = transcriptResolution.mode;
+
+      if (transcriptResolution.primaryError) {
+        const transErr = transcriptResolution.primaryError;
         const transcriptErrorMessage =
           transErr instanceof Error
             ? transErr.message
@@ -1844,28 +1862,16 @@ async function startServer() {
           requestId: res.locals.requestId,
           method: req.method,
           route: "/api/youtube-info",
-          durationMs: Date.now() - transcriptStartedAt,
+          durationMs: (primaryFinishedAt || Date.now()) - primaryStartedAt,
           errorCode: transcriptErrorCode,
         });
+      } else {
+        console.log("[Backend] Transcript fetch: SUCCESS");
+      }
 
-        const supadataStartedAt = Date.now();
-        try {
-          const supadataResult = await fetchSupadataNativeTranscript({
-            url: `https://www.youtube.com/watch?v=${videoId}`,
-            apiKey: process.env.SUPADATA_API_KEY,
-          });
-
-          transcript = supadataResult.text;
-          writeStructuredLog({
-            severity: "INFO",
-            event: "supadata_transcript_fetch_succeeded",
-            requestId: res.locals.requestId,
-            method: req.method,
-            route: "/api/youtube-info",
-            durationMs: Date.now() - supadataStartedAt,
-          });
-          console.log("[Backend] Supadata native transcript fetch: SUCCESS");
-        } catch (supadataErr: any) {
+      if (transcriptResolution.fallbackUsed) {
+        if (transcriptResolution.fallbackError) {
+          const supadataErr = transcriptResolution.fallbackError;
           const supadataErrorCode =
             supadataErr instanceof SupadataTranscriptError
               ? supadataErr.code
@@ -1877,12 +1883,22 @@ async function startServer() {
             requestId: res.locals.requestId,
             method: req.method,
             route: "/api/youtube-info",
-            durationMs: Date.now() - supadataStartedAt,
+            durationMs: supadataFinishedAt - supadataStartedAt,
             errorCode: supadataErrorCode,
           });
 
           console.log("[Backend] Transcript fetch: Using metadata fallback.");
-          mode = "metadata_fallback";
+        } else {
+          writeStructuredLog({
+            severity: "INFO",
+            event: "supadata_transcript_fetch_succeeded",
+            requestId: res.locals.requestId,
+            method: req.method,
+            route: "/api/youtube-info",
+            durationMs: supadataFinishedAt - supadataStartedAt,
+          });
+
+          console.log("[Backend] Supadata native transcript fetch: SUCCESS");
         }
       }
 
