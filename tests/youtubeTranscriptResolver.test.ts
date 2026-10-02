@@ -130,3 +130,57 @@ test("uses metadata fallback when fallback transcript is empty", async () => {
     "Fallback transcript too short or empty"
   );
 });
+
+test("preserves billable request accounting from successful fallback", async () => {
+  const result = await resolveYouTubeTranscript({
+    videoId: "video-accounting",
+    primary: async () => {
+      throw new Error("Transcript is disabled");
+    },
+    fallback: async () => ({
+      text: "Valid fallback transcript with accounting.",
+      billableRequests: "1",
+    }),
+  });
+
+  assert.equal(result.mode, "transcript");
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(result.billableRequests, "1");
+});
+
+test("preserves a valid partial transcript without discarding its content", async () => {
+  const partialTranscript =
+    "Partial source transcript containing enough valid educational content.";
+
+  const result = await resolveYouTubeTranscript({
+    videoId: "video-partial",
+    primary: async () => {
+      throw new Error("Transcript is disabled");
+    },
+    fallback: async () => ({ text: partialTranscript }),
+  });
+
+  assert.equal(result.mode, "transcript");
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(result.text, partialTranscript);
+});
+
+test("preserves a long transcript without resolver truncation", async () => {
+  const longTranscript = Array.from(
+    { length: 5000 },
+    (_, index) => `segment-${index}`
+  ).join(" ");
+
+  const result = await resolveYouTubeTranscript({
+    videoId: "video-long",
+    primary: async () => {
+      throw new Error("Transcript is disabled");
+    },
+    fallback: async () => ({ text: longTranscript }),
+  });
+
+  assert.equal(result.mode, "transcript");
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(result.text, longTranscript);
+  assert.equal(result.text.length, longTranscript.length);
+});
