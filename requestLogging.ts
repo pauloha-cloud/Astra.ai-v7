@@ -17,6 +17,7 @@ export interface SafeLogRecord {
   status?: number;
   durationMs?: number;
   errorCode?: string;
+  billableRequests?: string;
   stripeEventType?: string;
 }
 

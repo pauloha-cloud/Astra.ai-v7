@@ -1896,6 +1896,7 @@ async function startServer() {
             method: req.method,
             route: "/api/youtube-info",
             durationMs: supadataFinishedAt - supadataStartedAt,
+            billableRequests: transcriptResolution.billableRequests,
           });
 
           console.log("[Backend] Supadata native transcript fetch: SUCCESS");

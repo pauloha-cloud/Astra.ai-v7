@@ -6,12 +6,14 @@ export interface TranscriptItem {
 
 export interface TranscriptFallbackResult {
   text: string;
+  billableRequests?: string;
 }
 
 export interface YouTubeTranscriptResolution {
   text: string;
   mode: TranscriptMode;
   fallbackUsed: boolean;
+  billableRequests?: string;
   primaryError?: unknown;
   fallbackError?: unknown;
 }
@@ -80,6 +82,7 @@ export async function resolveYouTubeTranscript(
         text: fallbackResult.text,
         mode: "transcript",
         fallbackUsed: true,
+        billableRequests: fallbackResult.billableRequests,
         primaryError,
       };
     } catch (fallbackError) {
