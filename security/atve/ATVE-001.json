@@ -1,0 +1,17 @@
+{
+  "id": "ATVE-001",
+  "status": "temporary",
+  "advisory": "GHSA-m9gg-hp2v-232j",
+  "severity": "high",
+  "package": "@grpc/grpc-js",
+  "affectedVersion": "1.9.16",
+  "createdAt": "2026-10-03",
+  "expiresAt": "2026-11-02",
+  "owner": "Astra Architecture & Intelligence Council",
+  "reason": "Temporary exception for the transitive Firebase Firestore dependency while an upstream-compatible remediation remains unavailable. Astra exploitability analysis E1-E4 did not demonstrate reachability of the affected path in the current operational runtime.",
+  "upstream": "firebase-js-sdk issue #10400",
+  "dependencyPaths": [
+    "GHSA-m9gg-hp2v-232j|@firebase/firestore>@grpc/grpc-js>",
+    "GHSA-m9gg-hp2v-232j|@firebase/rules-unit-testing>firebase>@firebase/firestore-compat>@firebase/firestore>@grpc/grpc-js"
+  ]
+}
