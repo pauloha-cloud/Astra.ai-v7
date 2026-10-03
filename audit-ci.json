@@ -1,0 +1,7 @@
+{
+  "high": true,
+  "allowlist": [
+    "GHSA-m9gg-hp2v-232j|@firebase/firestore>@grpc/grpc-js>",
+    "GHSA-m9gg-hp2v-232j|@firebase/rules-unit-testing>firebase>@firebase/firestore-compat>@firebase/firestore>@grpc/grpc-js"
+  ]
+}
