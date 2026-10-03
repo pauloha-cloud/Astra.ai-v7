@@ -40,7 +40,7 @@ Validation: `PASS`, `PASS WITH RESERVATION`, `PARTIAL`, `PENDING`, `NOT AUDITED`
 | Observability / SRE | PARTIAL | NOT AUDITED | Broader SRE baseline pending |
 | FinOps | PARTIAL | NOT AUDITED | Accounting/budgets incomplete |
 | Backup / DR | PENDING | NOT AUDITED | Production DR pending |
-| Production Readiness | PENDING | BLOCKED | DEV Council closure first |
+| Production Readiness | PENDING | BLOCKED | G6+ production-readiness gates remain |
 | Go-Live | NOT APPLICABLE | BLOCKED | No PRD authorization |
 
 **DPR4-R002: DEV READY — G5A COUNCIL ACCEPTANCE PASS. PRD remains NOT AUTHORIZED.**
@@ -336,7 +336,7 @@ DPR4-R002 rollback: disable/remove Supadata path -> existing resolver -> metadat
 | RISK-003 | Supadata recurring PRD spend not authorized | HIGH | OPEN |
 | RISK-004 | PRD IAM/secrets/security baseline not audited | HIGH | OPEN |
 | RISK-005 | Production backup/DR not closed | HIGH | OPEN |
-| RISK-006 | Integrated partial/long/PT/EN/ES evidence incomplete | MEDIUM | RESOLVED — G5A PASS |
+| RISK-006 | Required G5A partial/long/PT/EN/ES evidence incomplete | MEDIUM | RESOLVED — G5A PASS |
 | DEBT-001 | Primary-failure event chronology occurs after fallback completion | LOW | OPEN / NON-BLOCKING |
 | DEBT-002 | Vite production bundle warning >500 kB | MEDIUM | OPEN / OUTSIDE DPR4-R002 |
 | DEBT-003 | Supadata per-call native accounting not evidenced for G5A | MEDIUM | RESOLVED — DEV G5A |
