@@ -1,12 +1,12 @@
 # Astra Learning AI — Master Matrix
 
 > **Governance ID:** ASTRA-GOV-MM-001
-> **Document Version:** 1.0
-> **Baseline Date:** 2026-09-27
+> **Document Version:** 1.1
+> **Baseline Date:** 2026-10-03
 > **Owner:** Astra Architecture & Intelligence Council
 > **Repository:** `pauloha-cloud/Astra.ai-v7`
 > **Official Branch:** `main`
-> **Baseline Source Commit:** `33b10aed12e2cc5cfe8ac7ff689728e328bef7e6`
+> **Baseline Source Commit:** `679708da295cd23e10a83ec8a4b5658234076f20`
 
 ## 1. Purpose
 
@@ -35,15 +35,15 @@ Validation: `PASS`, `PASS WITH RESERVATION`, `PARTIAL`, `PENDING`, `NOT AUDITED`
 | Firebase Authentication | PASS | NOT AUDITED | Candidate login validated |
 | Firestore | PASS WITH RESERVATION | NOT AUDITED | Rules tests passed; deployed-state audit remains |
 | AI | PASS WITH RESERVATION | NOT AUDITED | Existing Vertex/Gemini strategy preserved |
-| DPR4-R002 | DEV CORE VALIDATED | BLOCKED | Council gates remain |
+| DPR4-R002 | DEV READY | BLOCKED | G5A Council acceptance closed in DEV; PRD readiness gates remain |
 | Security | PARTIAL | NOT AUDITED | Broader readiness pending |
 | Observability / SRE | PARTIAL | NOT AUDITED | Broader SRE baseline pending |
 | FinOps | PARTIAL | NOT AUDITED | Accounting/budgets incomplete |
 | Backup / DR | PENDING | NOT AUDITED | Production DR pending |
-| Production Readiness | PENDING | BLOCKED | DEV Council closure first |
+| Production Readiness | PENDING | BLOCKED | G6+ production-readiness gates remain |
 | Go-Live | NOT APPLICABLE | BLOCKED | No PRD authorization |
 
-**DPR4-R002: DEV CORE VALIDATED — COUNCIL GATES PENDING.**
+**DPR4-R002: DEV READY — G5A COUNCIL ACCEPTANCE PASS. PRD remains NOT AUTHORIZED.**
 
 ## 5. Environment Registry
 
@@ -91,7 +91,7 @@ Preserve existing architecture unless evidence justifies change. Avoid premature
 
 DEV service `astra-learning-ai-dev`, region `us-west2`, runtime SA `astra-runtime-dev@astra-learning-ai-dev.iam.gserviceaccount.com`, CPU 1, memory 1 GiB, concurrency 20, timeout 3600s, max scale 2, startup CPU boost enabled.
 
-DPR4-R002 candidate: revision `astra-learning-ai-dev-dpr4r002-33b10ae`, tag `dpr4r002gates`, 0% normal traffic at validation, image digest `sha256:e332b6bdcd2ce0106fe0b87003206b962350382e2260226abf5b71dea5ab0e58`.
+DPR4-R002 Council-validated candidate: revision `astra-learning-ai-dev-dpr4r002-679708d`, tag `dpr4r002g5a`, 0% normal traffic at validation, image digest `sha256:7bf4149c7ab8d86bc484a518009ef745f0542291c1be26b4457df35c882626b7`. Source commit: `679708da295cd23e10a83ec8a4b5658234076f20`. Cloud Build: `7ee7af23-ca26-4761-98d5-258b0c1782d9`.
 
 Rollback baseline: revision `astra-learning-ai-dev-dpr4f007-b330e77`, 100% normal traffic at validation, image digest `sha256:fd417f42be3c41ca0524797311ecb2a5e9acbcb919134549b5d7f2533abe19f1`.
 
@@ -141,7 +141,7 @@ Rollback baseline: revision `astra-learning-ai-dev-dpr4f007-b330e77`, 100% norma
 | ID | Integration | DEV | PRD |
 |---|---|---|---|
 | INT-001 | Existing YouTube resolver | ACTIVE | NOT AUDITED |
-| INT-002 | Supadata native transcript | DEV CORE VALIDATED | BLOCKED |
+| INT-002 | Supadata native transcript | DEV READY | BLOCKED |
 | INT-003 | Gemini / Vertex AI | ACTIVE | NOT AUDITED |
 | INT-004 | Stripe | NOT FULLY AUDITED | NOT AUDITED |
 | INT-005 | Firebase Authentication | ACTIVE | NOT AUDITED |
@@ -150,7 +150,7 @@ Rollback baseline: revision `astra-learning-ai-dev-dpr4f007-b330e77`, 100% norma
 
 | ID | Subject | State | PRD |
 |---|---|---|---|
-| DPR4-R002 | Supadata native transcript fallback | DEV CORE VALIDATED — COUNCIL GATES PENDING | BLOCKED |
+| DPR4-R002 | Supadata native transcript fallback | DEV READY — G5A PASS | BLOCKED |
 | DPR4-R002-A4-P1.5 | Supadata native candidate | APPROVED / IMPLEMENTED DEV | NOT AUTHORIZED |
 | FUTURE | Model routing | PLANNED | NOT STARTED |
 | FUTURE | RAG architecture | PLANNED | NOT STARTED |
@@ -182,14 +182,31 @@ The reviewed structured query did not explicitly expose `mode=transcript`; deter
 | Candidate auth regression | PASS |
 | No PRD change executed in DPR4-R002 scope | PASS |
 | Secret safety | PASS WITH RESERVATION |
-| Partial transcript | PENDING |
-| Long transcript | PENDING |
-| PT integrated evidence | PENDING |
-| EN integrated evidence | PENDING |
-| ES integrated sentinel | PENDING |
-| Native-call accounting | PARTIAL |
+| Partial transcript | PASS — deterministic |
+| Long transcript | PASS — deterministic |
+| PT integrated evidence | PASS — DEV runtime |
+| EN integrated evidence | PASS — DEV runtime |
+| ES integrated sentinel | PASS — DEV runtime |
+| Native-call accounting | PASS — DEV runtime |
 
-Do not promote DPR4-R002 to `DEV READY` until mandatory pending gates are evidenced or formally waived.
+DPR4-R002 mandatory G5A acceptance gates are evidenced in DEV and Council acceptance is closed as PASS. This does not authorize PRD deployment; subsequent production-readiness gates remain mandatory.
+
+### G5A Council Closure Evidence — 2026-10-03
+
+- Source/merge: PR #26 merged to `main` at `679708da295cd23e10a83ec8a4b5658234076f20`.
+- CI: pre-merge Quality Gate #46 PASS; post-merge `main` Quality Gate #47 PASS.
+- Local gates: Supadata 6/6, resolver 9/9, request logging 12/12, rate limit 12/12, Firestore Rules 56/56; aggregate 95/95. Lint and production build PASS.
+- DEV candidate: `astra-learning-ai-dev-dpr4r002-679708d`, tag `dpr4r002g5a`, 0% normal traffic during validation.
+- Cloud Build: `7ee7af23-ca26-4761-98d5-258b0c1782d9`; image digest `sha256:7bf4149c7ab8d86bc484a518009ef745f0542291c1be26b4457df35c882626b7`.
+- Rollback baseline `astra-learning-ai-dev-dpr4f007-b330e77` remained at 100% normal traffic during validation.
+- Integrated PT/EN/ES runtime: PASS. All three audited executions completed with final `Mode: transcript`.
+- Supadata native accounting: each controlled PT/EN/ES execution recorded `billableRequests: "1"`; total observed in this validation = 3 native billable requests. This is not an account-wide historical consumption total.
+- Observed Supadata latency: PT 2032 ms; EN 1870 ms; ES 4370 ms.
+- Authentication regression: PASS on the candidate after candidate-specific DEV Firebase domain/referrer configuration.
+- Runtime log review did not expose API keys, bearer tokens, Firebase ID tokens or full transcripts in the reviewed evidence.
+- Partial and long transcript gates: PASS through deterministic resolver tests.
+- Known non-blocking observability debt: the primary-failure event is emitted after fallback completion although its `durationMs` measures the primary stage.
+- Council decision: **G5A PASS in DEV**. This does not authorize PRD deployment or bypass subsequent production-readiness gates.
 
 ## 15. Security
 
@@ -229,7 +246,7 @@ Do not promote DPR4-R002 to `DEV READY` until mandatory pending gates are eviden
 | FIN-001 | Billing inventory | NOT AUDITED | NOT AUDITED |
 | FIN-002 | Budgets / alerts | NOT AUDITED | PENDING |
 | FIN-003 | AI token accounting | PENDING | PENDING |
-| FIN-004 | Supadata native-call accounting | PARTIAL | PENDING |
+| FIN-004 | Supadata native-call accounting | PASS | PENDING |
 | FIN-005 | Supadata recurring PRD spend | NOT APPLICABLE | BLOCKED |
 | FIN-006 | Cost per study/user/plan | PLANNED | PLANNED |
 | FIN-007 | Abuse/cost protection | PARTIAL | PENDING |
@@ -241,7 +258,7 @@ Privacy Policy PT/EN/ES and Supadata disclosure are recorded as PASS for the DEV
 
 ## 19. Product / AI Quality
 
-Summary, Tutor, Quiz, Flashcards, Mind Map and Extra Questions remain active/evolving and require formal quality/pedagogical evaluation before production readiness. YouTube ingestion is `DEV CORE VALIDATED` for DPR4-R002 scope. Document ingestion remains NOT AUDITED in this Matrix. PT/EN/ES integrated acceptance evidence remains PENDING.
+Summary, Tutor, Quiz, Flashcards, Mind Map and Extra Questions remain active/evolving and require formal quality/pedagogical evaluation before production readiness. YouTube ingestion is `DEV READY` for DPR4-R002 G5A scope. Document ingestion remains NOT AUDITED in this Matrix. PT/EN/ES integrated acceptance evidence is PASS in DEV for DPR4-R002 G5A scope.
 
 ## 20. Migration Register
 
@@ -276,7 +293,7 @@ Phase 3 (~100,000): when justified, evaluate domain services, IaC, SLOs, DR, can
 | G3 | Automated tests | PASS for DPR4-R002 baseline |
 | G4 | DEV deployment | PASS |
 | G5 | DEV core runtime validation | PASS |
-| G5A | DPR4-R002 Council acceptance | PENDING |
+| G5A | DPR4-R002 Council acceptance | PASS |
 | G6 | Security readiness | PENDING |
 | G7 | Data / Firestore readiness | PENDING |
 | G8 | AI quality | PENDING |
@@ -294,7 +311,7 @@ Phase 3 (~100,000): when justified, evaluate domain services, IaC, SLOs, DR, can
 | G20 | PRD validation | BLOCKED |
 | G21 | Stable production | BLOCKED |
 
-**Current next gate: G5A — close/audit DPR4-R002 Council acceptance evidence.**
+**Current next gate: G6 — Security readiness. PRD remains blocked until all applicable production-readiness gates are closed or explicitly waived under Section 29.**
 
 ## 23. Release Register
 
@@ -302,7 +319,8 @@ Phase 3 (~100,000): when justified, evaluate domain services, IaC, SLOs, DR, can
 |---|---|---|---|---|
 | REL-DEV-001 | DEV | pre-DPR4-R002 | `astra-learning-ai-dev-dpr4f007-b330e77` | ROLLBACK BASELINE |
 | REL-DEV-002 | DEV | `3054da4...` | `astra-learning-ai-dev-dpr4r002-3054da4` | SUPERSEDED |
-| REL-DEV-003 | DEV | `33b10aed...` | `astra-learning-ai-dev-dpr4r002-33b10ae` | CORE VALIDATED |
+| REL-DEV-003 | DEV | `33b10aed...` | `astra-learning-ai-dev-dpr4r002-33b10ae` | SUPERSEDED |
+| REL-DEV-004 | DEV | `679708da...` | `astra-learning-ai-dev-dpr4r002-679708d` | G5A COUNCIL VALIDATED — 0% NORMAL TRAFFIC |
 | REL-PRD-001 | PRD | — | — | BLOCKED |
 
 ## 24. Rollback Register
@@ -313,21 +331,21 @@ DPR4-R002 rollback: disable/remove Supadata path -> existing resolver -> metadat
 
 | ID | Description | Severity | State |
 |---|---|---|---|
-| RISK-001 | DPR4-R002 Council evidence incomplete | HIGH | OPEN |
+| RISK-001 | DPR4-R002 Council evidence incomplete | HIGH | RESOLVED — G5A PASS |
 | RISK-002 | PRD infrastructure not audited | HIGH | OPEN |
 | RISK-003 | Supadata recurring PRD spend not authorized | HIGH | OPEN |
 | RISK-004 | PRD IAM/secrets/security baseline not audited | HIGH | OPEN |
 | RISK-005 | Production backup/DR not closed | HIGH | OPEN |
-| RISK-006 | Integrated partial/long/PT/EN/ES evidence incomplete | MEDIUM | OPEN |
-| DEBT-001 | Explicit transcript-mode runtime observability incomplete | LOW | OPEN |
+| RISK-006 | Required G5A partial/long/PT/EN/ES evidence incomplete | MEDIUM | RESOLVED — G5A PASS |
+| DEBT-001 | Primary-failure event chronology occurs after fallback completion | LOW | OPEN / NON-BLOCKING |
 | DEBT-002 | Vite production bundle warning >500 kB | MEDIUM | OPEN / OUTSIDE DPR4-R002 |
-| DEBT-003 | Complete Supadata call accounting not evidenced | MEDIUM | OPEN |
+| DEBT-003 | Supadata per-call native accounting not evidenced for G5A | MEDIUM | RESOLVED — DEV G5A |
 
 ## 26. Open Actions
 
-P0: close/audit partial, long, PT, EN, ES sentinel and native-call-accounting evidence; then obtain formal Council closure of DPR4-R002.
+P0 completed: DPR4-R002 G5A partial, long, PT, EN, ES and native-call-accounting evidence closed; Council acceptance PASS.
 
-P1 after Council closure/authorization: Fase 7A PRD read-only inventory; audit PRD existence/state; establish IAM/secrets, Firebase/Firestore, FinOps, monitoring, backup/DR and rollback baselines.
+P1: proceed to G6 Security readiness. PRD read-only inventory requires separate authorization; G5A closure does not authorize PRD deployment.
 
 P2: evaluate explicit transcript-mode observability and frontend bundle optimization separately.
 
@@ -381,21 +399,26 @@ A waiver does not convert missing evidence into `PASS`.
 | 2026-09-27 | 1.0 | Registered pending partial/long/PT/EN/ES/call-accounting gates |
 | 2026-09-27 | 1.0 | Established DEV-to-PRD Master Gate Matrix |
 | 2026-09-27 | 1.0 | Set G5A Council acceptance as next gate |
+| 2026-10-03 | 1.1 | Recorded PR #26, candidate `679708d` and G5A validation evidence |
+| 2026-10-03 | 1.1 | Closed partial/long/PT/EN/ES and Supadata native-call-accounting gates |
+| 2026-10-03 | 1.1 | Closed DPR4-R002 G5A Council acceptance as PASS in DEV; PRD remains unauthorized |
 
 ## 31. Current Checkpoint
 
 ```text
 Repository: pauloha-cloud/Astra.ai-v7
 Official branch: main
-Baseline source commit: 33b10aed12e2cc5cfe8ac7ff689728e328bef7e6
+Baseline source commit: 679708da295cd23e10a83ec8a4b5658234076f20
 
 DEV project: astra-learning-ai-dev
 DEV Cloud Run service: astra-learning-ai-dev
 DEV region: us-west2
-Validated candidate: astra-learning-ai-dev-dpr4r002-33b10ae
+Validated candidate: astra-learning-ai-dev-dpr4r002-679708d
+Candidate normal traffic during validation: 0%
+Rollback baseline normal traffic during validation: 100%
 
 DPR4-R002:
-DEV CORE VALIDATED — COUNCIL GATES PENDING
+DEV READY — G5A COUNCIL ACCEPTANCE PASS
 
 Overall Astra:
 PRODUCTION READINESS INCOMPLETE
@@ -404,15 +427,15 @@ PRD:
 NOT READY / NOT AUTHORIZED
 
 Current gate:
-G5A — DPR4-R002 FORMAL COUNCIL ACCEPTANCE
+G6 — SECURITY READINESS
 
 Next:
-CLOSE/AUDIT REMAINING DEV COUNCIL GATES
+CONTINUE DEV-TO-PRD READINESS GATES UNDER ASTRA-GOV-MM-001
 
-After closure:
-FASE 7A — PRD READ-ONLY INVENTORY
+PRD deployment remains blocked until applicable production-readiness
+gates are closed or explicitly waived under Section 29.
 ```
 
 ---
 
-**End of Astra Master Matrix v1.0**
+**End of Astra Master Matrix v1.1**
