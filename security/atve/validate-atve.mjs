@@ -3,6 +3,13 @@ import fs from "node:fs";
 const ATVE_FILE = "security/atve/ATVE-001.json";
 const AUDIT_CONFIG_FILE = "audit-ci.json";
 
+const APPROVED_ADVISORY = "GHSA-m9gg-hp2v-232j";
+const APPROVED_EXPIRES_AT = "2026-11-02";
+const APPROVED_DEPENDENCY_PATHS = [
+  "GHSA-m9gg-hp2v-232j|@firebase/firestore>@grpc/grpc-js>",
+  "GHSA-m9gg-hp2v-232j|@firebase/rules-unit-testing>firebase>@firebase/firestore-compat>@firebase/firestore>@grpc/grpc-js"
+];
+
 function fail(message) {
   console.error(`ATVE_FAIL: ${message}`);
   process.exitCode = 1;
@@ -80,6 +87,10 @@ if (!atve || !auditConfig) {
     fail("advisory must be a valid GHSA identifier");
   }
 
+  if (atve.advisory !== APPROVED_ADVISORY) {
+    fail("advisory differs from Council-approved exception");
+  }
+
   if (atve.severity !== "high") {
     fail("severity must be high");
   }
@@ -113,8 +124,24 @@ if (!atve || !auditConfig) {
     fail("dependencyPaths contains an invalid path");
   }
 
+  if (Array.isArray(atve.dependencyPaths)) {
+    const actualPaths = [...atve.dependencyPaths].sort();
+    const approvedPaths = [...APPROVED_DEPENDENCY_PATHS].sort();
+
+    if (
+      actualPaths.length !== approvedPaths.length ||
+      actualPaths.some((path, index) => path !== approvedPaths[index])
+    ) {
+      fail("dependencyPaths differ from Council-approved paths");
+    }
+  }
+
   const created = parseStrictDate(atve.createdAt, "createdAt");
   const expires = parseStrictDate(atve.expiresAt, "expiresAt");
+
+  if (atve.expiresAt !== APPROVED_EXPIRES_AT) {
+    fail("expiresAt differs from Council-approved deadline");
+  }
 
   if (created && expires && expires < created) {
     fail("expiresAt cannot be before createdAt");
