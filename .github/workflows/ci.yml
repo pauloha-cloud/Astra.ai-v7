@@ -49,8 +49,18 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Firebase Web build validator unit tests
+        run: node --test tests/verify-firebase-web-build.test.mjs
+
+      # CI fixture only. The actual DEV key must be supplied by an approved
+      # deployment workflow. Never deploy this CI bundle.
       - name: Production build
-        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ci-fixture-firebase-web-key-not-for-deployment
+        run: |
+          node scripts/verify-firebase-web-build.mjs pre
+          npm run build
+          node scripts/verify-firebase-web-build.mjs post
 
       - name: Supadata native transcript tests
         run: npm run test:supadata-transcript
