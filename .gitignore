@@ -7,6 +7,12 @@ coverage/
 .env*
 !.env.example
 
+# Temporary Firebase Web configuration and G2-C experimental bundles
+g2c-pack-build-variables.txt
+*.firebase-build.env
+g2c-*-diagnostic-source/
+source-v2.*.tar.gz
+
 # Private keys and local credential files
 *.pem
 *.key
