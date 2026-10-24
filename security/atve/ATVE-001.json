@@ -1,6 +1,6 @@
 {
   "id": "ATVE-001",
-  "status": "temporary",
+  "status": "retired",
   "advisory": "GHSA-m9gg-hp2v-232j",
   "severity": "high",
   "package": "@grpc/grpc-js",
@@ -13,5 +13,7 @@
   "dependencyPaths": [
     "GHSA-m9gg-hp2v-232j|@firebase/firestore>@grpc/grpc-js>",
     "GHSA-m9gg-hp2v-232j|@firebase/rules-unit-testing>firebase>@firebase/firestore-compat>@firebase/firestore>@grpc/grpc-js"
-  ]
+  ],
+  "retiredAt": "2026-10-24",
+  "retirementReason": "The reviewed advisory GHSA-m9gg-hp2v-232j is patched in every installed @grpc/grpc-js instance (1.14.5); the temporary allowlist is no longer required."
 }

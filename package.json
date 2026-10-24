@@ -72,7 +72,7 @@
     },
     "@fastify/busboy": "3.2.2",
     "jspdf": {
-      "dompurify": "3.4.16"
+      "dompurify": "3.4.17"
     }
   }
 }
