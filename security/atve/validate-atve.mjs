@@ -79,8 +79,8 @@ if (!atve || !auditConfig) {
     fail("unexpected ATVE id");
   }
 
-  if (atve.status !== "temporary") {
-    fail("status must be temporary");
+  if (atve.status !== "retired") {
+    fail("status must be retired");
   }
 
   if (!/^GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/i.test(atve.advisory ?? "")) {
@@ -147,14 +147,21 @@ if (!atve || !auditConfig) {
     fail("expiresAt cannot be before createdAt");
   }
 
-  if (expires) {
-    const expirationBoundary = new Date(expires);
-    expirationBoundary.setUTCHours(23, 59, 59, 999);
-
-    if (Date.now() > expirationBoundary.getTime()) {
-      fail(`ATVE expired on ${atve.expiresAt}`);
-    }
+  if (!isNonEmptyString(atve.retirementReason)) {
+    fail("retirementReason is required");
   }
+  const retired = parseStrictDate(atve.retiredAt, "retiredAt");
+  if (retired && created && retired < created) {
+    fail("retiredAt cannot be before createdAt");
+  }
+  if (retired && expires && retired > expires) {
+    fail("retiredAt cannot be after approved expiry date");
+  }
+  if (retired && retired.getTime() > Date.now()) {
+    fail("retiredAt cannot be in the future");
+  }
+
+  // Historical expiry is retained, but no active exception survives retirement.
 
   const allowedAuditConfigKeys = ["allowlist", "high"];
   const actualAuditConfigKeys = Object.keys(auditConfig).sort();
@@ -172,24 +179,32 @@ if (!atve || !auditConfig) {
     fail("audit-ci high severity gate must remain enabled");
   }
 
-  if (!Array.isArray(auditConfig.allowlist)) {
-    fail("audit-ci allowlist must be an array");
-  } else if (Array.isArray(atve.dependencyPaths)) {
-    const atvePaths = [...atve.dependencyPaths].sort();
-    const auditPaths = [...auditConfig.allowlist].sort();
+  if (!Array.isArray(auditConfig.allowlist) || auditConfig.allowlist.length !== 0) {
+    fail("retired ATVE requires empty audit-ci allowlist");
+  }
 
-    if (
-      atvePaths.length !== auditPaths.length ||
-      atvePaths.some((path, index) => path !== auditPaths[index])
-    ) {
-      fail("audit-ci allowlist does not exactly match ATVE dependencyPaths");
+  // Defense in depth: never retire an exception while the tracked advisory remains vulnerable.
+  const lockfile = readJson("package-lock.json");
+  if (lockfile) {
+    const entries = Object.entries(lockfile.packages ?? {}).filter(
+      ([name]) => /^node_modules\/(?:.*\/node_modules\/)?@grpc\/grpc-js$/.test(name)
+    );
+    if (entries.length === 0) fail("no @grpc/grpc-js entries found in lockfile");
+    for (const [name, pkg] of entries) {
+      const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(pkg?.version ?? "");
+      if (!m) {
+        fail(`invalid grpc-js version at ${name}`);
+        continue;
+      }
+      const [major, minor, patch] = m.slice(1).map(Number);
+      const patched = major > 1 || (major === 1 && (
+        minor > 14 || (minor === 14 && patch >= 5) || (minor === 13 && patch >= 6)
+      ));
+      if (!patched) fail(`vulnerable grpc-js at ${name}: ${pkg.version}`);
     }
   }
 
   if (!process.exitCode) {
-    console.log(
-      `ATVE_PASS: ${atve.id} valid through ${atve.expiresAt}; ` +
-      `${atve.dependencyPaths.length} exact dependency paths authorized.`
-    );
+    console.log("ATVE_RETIRED_PASS: ATVE-001 historical record retained; no active exceptions; grpc-js versions patched.");
   }
 }
