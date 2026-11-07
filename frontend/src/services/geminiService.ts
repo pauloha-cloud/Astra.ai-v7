@@ -10,6 +10,7 @@ export interface AnalysisResult {
     thumbnail: string;
   };
   mode: 'transcript' | 'metadata_fallback';
+  generationStatus?: 'success' | 'failed';
   message: string;
   summary: string;
   key_points: string[];
