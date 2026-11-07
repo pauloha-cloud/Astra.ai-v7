@@ -3015,7 +3015,17 @@ export default function App() {
         explanationLevel: preferences.explanationLevel
       }, { timeout: 180000 });
       const data = response.data as AnalysisResult;
-      
+
+      // Reject failed or incomplete responses before touching Firestore.
+      if (
+        data.generationStatus === "failed" ||
+        !data.video?.videoId ||
+        typeof data.summary !== "string" ||
+        !data.summary.trim()
+      ) {
+        throw new Error("AI_GENERATION_FAILED");
+      }
+
       console.log(`[Frontend] Received analysis for: ${data.video.videoId} (Mode: ${data.mode})`);
       
       if (data.mode === 'metadata_fallback') {
