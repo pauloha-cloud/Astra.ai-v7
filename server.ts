@@ -2081,86 +2081,36 @@ async function startServer() {
         }
 
         console.log("[Backend] Gemini analysis: SUCCESS");
-      } catch (aiErr: any) {
-        console.error("[Backend] Gemini analysis: FAILED -", aiErr.message);
-        
-        // Propagate API configuration errors immediately to let the frontend know the API key requires attention
-        if (aiErr.message?.includes("Gemini API configuration") || aiErr.message?.includes("GEMINI_API_KEY")) {
-          return res.status(500).json({
-            error: "Gemini API Configuration Error",
-            details: aiErr.message
-          });
-        }
-        
-        // Final fallback analysis object if AI fails completely (constructive and helpful)
-        const isPt = lang === 'pt';
-        const isEs = lang === 'es';
-        analysisData = {
-          summary: isPt 
-            ? `Esta sessão foca no conteúdo de **${metadata.title}**. Embora a análise automatizada detalhada tenha encontrado uma limitação técnica no momento, você ainda pode explorar os conceitos fundamentais através da transcrição e do Tutor Astra Learning AI.`
-            : isEs
-              ? `Esta sesión se centra en el contenido de **${metadata.title}**. Aunque el análisis detallado automatizado ha encontrado una limitación técnica en este momento, todavía puede explorar los conceptos fundamentales a través de la transcripción y el Tutor de Astra Learning AI.`
-              : `This session focuses on **${metadata.title}**. While our automated deep analysis encountered a brief technical limitation, you can still explore the core concepts using the transcript and the Astra Learning AI Tutor.`,
-          key_points: isPt
-            ? [
-                `Tópico: ${metadata.title}`,
-                `Criador: ${metadata.author_name || 'Desconhecido'}`,
-                "Use o Tutor de Estudos para aprofundar seu conhecimento.",
-                "Revise a transcrição para detalhes específicos."
-              ]
-            : isEs
-              ? [
-                  `Tema: ${metadata.title}`,
-                  `Creador: ${metadata.author_name || 'Desconocido'}`,
-                  "Usa el Tutor de Estudios para profundizar tu conocimiento.",
-                  "Revisa la transcripción para obtener detalles específicos."
-                ]
-              : [
-                  `Topic: ${metadata.title}`,
-                  `Creator: ${metadata.author_name || 'Unknown'}`,
-                  "Use the Study Tutor to deepen your knowledge.",
-                  "Review the transcript for specific details."
-                ],
-          quiz: [],
-          mind_map: { 
-            topic: metadata.title, 
-            children: [{ topic: metadata.author_name || 'YouTube', children: [] }] 
-          },
-          tutor_questions: isPt
-            ? [
-                "Pode resumir o ponto principal deste vídeo?",
-                "Quais são as lições práticas que posso tirar daqui?"
-              ]
-            : isEs
-              ? [
-                  "¿Puedes resumir el punto principal de este video?",
-                  "¿Cuáles son las lecciones prácticas que puedo aprender de aquí?"
-                ]
-              : [
-                  "Can you summarize the main point of this video?",
-                  "What practical lessons can I take from here?"
-                ],
-          limitations: isPt
-            ? [
-                "A análise da IA está temporariamente limitada.",
-                "A transcrição pode estar incompleta ou indisponível."
-              ]
-            : isEs
-              ? [
-                  "El análisis de la IA está temporalmente limitado.",
-                  "La transcripción puede estar incompleta o no disponible."
-                ]
-              : [
-                  "AI Analysis is temporarily limited.",
-                  "Transcript may be incomplete or unavailable."
-                ],
-          flashcards: []
-        };
+      } catch (aiErr: unknown) {
+        const errorMessage = aiErr instanceof Error ? aiErr.message : "";
+        const isConfigurationError =
+          errorMessage.includes("Gemini API configuration") ||
+          errorMessage.includes("GEMINI_API_KEY");
+
+        writeStructuredLog({
+          severity: "ERROR",
+          event: "youtube_ai_generation_failed",
+          requestId: res.locals.requestId,
+          method: req.method,
+          route: "/api/youtube-info",
+          errorCode: getSafeErrorCode(aiErr),
+        });
+
+        // Do not return a fabricated educational result on AI failure.
+        return res.status(isConfigurationError ? 500 : 503).json({
+          code: isConfigurationError ? "AI_CONFIGURATION_ERROR" : "AI_GENERATION_FAILED",
+          error: lang === "pt"
+            ? "Não foi possível concluir a análise. Tente novamente mais tarde."
+            : lang === "es"
+              ? "No fue posible completar el análisis. Inténtalo más tarde."
+              : "The analysis could not be completed. Please try again later.",
+        });
       }
 
       // Step 5: Final Response
       console.log(`[Backend] Request Finished. Mode: ${mode}`);
       return res.json({
+        generationStatus: "success",
         video: {
           videoId,
           url: `https://www.youtube.com/watch?v=${videoId}`,
